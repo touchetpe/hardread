@@ -63,3 +63,11 @@ Every reported run lists:
 - **D5–D6 (Oct 31 → Nov 1 10:00 Paris):** A/A checks at C1t1.
 - **D6 12:00 Paris:** freeze.
 - **D6 → D7:** the sealed primary (≈17 h), then the confirmatory C2 run (≈9 h) if the primary is significant. Then reveals-only, if time allows before the D7 analysis.
+
+## Amendments
+
+### A1 (2026-10-26, before any lever or sealed data): development sets
+- **Development set A** (lever tuning): the `hr_train` pool.
+- **Development set B** (G2 gate on D4, n ≥ 1,000 at C1t1): the `hr_val` pool. Its rosters are never used to train the student, the belief model or Glimmer.
+- Lever screens and gates use the same design as the primary: side-swapped pairings, with the treatment seat alternating every pairing (`run_match.py --treat ... --treat-seat alternate`).
+- Nothing in §1–§3 changes.
