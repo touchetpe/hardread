@@ -96,3 +96,29 @@ Concurrency was conservative, so C1t1 and C2 may gain ≈20–40% when tuned (no
   - value-of-information jobs: ≈65 games/h per node at 4 in parallel (40 games in 37 min);
   - volume farm: ≈1,200 games/h.
 - **Value-of-information gate, provisional after 40 games per level (do not cite):** oracle side wins 67.5% (p = 1), 67.5% (p = 0.5), 47.5% (p = 0.25), with intervals of ±11 to ±18. The full 600 games per level are expected around 01:30 UTC.
+
+## 2026-10-26 evening: review engine (`tools/review/`, commit 3cc3859; local, 250 C1t1 label-farm games)
+- **Reconstruction:** 21,351 decisions (500 sides) rebuilt offline by driving Foul Play's own battle code.
+  - **Farm format (exact HP):** 92.8% strict-correct. State plus legal set match 99.98%; the legal set matches 100%; the action matches 100% whenever the log shows it.
+  - **Public-replay format (percent HP):** 92.4% strict.
+  - **All strict misses are actions the replay never shows (7.2%):** the Pokémon fainted, slept, was paralysed or flinched before moving, or Encore replaced the move. The review gives a cost range for these.
+  - One real 53-turn ladder replay, with its team drafted from what was revealed, reconstructs cleanly (58 decisions).
+  - **The D2 gate on the owner's replays is still to be measured.**
+- **Calibration (5 folds by game):**
+  - raw root value: Brier 0.2062, ECE 0.018;
+  - Platt: Brier 0.2060, ECE 0.0075 (Brier gain within noise; root values are already close to calibrated);
+  - turns 0–5 carry no signal; turns 16–30 reach Brier 0.181.
+- **Mirror check** (9,310 matched seat pairs): |P_A + P_B − 1| has mean 0.061, median 0.038, p90 0.14, and grows with turn. Calibration doesn't close it: the gap comes from each seat's private information and search noise.
+- **Decision cost** (4 worlds × 1 s per decision):
+  - the bot's own choices cost 0.0015 win probability on average (median 0);
+  - a random alternative costs 0.089;
+  - the review's top move equals the bot's 76% of the time;
+  - noise floor ≈ 0.02;
+  - the human replay averaged 0.032 per decision (illustrative; team drafted).
+- **Hax meter: FAILED its sanity check:**
+  - summed luck vs winner: correlation 0.02 / 0.09 (100 games per seat, SE ≈ 0.10); deeper valuation doesn't change it;
+  - per-turn signal exists (0.18 vs the bot's value changes), and the seats are mirrored at −0.55 per game;
+  - a plain event count (crits, misses, full para, flinches) does better: 0.18 over 250 games.
+  - **Suspects:** short-horizon valuation of post-chance states (forced-replacement KOs), and fake luck from wrong sampled bulk.
+  - **Fix in progress.** Until it passes, the product shows chance as events, labelled experimental.
+- **Review cost:** 25–200 s per game, ≈1.1 s per decision.
