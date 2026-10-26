@@ -22,6 +22,23 @@ Working repo for the plan in [research/22-final-comparison.md](../research/22-fi
 1. **Local guest login:** on a `localhost`/`127.0.0.1` server, Foul Play sends `/trn name,0,` directly instead of calling the public login API.
 
 ## Teams
+**Pool** (`../data/teams/`):
+- **Source:** [metamon-teams v5](https://huggingface.co/datasets/jakegrigsby/metamon-teams) Gen9 OU.
+  - `hl_05_26`: 43,764 high-ladder teams (May 2026). Hidden details are *predicted* from replays, so they are plausible teams, not ground truth.
+  - `competitive`: 16 expert sample teams.
+- **Validated** with `tools/validate_teams.js` (Showdown's own TeamValidator, pinned rules):
+  - all 43,764 high-ladder teams are legal;
+  - 11 of 16 sample teams are legal (5 use Tera Blast, now banned);
+  - sanity check: the validator rejects the known-bad example team.
+- **Diversity:** 386 species, 8,521 distinct 6-species rosters.
+- **Split** `data/teams/splits/hl_05_26-gen9ou-split-v1.json` (SHA-256 `575b5dc2…`):
+  - **30% of rosters (2,556 rosters, 14,136 teams) reserved and untouched** for a future held-out or sealed set;
+  - 29,628 development teams.
+- **Installed in the fork:**
+  - `gen9/hr_hl_dev`: 2,000 development teams;
+  - `gen9/hr_comp`: 11 legal expert teams.
+- **Pairing:** `--team-pool gen9/hr_hl_dev --seed N` draws two different teams per game. Tested: 6 of 6 games completed, 27–92 s each.
+
 - `foul-play/fp/teams/teams/gen9/ou/example` is **rejected** by current Gen9 OU rules: Spore (Sleep Moves Clause) and Tera Blast (banned).
   - Foul Play doesn't detect the rejection and waits forever. **Always validate teams before using them:**
     ```sh
@@ -64,3 +81,19 @@ Foul Play doubles the number of worlds while the opponent has revealed fewer tha
 - Showdown sets.
 
 **Caches live under** `foul-play/fp/data/`.
+
+## Azure ML jobs (cluster `${HR_AZ_CLUSTER}`, ≥4 nodes always on, 40 vCPU + 1× H100 NVL each)
+Workspace `${HR_AZ_WS}`. Other lanes run jobs there too; never touch their jobs.
+
+**Environment:** reuses `pokemon-h100-axolotl-cuda13-training:20261026-9f7aa9a5704c` (Python 3.12, CUDA 13).
+
+**Outputs:** `azureml://datastores/workspaceblobstore/paths/pokemon-rl-research/hardread/<job>/`.
+
+**Jobs:**
+- `azure/farm_job.sh`: CPU farm test.
+  - Setup: installs Node v24.13.0 and Rust 1.89.0, builds poke-engine, fetches Showdown at `c0845f33`.
+  - Then runs timed F1, C1t1 and C2 batches.
+- `azure/glimmer_speed/speed_test.py`: Glimmer serving speed.
+  - Setup: llama.cpp `f8def7fe` built with CUDA for sm_90; pinned Q4_K_M GGUF downloaded with its hash checked.
+  - Replays 31 real battle requests with reasoning low vs off, 1 vs 4 slots.
+- **Attempts** (staged code, `job.yml`, create responses) are kept under `azure/attempts/<job>/`.
