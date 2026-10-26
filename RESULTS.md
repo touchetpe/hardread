@@ -213,3 +213,15 @@ Concurrency was conservative, so C1t1 and C2 may gain ≈20–40% when tuned (no
   - chance after a mid-turn pivot switch is not counted;
   - damage rolls count only where they decide a KO;
   - validated on bot self-play only; human replays come next.
+
+## 2026-10-26 ≈21:40–22:00 UTC: cluster raised to 27 nodes; jobs added
+- `hrsft-20261026-v0b-2205` (3-node DDP): a Glimmer v0 hedge on the same 55.6k rows. LoRA alpha 32 (scale 1.0 vs 0.5), choice weight 20, soft alpha 0.9.
+- `hraa-20261026-c1t1-n{1,2,3}-d106`: early A/A at the sealed configuration (C1t1, vanilla vs vanilla, side-swapped, `hr_train` teams). The pre-registered A/As still run on D5–D6.
+- `hrlev-20261026-dbl-n1-r9231`: double-half lever screen restarted on an idle node.
+- **Student v1 GPU retrain:** to be submitted by the student lane (`hrstu-*`).
+- **Glimmer v0 progress at 21:27 UTC** (`steps.jsonl`; weighted loss confirmed on GPU):
+  - **v0-ddp:** 3 nodes at 6.7 s/step (≈3.1× the single node). Training-batch choice accuracy rose from 0.26 to ≈0.40; choice cross-entropy 1.94 → 1.61; format cross-entropy 0.14 → 0.05.
+  - **v0-safe:** 13.9 s/step.
+- **Provisional at 21:27 UTC:**
+  - value of information (320 games per level): 70.9 ± 4.4 (p = 1), 65.0 ± 5.0 (p = 0.5), 50.9 ± 5.1 (p = 0.25);
+  - lever screens (220 games each): value 54.5 ± 5.9, argmax 48.6 ± 6.0.
