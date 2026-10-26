@@ -82,17 +82,28 @@ def bot_cmd(username, mode, cfg, team, opponent=None, log_level="INFO"):
 
 
 def play_game(idx, run_dir, cfg_a, cfg_b, team_a, team_b, timeout, log_level="INFO",
-              oracle_p=None, oracle_fields="all", oracle_seed=None):
+              oracle_p=None, oracle_fields="all", oracle_seed=None, log_decisions=False, log_states=False):
     tag = uuid.uuid4().hex[:6]
     name_a, name_b = f"hra{idx}{tag}", f"hrb{idx}{tag}"
     log_a = open(run_dir / f"g{idx:04d}_a.log", "w")
     log_b = open(run_dir / f"g{idx:04d}_b.log", "w")
     t0 = time.time()
     # B accepts, A challenges.
+    env_b = dict(os.environ)
+    for k in ("HARDREAD_ORACLE_TEAM", "HARDREAD_ORACLE_P", "HARDREAD_ORACLE_FIELDS", "HARDREAD_ORACLE_SEED"):
+        env_b.pop(k, None)
+    if log_decisions:
+        env_b["HARDREAD_DECISION_LOG"] = str(run_dir / f"g{idx:04d}_b.decisions.jsonl")
+        if log_states:
+            env_b["HARDREAD_LOG_STATES"] = "1"
     pb = subprocess.Popen(bot_cmd(name_b, "accept_challenge", cfg_b, team_b, log_level=log_level),
-                          cwd=FOULPLAY_DIR, stdout=log_b, stderr=subprocess.STDOUT)
+                          cwd=FOULPLAY_DIR, stdout=log_b, stderr=subprocess.STDOUT, env=env_b)
     time.sleep(2.0)
     env_a = dict(os.environ)
+    if log_decisions:
+        env_a["HARDREAD_DECISION_LOG"] = str(run_dir / f"g{idx:04d}_a.decisions.jsonl")
+        if log_states:
+            env_a["HARDREAD_LOG_STATES"] = "1"
     if oracle_p is not None:
         # Evaluator-only: side A sees side B's true team with probability p per Pokemon per world.
         env_a["HARDREAD_ORACLE_TEAM"] = str(FOULPLAY_DIR / "fp" / "teams" / "teams" / team_b)
@@ -155,6 +166,9 @@ def main():
                     help="Evaluator-only: give side A side B's true sets with this probability")
     ap.add_argument("--oracle-fields", default="all")
     ap.add_argument("--oracle-seed", type=int, default=None)
+    ap.add_argument("--log-decisions", action="store_true",
+                    help="Write per-decision JSONL for both bots (fp/hardread_decision_log.py)")
+    ap.add_argument("--log-states", action="store_true", help="Also store world state strings (large)")
     args = ap.parse_args()
     global PORT
     if args.port in (18000, 18002):
@@ -182,7 +196,8 @@ def main():
         with ThreadPoolExecutor(max_workers=args.concurrency) as ex:
             futs = [ex.submit(play_game, i, run_dir, args.cfg_a, args.cfg_b,
                               pairs[i][0], pairs[i][1], args.timeout, args.log_level,
-                              args.oracle_a_p, args.oracle_fields, args.oracle_seed)
+                              args.oracle_a_p, args.oracle_fields, args.oracle_seed,
+                              args.log_decisions, args.log_states)
                     for i in range(len(pairs))]
             with open(run_dir / "games.jsonl", "a") as out:
                 for f in futs:
