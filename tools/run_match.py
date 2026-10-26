@@ -5,6 +5,7 @@ Each game pairs an accepting bot with a challenging bot. Results go to
 runs/<run_id>/games.jsonl, one record per game.
 """
 import argparse
+import random
 import json
 import os
 import re
@@ -18,10 +19,12 @@ from pathlib import Path
 
 HARDREAD = Path(__file__).resolve().parents[1]
 PROJECT = HARDREAD.parent
-FOULPLAY_DIR = HARDREAD / "foul-play"
-FOULPLAY_PY = PROJECT / "environments" / "foulplay" / "bin" / "python"
-RUNTIME = HARDREAD / "showdown" / "runtime"
-NODE = "/Users/REDACTED/.nvm/versions/node/v24.13.0/bin/node"
+# Paths default to the Mac layout; Azure jobs override them with HARDREAD_* variables.
+FOULPLAY_DIR = Path(os.environ.get("HARDREAD_FOULPLAY_DIR", HARDREAD / "foul-play"))
+FOULPLAY_PY = Path(os.environ.get("HARDREAD_FOULPLAY_PY", PROJECT / "environments" / "foulplay" / "bin" / "python"))
+RUNTIME = Path(os.environ.get("HARDREAD_RUNTIME", HARDREAD / "showdown" / "runtime"))
+NODE = os.environ.get("HARDREAD_NODE", "/Users/REDACTED/.nvm/versions/node/v24.13.0/bin/node")
+RUNS_DIR = Path(os.environ.get("HARDREAD_RUNS_DIR", HARDREAD / "runs"))
 PORT = 18010  # default; overridden by --port
 
 CONFIGS = {
@@ -135,6 +138,9 @@ def main():
     ap.add_argument("--cfg-b", default="F1", choices=CONFIGS)
     ap.add_argument("--team-a", default="gen9/ou/example")
     ap.add_argument("--team-b", default="gen9/ou/example")
+    ap.add_argument("--team-pool", default=None,
+                    help="Folder under fp/teams/teams; each game draws two different teams from it")
+    ap.add_argument("--seed", type=int, default=0, help="Seed for team-pool pairing")
     ap.add_argument("--timeout", type=int, default=1800)
     ap.add_argument("--run-id", default=None)
     ap.add_argument("--log-level", default="INFO")
@@ -153,15 +159,24 @@ def main():
     PORT = args.port
 
     run_id = args.run_id or time.strftime("%Y%m%dT%H%M%S")
-    run_dir = HARDREAD / "runs" / run_id
+    run_dir = RUNS_DIR / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
     server = start_server(run_dir, reuse=args.reuse_server)
     t0 = time.time()
     results = []
     try:
+        pairs = [(args.team_a, args.team_b)] * args.games
+        if args.team_pool:
+            pool_dir = FOULPLAY_DIR / "fp" / "teams" / "teams" / args.team_pool
+            names = sorted(f.name for f in pool_dir.iterdir() if f.is_file())
+            rng = random.Random(args.seed)
+            pairs = []
+            for _ in range(args.games):
+                a, b = rng.sample(names, 2)
+                pairs.append((f"{args.team_pool}/{a}", f"{args.team_pool}/{b}"))
         with ThreadPoolExecutor(max_workers=args.concurrency) as ex:
             futs = [ex.submit(play_game, i, run_dir, args.cfg_a, args.cfg_b,
-                              args.team_a, args.team_b, args.timeout, args.log_level,
+                              pairs[i][0], pairs[i][1], args.timeout, args.log_level,
                               args.oracle_a_p, args.oracle_fields, args.oracle_seed)
                     for i in range(args.games)]
             with open(run_dir / "games.jsonl", "a") as out:
@@ -184,7 +199,8 @@ def main():
                "mean_game_seconds": round(sum(r["seconds"] for r in results) / max(1, len(results)), 1),
                "games_per_hour": round(len(done) / wall * 3600, 1) if wall else None,
                "concurrency": args.concurrency, "cfg_a": args.cfg_a, "cfg_b": args.cfg_b,
-               "oracle_a_p": args.oracle_a_p, "oracle_fields": args.oracle_fields}
+               "oracle_a_p": args.oracle_a_p, "oracle_fields": args.oracle_fields,
+               "team_pool": args.team_pool, "seed": args.seed}
     (run_dir / "summary.json").write_text(json.dumps(summary, indent=2))
     print("SUMMARY", json.dumps(summary), flush=True)
 
