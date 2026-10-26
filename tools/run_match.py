@@ -83,7 +83,7 @@ def bot_cmd(username, mode, cfg, team, opponent=None, log_level="INFO"):
 
 def play_game(idx, run_dir, cfg_a, cfg_b, team_a, team_b, timeout, log_level="INFO",
               oracle_p=None, oracle_fields="all", oracle_seed=None, log_decisions=False, log_states=False,
-              oracle_side="A"):
+              oracle_side="A", treat_env=None, treat_side="A"):
     tag = uuid.uuid4().hex[:6]
     name_a, name_b = f"hra{idx}{tag}", f"hrb{idx}{tag}"
     log_a = open(run_dir / f"g{idx:04d}_a.log", "w")
@@ -92,8 +92,10 @@ def play_game(idx, run_dir, cfg_a, cfg_b, team_a, team_b, timeout, log_level="IN
     # B accepts, A challenges.
     env_b = dict(os.environ)
     oracle_keys = ("HARDREAD_ORACLE_TEAM", "HARDREAD_ORACLE_P", "HARDREAD_ORACLE_FIELDS", "HARDREAD_ORACLE_SEED")
-    for k in oracle_keys:
+    for k in oracle_keys + tuple(k for k in os.environ if k.startswith("HARDREAD_LEVER_")):
         env_b.pop(k, None)
+    if treat_env and treat_side == "B":
+        env_b.update(treat_env)
     if oracle_p is not None and oracle_side == "B":
         # Evaluator-only: side B sees side A's true team.
         env_b.update(oracle_env(team_a, oracle_p, oracle_fields, oracle_seed, idx))
@@ -105,8 +107,10 @@ def play_game(idx, run_dir, cfg_a, cfg_b, team_a, team_b, timeout, log_level="IN
                           cwd=FOULPLAY_DIR, stdout=log_b, stderr=subprocess.STDOUT, env=env_b)
     time.sleep(2.0)
     env_a = dict(os.environ)
-    for k in oracle_keys:
+    for k in oracle_keys + tuple(k for k in os.environ if k.startswith("HARDREAD_LEVER_")):
         env_a.pop(k, None)
+    if treat_env and treat_side == "A":
+        env_a.update(treat_env)
     if log_decisions:
         env_a["HARDREAD_DECISION_LOG"] = str(run_dir / f"g{idx:04d}_a.decisions.jsonl")
         if log_states:
@@ -141,6 +145,7 @@ def play_game(idx, run_dir, cfg_a, cfg_b, team_a, team_b, timeout, log_level="IN
             "oracle_p": oracle_p, "oracle_side": oracle_side if oracle_p is not None else None,
             "oracle_fields": oracle_fields if oracle_p is not None else None,
             "oracle_hits": oracle_hits,
+            "treat_side": treat_side if treat_env else None,
             "team_a": team_a, "team_b": team_b, "winner": winner, "status": status,
             "seconds": round(dt, 1), "turns_logged": turns,
             "rc_a": pa.returncode, "rc_b": pb.returncode}
@@ -189,6 +194,11 @@ def main():
                     help="Which side gets the oracle (alternate: switch every pairing to cancel seat bias)")
     ap.add_argument("--oracle-fields", default="all")
     ap.add_argument("--oracle-seed", type=int, default=None)
+    ap.add_argument("--treat", default=None,
+                    help="Comma-separated KEY=VALUE environment for the treatment side only, "
+                         "e.g. HARDREAD_LEVER_SELECT=argmax (HardRead levers)")
+    ap.add_argument("--treat-seat", default="alternate", choices=["A", "B", "alternate"],
+                    help="Which side gets --treat (alternate: switch every pairing to cancel seat bias)")
     ap.add_argument("--log-decisions", action="store_true",
                     help="Write per-decision JSONL for both bots (fp/hardread_decision_log.py)")
     ap.add_argument("--log-states", action="store_true", help="Also store world state strings (large)")
@@ -197,6 +207,7 @@ def main():
     if args.port in (18000, 18002):
         raise SystemExit("Ports 18000/18002 belong to other lanes")
     PORT = args.port
+    treat_env = dict(kv.split("=", 1) for kv in args.treat.split(",")) if args.treat else None
 
     run_id = args.run_id or time.strftime("%Y%m%dT%H%M%S")
     run_dir = RUNS_DIR / run_id
@@ -221,7 +232,8 @@ def main():
                               pairs[i][0], pairs[i][1], args.timeout, args.log_level,
                               args.oracle_a_p, args.oracle_fields, args.oracle_seed,
                               args.log_decisions, args.log_states,
-                              oracle_side_for(i, args.oracle_seat, args.side_swap))
+                              oracle_side_for(i, args.oracle_seat, args.side_swap),
+                              treat_env, oracle_side_for(i, args.treat_seat, args.side_swap))
                     for i in range(len(pairs))]
             with open(run_dir / "games.jsonl", "a") as out:
                 for f in futs:
@@ -242,6 +254,8 @@ def main():
                "oracle_side_wins": (sum(r["winner"] == r["oracle_side"] for r in done)
                                     if args.oracle_a_p is not None else None),
                "failures": sum(r["status"] != "ok" for r in results),
+               "treat_side_wins": (sum(r["winner"] == r["treat_side"] for r in done) if treat_env else None),
+               "treat": args.treat,
                "wall_seconds": round(wall, 1),
                "mean_game_seconds": round(sum(r["seconds"] for r in results) / max(1, len(results)), 1),
                "games_per_hour": round(len(done) / wall * 3600, 1) if wall else None,
