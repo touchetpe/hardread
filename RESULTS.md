@@ -18,6 +18,7 @@ These are tool and infrastructure measurements only, not scientific claims. Ever
 | oracle-test-p05 | Oracle at p = 0.5 | Completed; ≈half of the worlds substituted |
 | aa-F1-100 | A/A at F1, mirror team | 52–48 (n = 100, CI ±9.8 points), 0 failures |
 | pool-F1-6 | Diverse team pool | 6/6 completed, 27–92 s |
+| aa-pool-F1-200 | A/A at F1, diverse pool, **no side swap** | **A (challenger) won 118/200 = 59%**, outside the 95% band (±6.9 points; p ≈ 0.01). 0 failures; median game 38 s. **Warning: possible seat bias, mixed up with team strength because sides weren't swapped.** Follow-up: `hraa-20261026-310d28` (1,000 side-swapped pairs on Azure). |
 
 ## 2026-10-26: Azure H100 Glimmer serving (`hrglimmer-20261026-9925f5`)
 
