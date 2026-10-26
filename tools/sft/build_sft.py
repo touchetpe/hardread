@@ -14,7 +14,16 @@ Both sides of a game share its log, so they always land in the same split. Teams
 a 2,000-team dev pool, so a team can appear in both splits (positions/games do not).
 
 Targets
-  action: Foul Play's played `choice`, as submit_action(choice_id) over the frozen menu.
+  action: --target argmax (default): the search policy's argmax (max chance-weighted visit share);
+          --target choice: Foul Play's played `choice` (differs from the argmax in ~11% of C1t1 decisions);
+          as submit_action(choice_id) over the frozen menu. Each action row also stores, for the
+          choice-id loss in azure/sft/sft_plugin.py:
+            choice_pos  index in input_ids of the DECISIVE token of the id: the first target token
+                        that differs between menu entries when the target is rendered with each act_XX
+                        (Glimmer tokenizer: 'act','_','NN' -> the single 2-digit token 'NN');
+            soft_tok/soft_p  the search policy over the menu, aggregated per decisive token (ids that
+                        share their first differing token pool their mass; never happens with act_01..99);
+            hard_tok    the target's decisive token (== input_ids[choice_pos] == labels[choice_pos]).
   reads : opponent's TRUE sets (opp_team, label only) for every non-fainted opponent Pokemon,
           as submit_reads(reads={species: {ability, item, moves, spread, tera}}).
 
@@ -53,7 +62,37 @@ def opener(p):
 
 
 def games_path(dec_path: Path) -> Path:
-    return dec_path.with_name(dec_path.name.replace(".jsonl", ".games.jsonl"))
+    stem, sep, tail = dec_path.name.rpartition(".jsonl")  # same rule as tools/dataset/extract.py
+    return dec_path.with_name(stem + ".games.jsonl" + tail if sep else dec_path.name + ".games.jsonl")
+
+
+ID_MARK = '<atem:parameter name="choice_id">{}</atem:parameter>'
+
+
+def choice_token_info(gc, enc, id_map, target_id, policy_by_id) -> dict:
+    """Decisive token of the target choice id and the soft target over the menu (see module doc)."""
+    n_p = enc["n_prompt"]
+    tgt_ids = enc["input_ids"][n_p:]
+    text = enc["target_text"]
+    mark = ID_MARK.format(target_id)
+    if text.count(mark) != 1:
+        raise ValueError("choice id not found exactly once in the rendered target")
+    seqs = {cid: gc.ids(text.replace(mark, ID_MARK.format(cid))) for cid in id_map}
+    if seqs[target_id] != tgt_ids:
+        raise ValueError("standalone target tokenisation differs from the in-context tokens")
+    n = min(len(v) for v in seqs.values())
+    d = next(i for i in range(n) if len({v[i] for v in seqs.values()}) > 1)
+    multi = any(len(v) != len(tgt_ids) for v in seqs.values())
+    mass = defaultdict(float)
+    for cid, v in seqs.items():
+        mass[v[d]] += float(policy_by_id.get(cid, 0.0))
+    total = sum(mass.values())
+    hard = tgt_ids[d]
+    if total <= 0:
+        mass, total = {hard: 1.0}, 1.0
+    toks = sorted(mass)
+    return {"choice_pos": n_p + d, "hard_tok": hard, "soft_tok": toks,
+            "soft_p": [round(mass[t] / total, 6) for t in toks], "multi_token_ids": multi}
 
 
 def h01(key: str) -> float:
@@ -79,6 +118,8 @@ def main(argv=None):
     ap.add_argument("inputs", nargs="+", type=Path)
     ap.add_argument("--out-dir", required=True, type=Path)
     ap.add_argument("--task", choices=["action", "reads", "both"], default="action")
+    ap.add_argument("--target", choices=["argmax", "choice"], default="argmax",
+                    help="action target: search-policy argmax (default) or Foul Play's played choice")
     ap.add_argument("--val-frac", type=float, default=0.05)
     ap.add_argument("--drop-team-preview", action="store_true")
     ap.add_argument("--min-legal", type=int, default=2, help="drop decisions with fewer legal actions (forced moves)")
@@ -92,6 +133,8 @@ def main(argv=None):
     ap.add_argument("--reads-every", type=int, default=4, help="reads task: keep ~1 in N decisions")
     ap.add_argument("--max-tokens", type=int, default=2048)
     ap.add_argument("--max-train", type=int, default=0, help="cap train examples after resampling (0 = all)")
+    ap.add_argument("--max-train-action", type=int, default=0, help="cap train action rows (0 = all)")
+    ap.add_argument("--max-train-reads", type=int, default=0, help="cap train reads rows (0 = all)")
     ap.add_argument("--keep-frac", type=float, default=1.0,
                     help="keep a deterministic sha256(uid) subset of decisions before rendering (fast subsampling)")
     ap.add_argument("--model-dir", default=None, help="dir with tokenizer.json + chat_template.jinja (pinned)")
@@ -147,11 +190,15 @@ def main(argv=None):
                 if r.get("choice") not in legal:
                     drops["choice_not_legal"] += 1
                     continue
+                pol = {a: float(p) for a, p in (r.get("policy") or {}).items() if a in legal}
+                argmax = max(pol, key=pol.get) if pol else r["choice"]
+                target = argmax if args.target == "argmax" else r["choice"]
+                counts["target_eq_choice"] += int(target == r["choice"])
                 visits = sum(w.get("total_visits") or 0 for w in r.get("worlds") or [])
                 if visits < args.min_visits:
                     drops["min_visits"] += 1
                     continue
-                conf = float((r.get("policy") or {}).get(r["choice"], 0.0))
+                conf = pol.get(target, 0.0)
                 if conf < args.min_conf:
                     drops["min_conf"] += 1
                     continue
@@ -170,7 +217,7 @@ def main(argv=None):
                     ex = S.build_example(r["view"], history, legal, r["player"], r["turn"], r["k"],
                                          bool(r.get("team_preview")), task=task)
                     if task == "action":
-                        tgt = S.target_message(r["choice"], ex["id_map"])
+                        tgt = S.target_message(target, ex["id_map"])
                         reads = None
                     else:
                         reads = S.reads_label(ex["species"], r.get("opp_team") or [])
@@ -188,20 +235,30 @@ def main(argv=None):
                     tok[task]["target"].append(enc["n_target"])
                     tok[task]["total"].append(n)
                     rec = {"example_id": eid, "task": task, "input_ids": enc["input_ids"], "labels": enc["labels"]}
+                    inv = {v: k for k, v in ex["id_map"].items()}
+                    if task == "action":
+                        info = choice_token_info(gc, enc, ex["id_map"], inv[target], {inv[a]: p for a, p in pol.items()})
+                        counts["choice_multi_token_ids"] += int(info.pop("multi_token_ids"))
+                        if enc["labels"][info["choice_pos"]] != info["hard_tok"]:
+                            raise ValueError(f"{eid}: label/choice token misalignment")
+                        rec.update(info)
+                    line_ = json.dumps(rec, separators=(",", ":"))
                     if split == "train":
                         k = copies(w, eid)
                         counts[f"train_{task}_unique"] += 1
                         for c in range(k):
-                            train_rows.append(rec if c == 0 else dict(rec, example_id=f"{eid}#{c}"))
+                            train_rows.append((task, line_ if c == 0 else json.dumps(dict(rec, example_id=f"{eid}#{c}"),
+                                                                                     separators=(",", ":"))))
                     else:
-                        val_rows.append(rec)
-                        inv = {v: k for k, v in ex["id_map"].items()}
+                        val_rows.append((task, line_))
                         eval_rows.append({
                             "example_id": eid, "task": task, "uid": r["uid"], "turn": r["turn"], "k": r["k"],
                             "team_preview": bool(r.get("team_preview")), "cfg": r.get("cfg"),
                             "messages": ex["messages"], "tools": ex["tools"], "id_map": ex["id_map"],
                             "choice": r["choice"] if task == "action" else None,
                             "choice_id": inv.get(r["choice"]) if task == "action" else None,
+                            "argmax_id": inv.get(argmax) if task == "action" else None,
+                            "target_id": inv.get(target) if task == "action" else None,
                             "policy": {inv[a]: p for a, p in (r.get("policy") or {}).items() if a in inv} if task == "action" else None,
                             "reads": reads, "n_prompt": enc["n_prompt"], "serializer": S.SERIALIZER_VERSION})
                     if len(shown) < args.n_examples * len(tasks) and sum(1 for s in shown if s[0] == task) < args.n_examples \
@@ -211,17 +268,23 @@ def main(argv=None):
 
     rng = random.Random(args.seed)
     rng.shuffle(train_rows)
+    for task, cap in (("action", args.max_train_action), ("reads", args.max_train_reads)):
+        have = [x for x in train_rows if x[0] == task]
+        if cap and len(have) > cap:
+            drops[f"max_train_{task}_cap"] += len(have) - cap
+            keep = set(id(x) for x in have[:cap])
+            train_rows = [x for x in train_rows if x[0] != task or id(x) in keep]
     if args.max_train and len(train_rows) > args.max_train:
         drops["max_train_cap"] += len(train_rows) - args.max_train
         train_rows = train_rows[: args.max_train]
 
-    def dump(name, rows):
+    def dump(name, rows, raw=False):
         with gzip.open(out / name, "wt") as f:
             for row in rows:
-                f.write(json.dumps(row, separators=(",", ":")) + "\n")
+                f.write((row[1] if raw else json.dumps(row, separators=(",", ":"))) + "\n")
 
-    dump("train.jsonl.gz", train_rows)
-    dump("val.jsonl.gz", val_rows)
+    dump("train.jsonl.gz", train_rows, raw=True)
+    dump("val.jsonl.gz", val_rows, raw=True)
     dump("eval.jsonl.gz", eval_rows)
     with open(out / "examples.txt", "w") as f:
         for task, eid, text in shown:
@@ -236,12 +299,15 @@ def main(argv=None):
         "supervision": "labels on every token after the generation prompt '<|start|>assistant' (channel header, ATEM call, <|eot|>)",
         "counts": dict(counts, train_rows=len(train_rows), val_rows=len(val_rows), eval_rows=len(eval_rows),
                        train_games=len(games_seen["train"]), val_games=len(games_seen["val"]),
-                       train_by_task=dict(Counter(r["task"] for r in train_rows)),
-                       val_by_task=dict(Counter(r["task"] for r in val_rows))),
+                       train_by_task=dict(Counter(t for t, _ in train_rows)),
+                       val_by_task=dict(Counter(t for t, _ in val_rows))),
+        "target": args.target,
+        "choice_loss_fields": "action rows: choice_pos, hard_tok, soft_tok, soft_p (decisive id token + search policy)",
         "drops": dict(drops),
         "tokens": {task: {k: pstats(v) for k, v in d.items()} for task, d in tok.items()},
-        "train_supervised_tokens": sum(sum(1 for x in r["labels"] if x != -100) for r in train_rows),
-        "train_total_tokens": sum(len(r["input_ids"]) for r in train_rows),
+        "rendered_supervised_tokens": sum(sum(tok[t]["target"]) for t in tok),  # all splits, before caps
+        "train_rows_total_tokens_est": int(sum(statistics.mean(tok[t]["total"]) * n for t, n in
+                                               Counter(t for t, _ in train_rows).items())),
     }
     (out / "manifest.json").write_text(json.dumps(manifest, indent=1))
     print(json.dumps({k: manifest[k] for k in ("counts", "drops", "tokens", "build_seconds")}, indent=1))

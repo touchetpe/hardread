@@ -9,7 +9,8 @@ set -euo pipefail
 NAME="$1"; DATA="$2"; TIMEOUT="$3"; DESC="$4"; shift 4
 NODES="${NODES:-1}"
 [[ "$NAME" == hrsft-* ]] || { echo "job name must start with hrsft-"; exit 2; }
-(( TIMEOUT <= 10800 )) || { echo "timeout must be <= 10800 s"; exit 2; }
+MAX_TIMEOUT="${MAX_TIMEOUT:-10800}"  # raise explicitly (e.g. MAX_TIMEOUT=21600) for v0 runs
+(( TIMEOUT <= MAX_TIMEOUT )) || { echo "timeout must be <= $MAX_TIMEOUT s (set MAX_TIMEOUT to raise)"; exit 2; }
 HERE="$(cd "$(dirname "$0")" && pwd)"; AZ="$(dirname "$HERE")"; HR="$(dirname "$AZ")"
 RG=rg-${HR_AZ_WS}; WS=${HR_AZ_WS}
 ENV_ID=/subscriptions/${HR_AZ_SUBSCRIPTION}/resourceGroups/$RG/providers/Microsoft.MachineLearningServices/workspaces/$WS/environments/pokemon-h100-axolotl-cuda13-training/versions/20261026-9f7aa9a5704c

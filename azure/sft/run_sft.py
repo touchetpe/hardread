@@ -176,6 +176,13 @@ def _train(args, env):
             cfg[key] = val
     if not args.max_steps:
         cfg.pop("max_steps", None)
+    if int(os.environ.get("WORLD_SIZE", "1")) > 1:
+        # Only LoRA params train and all are used every step; HF would default to True for a PEFT model.
+        cfg["ddp_find_unused_parameters"] = False
+    if args.loss == "weighted":
+        # The choice-token loss needs logits at the supervised positions: Cut Cross Entropy off.
+        cfg["plugins"] = [p for p in cfg["plugins"] if "cut_cross_entropy" not in p]
+        cfg["cut_cross_entropy"] = False
     resolved = OUT / f"config.resolved{SUFFIX}.yaml"
     resolved.write_text(yaml.safe_dump(cfg, sort_keys=False))
     sh(["axolotl", "train", resolved, "--launcher", "python"], f"train{SUFFIX}.log", env=env, cwd=CODE,
@@ -198,10 +205,11 @@ def _train(args, env):
 
 train = stage("train")(_train)
 train_retry_mb1 = stage("train_retry_mb1")(_train)
+train_retry_plain = stage("train_retry_plain")(_train)
 
 
 def train_ok() -> bool:
-    return any(STATE["stages"].get(k, {}).get("status") == "ok" for k in ("train", "train_retry_mb1"))
+    return any(STATE["stages"].get(k, {}).get("status") == "ok" for k in ("train", "train_retry_plain", "train_retry_mb1"))
 
 
 def n_steps_logged() -> int:
@@ -321,6 +329,10 @@ def main():
     ap.add_argument("--skip-serve", action="store_true")
     ap.add_argument("--skip-teacher", action="store_true")
     ap.add_argument("--no-mb-fallback", action="store_true")
+    ap.add_argument("--loss", choices=["plain", "weighted"], default="weighted",
+                    help="plain: token-mean CE (CCE); weighted: choice-token weight W + soft policy target (sft_plugin)")
+    ap.add_argument("--choice-weight", type=float, default=10.0)
+    ap.add_argument("--soft-alpha", type=float, default=0.7)
     args = ap.parse_args()
     args.data = str(Path(args.data).resolve())
     args.snapshot = str(Path(args.snapshot).resolve())
@@ -334,7 +346,8 @@ def main():
     env = dict(os.environ, TMPDIR=str(work / "tmp"), HF_HOME=str(work / "hf"), HF_DATASETS_CACHE=str(work / "hf" / "ds"),
                HF_HUB_OFFLINE="1", TRANSFORMERS_OFFLINE="1", HF_HUB_DISABLE_TELEMETRY="1", WANDB_MODE="offline",
                WANDB_DIR=str(work), TOKENIZERS_PARALLELISM="false", PYTHONUNBUFFERED="1",
-               HRSFT_STEPS_LOG=str(OUT / "steps.jsonl"),
+               HRSFT_STEPS_LOG=str(OUT / "steps.jsonl"), HRSFT_LOSS=args.loss,
+               HRSFT_CHOICE_W=str(args.choice_weight), HRSFT_SOFT_ALPHA=str(args.soft_alpha),
                PYTHONPATH=os.pathsep.join([str(SFT), str(TOOLS), str(CODE), os.environ.get("PYTHONPATH", "")]))
     if int(os.environ.get("WORLD_SIZE", "1")) > 1:
         # NC40ads_H100_v5 nodes have no InfiniBand: NCCL over TCP sockets. LoRA grads are ~0.4 GB/step.
@@ -348,7 +361,17 @@ def main():
         threading.Thread(target=prefetch, args=(work, shm, pre), daemon=True).start()
     train(args, env)
     mb = args.micro_batch or 4
-    if STATE["stages"]["train"]["status"] != "ok" and n_steps_logged() == 0 and mb > 1 and not args.no_mb_fallback:
+    if STATE["stages"]["train"]["status"] != "ok" and n_steps_logged() == 0 and args.loss == "weighted" \
+            and not args.no_mb_fallback:
+        # The weighted choice loss is the newest code path: fall back once to the smoke-proven plain loss.
+        log("weighted-loss training failed before the first step; retrying with --loss plain (see summary)")
+        args.loss = "plain"
+        env["HRSFT_LOSS"] = "plain"
+        STATE["loss_fallback"] = "weighted -> plain"
+        train_retry_plain(args, env)
+        if STATE["stages"]["train_retry_plain"]["status"] == "ok":
+            mb = 1  # skip the micro-batch retry
+    if not train_ok() and n_steps_logged() == 0 and mb > 1 and not args.no_mb_fallback:
         # The qualified canary only ever ran micro-batch 1: retry once there, same effective batch.
         log(f"train failed before the first step with micro-batch {mb}; retrying with micro-batch 1")
         args.grad_accum, args.micro_batch = (args.grad_accum or 4) * mb, 1

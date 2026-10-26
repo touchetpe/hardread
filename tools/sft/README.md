@@ -39,6 +39,18 @@ That is 57 target tokens.
   - llama.cpp adds that BOS when tokenizing, so the token ids are identical.
 - **Parsing:** llama.cpp's PEG parser accepts the layout (`(start analysis)* start tool`). Setting `ACT_REASONING = None` gives a bare tool call, which is also valid.
 
+## Choice-token loss (v0 default)
+The smoke run learned the format by step 10 and then barely moved on the decision (34% vs 30.5% for the base model). The choice-id token is 1 of 57 target tokens. Three changes address this:
+- **`--target argmax`** (build_sft default): train on the search policy's argmax rather than the sampled `choice`, which disagrees with it in 11% of C1t1 decisions.
+- **Decisive token.** Each action row stores `choice_pos`, `hard_tok`, `soft_tok` and `soft_p`.
+  - `choice_pos` is the first target token that differs when the target is rendered with each menu id. Under the Glimmer tokenizer `act_NN` is always `'act','_','NN'`, with `01`…`99` each a single token, so it is the 2-digit token. `choice_multi_token_ids` = 0 on all data.
+  - If ids ever spanned several tokens, ids sharing that first token would pool their policy mass, and the later tokens would get the ordinary hard CE.
+  - `soft_tok` and `soft_p` hold the search policy over the menu, aggregated per decisive token.
+- **`--loss weighted`** (run_sft default, `sft_plugin.HardReadTrainer`). Format tokens keep weight 1. The decisive token gets weight `W` (`--choice-weight`, default 10). Its loss is `α·H(q, p) + (1−α)·CE(hard)` (`--soft-alpha`, default 0.7), where p is the full-vocabulary softmax.
+  - The loss is `Σ w·l / Σ w` over the micro-batch, a weighted token mean. With W=1 and α=0 it equals plain CE exactly. The choice token carries 10/66 of the loss instead of 1/57.
+  - Cut Cross Entropy is switched off. Logits are computed only at supervised positions through `logits_to_keep` with an index tensor, with a full-logit fallback.
+  - Tests: `python3 azure/sft/test_sft_loss.py` (CPU, tiny random model with the full 202,048-token vocabulary). They cover loss values, exact gradients at the choice position, zero gradient on prompt and padding, and alignment of masks with the rendered tokens.
+
 ## Reads task
 - **Tool:** `submit_reads(reads={species: {ability, item, moves, spread, tera}})`, for every non-fainted opponent Pokémon.
 - **Labels:** taken from `opp_team` and used only as labels.
@@ -49,9 +61,10 @@ That is 57 target tokens.
 ## Build
 ```sh
 python3 tools/dataset/extract.py scratch_ds/c1t1/chunks/*.tar.gz --out scratch_ds/c1t1/decisions.jsonl.gz
-python3 tools/sft/build_sft.py scratch_ds/c1t1/decisions.jsonl.gz --out-dir scratch_ds/sft/v0 \
-    --task action --val-frac 0.05 --cfg C1t1 [--drop-team-preview] [--min-visits N] [--min-conf X] \
-    [--weight conf --conf-ref 0.5] [--teampreview-weight 0.5] [--max-train N]
+python3 tools/sft/build_sft.py scratch_ds/sft/v0-src/decisions.jsonl.gz --out-dir scratch_ds/sft/v0 \
+    --task both --target argmax --val-frac 0.02 --cfg C1t1 --keep-frac F --reads-every 9 \
+    --max-train-action 50000 --max-train-reads 5556 [--drop-team-preview] [--min-visits N] [--min-conf X] \
+    [--weight conf --conf-ref 0.5] [--teampreview-weight 0.5]
 ```
 - **Split:** by game, using `sha256("<run_id>/g<game>")`, so both sides of a game land in the same split. Teams can recur across splits because they come from the 2,000-team dev pool.
 - **Default filter:** drops decisions with only one legal action.
@@ -76,6 +89,23 @@ bash azure/sft/submit_sft.sh hrsft-<date>-<tag> scratch_ds/sft/v0 10800 "descrip
   - Rank 0 alone saves, evaluates and serves.
   - NCCL runs over TCP because these nodes have no InfiniBand. LoRA gradients are about 0.4 GB per step, which is small next to a step of about 10 s.
   - Each rank sees `micro_batch × grad_accum` rows per step. Divide `--grad-accum` by N to keep the effective batch.
+
+## v0 (prepared, not submitted)
+- **Data:** `scratch_ds/sft/v0`, built from 54 C1t1 chunks (112,619 decisions, 1,350 games).
+  - Train: 50,000 action + 5,556 reads rows, about 69M tokens.
+  - Held out: 1,066 action + 132 reads rows from 23 games.
+- **Single-node subset:** `scratch_ds/sft/v0-20k` is the first 20k rows of the shuffled train file (18,001 action + 1,999 reads).
+```sh
+# v0-safe: 1 node, 20k rows, ~4.4 h train (+~25 min load/eval/serve)
+MAX_TIMEOUT=21600 bash azure/sft/submit_sft.sh hrsft-<date>-v0safe-<hex> scratch_ds/sft/v0-20k 21600 "v0-safe" \
+  --epochs 1 --micro-batch 4 --grad-accum 4 --save-steps 100 --loss weighted --choice-weight 10 --soft-alpha 0.7 \
+  --eval-n 400 --gen-n 24 --serve-n 400 --base-n 0
+# v0-ddp: 3 nodes, 55.6k rows, ~4.1 h compute + DDP overhead (+~25 min)
+NODES=3 MAX_TIMEOUT=21600 bash azure/sft/submit_sft.sh hrsft-<date>-v0ddp-<hex> scratch_ds/sft/v0 21600 "v0-ddp" \
+  --epochs 1 --micro-batch 4 --grad-accum 2 --save-steps 200 --loss weighted --choice-weight 10 --soft-alpha 0.7 \
+  --eval-n 400 --gen-n 24 --serve-n 400 --base-n 0
+```
+- **Fallback:** if weighted-loss training fails before its first step, `run_sft.py` retries once with `--loss plain` (smoke-proven) and records `loss_fallback` in `summary.json`.
 
 ## Serving
 Base Q4_K_M GGUF + `--lora adapter-bf16.gguf` (about 0.4 GB). The flags are those of `azure/sft/run_sft.py`, with the request using `tool_choice: required`. The alternative is to merge the adapter into the BF16 base, convert, and quantize to Q4_K_M.
