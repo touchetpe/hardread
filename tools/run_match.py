@@ -141,6 +141,9 @@ def main():
     ap.add_argument("--team-pool", default=None,
                     help="Folder under fp/teams/teams; each game draws two different teams from it")
     ap.add_argument("--seed", type=int, default=0, help="Seed for team-pool pairing")
+    ap.add_argument("--side-swap", action="store_true",
+                    help="Play every team pairing twice with the teams swapped between sides "
+                         "(A is always the challenger). --games counts pairs.")
     ap.add_argument("--timeout", type=int, default=1800)
     ap.add_argument("--run-id", default=None)
     ap.add_argument("--log-level", default="INFO")
@@ -174,11 +177,13 @@ def main():
             for _ in range(args.games):
                 a, b = rng.sample(names, 2)
                 pairs.append((f"{args.team_pool}/{a}", f"{args.team_pool}/{b}"))
+        if args.side_swap:
+            pairs = [p for ab in pairs for p in (ab, (ab[1], ab[0]))]
         with ThreadPoolExecutor(max_workers=args.concurrency) as ex:
             futs = [ex.submit(play_game, i, run_dir, args.cfg_a, args.cfg_b,
                               pairs[i][0], pairs[i][1], args.timeout, args.log_level,
                               args.oracle_a_p, args.oracle_fields, args.oracle_seed)
-                    for i in range(args.games)]
+                    for i in range(len(pairs))]
             with open(run_dir / "games.jsonl", "a") as out:
                 for f in futs:
                     r = f.result()
@@ -200,7 +205,7 @@ def main():
                "games_per_hour": round(len(done) / wall * 3600, 1) if wall else None,
                "concurrency": args.concurrency, "cfg_a": args.cfg_a, "cfg_b": args.cfg_b,
                "oracle_a_p": args.oracle_a_p, "oracle_fields": args.oracle_fields,
-               "team_pool": args.team_pool, "seed": args.seed}
+               "team_pool": args.team_pool, "seed": args.seed, "side_swap": args.side_swap}
     (run_dir / "summary.json").write_text(json.dumps(summary, indent=2))
     print("SUMMARY", json.dumps(summary), flush=True)
 
