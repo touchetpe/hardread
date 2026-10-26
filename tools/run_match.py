@@ -22,13 +22,14 @@ FOULPLAY_DIR = HARDREAD / "foul-play"
 FOULPLAY_PY = PROJECT / "environments" / "foulplay" / "bin" / "python"
 RUNTIME = HARDREAD / "showdown" / "runtime"
 NODE = "/Users/REDACTED/.nvm/versions/node/v24.13.0/bin/node"
-PORT = 18010
+PORT = 18010  # default; overridden by --port
 
 CONFIGS = {
     # name: (search_parallelism, search_time_ms, search_threads)
     "F1": (2, 100, 1),
     "C1": (4, 2000, 2),
     "C2": (8, 3500, 1),
+    "C1t1": (4, 2000, 1),
 }
 
 
@@ -38,9 +39,12 @@ def port_open(port):
         return s.connect_ex(("127.0.0.1", port)) == 0
 
 
-def start_server(log_dir):
+def start_server(log_dir, reuse=False):
     if port_open(PORT):
-        return None
+        if reuse:
+            return None
+        raise SystemExit(f"Port {PORT} is busy. Use --port N for a private server, "
+                         f"or --reuse-server to share one you started yourself.")
     env = {k: v for k, v in os.environ.items() if k not in ("PSPORT", "PSBINDADDR", "PSNOSSL")}
     log = open(log_dir / "showdown.log", "w")
     proc = subprocess.Popen(
@@ -74,7 +78,8 @@ def bot_cmd(username, mode, cfg, team, opponent=None, log_level="INFO"):
     return cmd
 
 
-def play_game(idx, run_dir, cfg_a, cfg_b, team_a, team_b, timeout, log_level="INFO"):
+def play_game(idx, run_dir, cfg_a, cfg_b, team_a, team_b, timeout, log_level="INFO",
+              oracle_p=None, oracle_fields="all", oracle_seed=None):
     tag = uuid.uuid4().hex[:6]
     name_a, name_b = f"hra{idx}{tag}", f"hrb{idx}{tag}"
     log_a = open(run_dir / f"g{idx:04d}_a.log", "w")
@@ -84,8 +89,16 @@ def play_game(idx, run_dir, cfg_a, cfg_b, team_a, team_b, timeout, log_level="IN
     pb = subprocess.Popen(bot_cmd(name_b, "accept_challenge", cfg_b, team_b, log_level=log_level),
                           cwd=FOULPLAY_DIR, stdout=log_b, stderr=subprocess.STDOUT)
     time.sleep(2.0)
+    env_a = dict(os.environ)
+    if oracle_p is not None:
+        # Evaluator-only: side A sees side B's true team with probability p per Pokemon per world.
+        env_a["HARDREAD_ORACLE_TEAM"] = str(FOULPLAY_DIR / "fp" / "teams" / "teams" / team_b)
+        env_a["HARDREAD_ORACLE_P"] = str(oracle_p)
+        env_a["HARDREAD_ORACLE_FIELDS"] = oracle_fields
+        if oracle_seed is not None:
+            env_a["HARDREAD_ORACLE_SEED"] = str(oracle_seed + idx)
     pa = subprocess.Popen(bot_cmd(name_a, "challenge_user", cfg_a, team_a, opponent=name_b, log_level=log_level),
-                          cwd=FOULPLAY_DIR, stdout=log_a, stderr=subprocess.STDOUT)
+                          cwd=FOULPLAY_DIR, stdout=log_a, stderr=subprocess.STDOUT, env=env_a)
     status = "ok"
     try:
         pa.wait(timeout=timeout)
@@ -105,7 +118,10 @@ def play_game(idx, run_dir, cfg_a, cfg_b, team_a, team_b, timeout, log_level="IN
     turns = len(re.findall(r"\|turn\|", text_a)) or None
     if winner is None and status == "ok":
         status = "no_result"
+    oracle_hits = len(re.findall(r"Oracle applied", text_a))
     return {"game": idx, "a": name_a, "b": name_b, "cfg_a": cfg_a, "cfg_b": cfg_b,
+            "oracle_p_a": oracle_p, "oracle_fields_a": oracle_fields if oracle_p is not None else None,
+            "oracle_hits_a": oracle_hits,
             "team_a": team_a, "team_b": team_b, "winner": winner, "status": status,
             "seconds": round(dt, 1), "turns_logged": turns,
             "rc_a": pa.returncode, "rc_b": pb.returncode}
@@ -122,18 +138,31 @@ def main():
     ap.add_argument("--timeout", type=int, default=1800)
     ap.add_argument("--run-id", default=None)
     ap.add_argument("--log-level", default="INFO")
+    ap.add_argument("--port", type=int, default=18010,
+                    help="Private Showdown port for this run (18000/18002 belong to other lanes)")
+    ap.add_argument("--reuse-server", action="store_true",
+                    help="Use an already running server on --port instead of starting one")
+    ap.add_argument("--oracle-a-p", type=float, default=None,
+                    help="Evaluator-only: give side A side B's true sets with this probability")
+    ap.add_argument("--oracle-fields", default="all")
+    ap.add_argument("--oracle-seed", type=int, default=None)
     args = ap.parse_args()
+    global PORT
+    if args.port in (18000, 18002):
+        raise SystemExit("Ports 18000/18002 belong to other lanes")
+    PORT = args.port
 
     run_id = args.run_id or time.strftime("%Y%m%dT%H%M%S")
     run_dir = HARDREAD / "runs" / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
-    server = start_server(run_dir)
+    server = start_server(run_dir, reuse=args.reuse_server)
     t0 = time.time()
     results = []
     try:
         with ThreadPoolExecutor(max_workers=args.concurrency) as ex:
             futs = [ex.submit(play_game, i, run_dir, args.cfg_a, args.cfg_b,
-                              args.team_a, args.team_b, args.timeout, args.log_level)
+                              args.team_a, args.team_b, args.timeout, args.log_level,
+                              args.oracle_a_p, args.oracle_fields, args.oracle_seed)
                     for i in range(args.games)]
             with open(run_dir / "games.jsonl", "a") as out:
                 for f in futs:
@@ -154,7 +183,8 @@ def main():
                "wall_seconds": round(wall, 1),
                "mean_game_seconds": round(sum(r["seconds"] for r in results) / max(1, len(results)), 1),
                "games_per_hour": round(len(done) / wall * 3600, 1) if wall else None,
-               "concurrency": args.concurrency, "cfg_a": args.cfg_a, "cfg_b": args.cfg_b}
+               "concurrency": args.concurrency, "cfg_a": args.cfg_a, "cfg_b": args.cfg_b,
+               "oracle_a_p": args.oracle_a_p, "oracle_fields": args.oracle_fields}
     (run_dir / "summary.json").write_text(json.dumps(summary, indent=2))
     print("SUMMARY", json.dumps(summary), flush=True)
 

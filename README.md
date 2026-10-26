@@ -41,12 +41,22 @@ Working repo for the plan in [research/22-final-comparison.md](../research/22-fi
 | Name | Worlds | ms per world | Threads | Note |
 |---|---|---|---|---|
 | F1 | 2 | 100 | 1 | fast |
-| C1 | 4 | 2000 | 2 | ≈2 s per move |
+| C1 | 4 | 2000 | 2 | ≈2 s per move. **Crashes (`BrokenProcessPool`) with 2 threads per world: use C1t1.** |
+| C1t1 | 4 | 2000 | 1 | ≈2 s per move; one game ≈179 s on the Mac |
 | C2 | 8 | 3500 | 1 | ≈3.5 s per move, ≈7 s early |
 
 Foul Play doubles the number of worlds while the opponent has revealed fewer than 3 moves.
 
+**Server isolation:** each run starts its own private server on `--port` (default 18010) and refuses a busy port. Run parallel jobs on different ports (18011, 18012, …), or use `--reuse-server` for a server you started yourself.
+
+**Oracle (evaluator-only).** `--oracle-a-p P --oracle-fields all|item|ability|tera|moves|spread` gives side A side B's true sets with probability P, per Pokémon and per sampled world (`fp/hardread_oracle.py`, hooked into `prepare_battles`). Tested: at p = 1, 500 of 500 substitutions matched the true team; at p = 0.5, about half the worlds.
+
 **Output.** Results go to `runs/<run_id>/games.jsonl` and `summary.json`, with per-bot logs in `runs/<run_id>/`.
+
+## Measured on the Mac (M4 Max, 16 cores)
+- **F1:** one game ≈25–35 s; 8 of 8 games completed at 4 in parallel → **≈460 games/hour**.
+- **C1t1:** one game ≈179 s, ≈0.4 GB per search process.
+- **C1 with 2 threads per world:** search worker crash. Avoid.
 
 ## Data that Foul Play downloads on first use (cached; to be pinned and hashed)
 - Smogon chaos stats for the previous month (`smogon.com/stats`);
