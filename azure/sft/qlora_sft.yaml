@@ -1,0 +1,76 @@
+# HardRead Glimmer SFT: 1x H100 QLoRA, adapted from the qualified canary (h100/config/canary.yaml).
+# run_sft.py fills base_model, datasets[0].path, output_dir and the CLI overrides (max_steps, ...).
+# Quantization: the flat bnb_4bit_* fields are omitted on purpose. Axolotl 0.19 ignores them and
+# uses its defaults (NF4, double_quant=True, bf16 compute, bf16 quant storage), which is exactly what
+# the qualified canary checkpoint records; eval_sft.py reloads with the same settings.
+base_model: __SNAPSHOT__
+processor_type: AutoProcessor
+
+plugins:
+  - axolotl.integrations.cut_cross_entropy.CutCrossEntropyPlugin
+  - sft_plugin.HardReadSFTPlugin
+cut_cross_entropy: true
+
+adapter: qlora
+load_in_4bit: true
+lora_r: 32
+lora_alpha: 16
+lora_dropout: 0.05
+# Language projections only (vision tower frozen), as in the upstream Muse recipe.
+lora_target_modules: "model\\.language_model\\.layers\\.\\d+\\.(self_attn\\.(q|k|v|o)_proj|mlp\\.(gate|up|down)_proj)"
+lora_mlp_kernel: false
+lora_qkv_kernel: false
+lora_o_kernel: false
+lora_embedding_kernel: false
+
+# Pre-tokenized rows come from sft_plugin.HardReadSFTPlugin (labels already masked).
+skip_prepare_dataset: true
+remove_unused_columns: false
+sample_packing: false
+eval_sample_packing: false
+train_on_inputs: false
+datasets:
+  - path: __TRAIN__
+    type: chat_template
+    field_messages: messages
+    roles_to_train:
+      - assistant
+    train_on_eos: turn
+val_set_size: 0.0
+output_dir: __OUTPUT__
+
+# Longest smoke/sample example is 1,549 tokens (prompt p99 ~1,420 + 57 target).
+sequence_len: 2048
+pad_to_sequence_len: false
+
+micro_batch_size: 4
+gradient_accumulation_steps: 4
+num_epochs: 1
+optimizer: adamw_bnb_8bit
+lr_scheduler: cosine
+learning_rate: 0.0002
+warmup_steps: 10
+weight_decay: 0.0
+max_grad_norm: 1.0
+
+bf16: true
+fp16: false
+tf32: true
+gradient_checkpointing: true
+attn_implementation: flash_attention_2
+logging_steps: 1
+include_tkps: true
+
+eval_strategy: "no"
+# Checkpoints go straight to the job output (rw_mount): a killed job keeps progress, and a
+# resubmission with the same output path resumes from the newest checkpoint.
+save_strategy: steps
+save_steps: 40
+save_total_limit: 3
+save_only_model: false
+save_safetensors: true
+auto_resume_from_checkpoints: true
+
+seed: 42
+dataloader_num_workers: 0
+wandb_mode: offline
