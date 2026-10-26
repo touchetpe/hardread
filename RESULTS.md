@@ -272,3 +272,22 @@ Concurrency was conservative, so C1t1 and C2 may gain ≈20–40% when tuned (no
 - **Human action table:** 3.70M rows with rating band.
 - **Ops note:** the agent ran a broad `pkill -f multiprocessing.spawn`, which briefly killed other lanes' pool workers (respawned). Agents are now told to stop only their own PIDs.
 - **Next:** belief v1 (farm full labels + human partial labels) on the S-A test set (`hr_val`, log v3 with Foul Play's own 64-draw belief as the baseline).
+
+## 2026-10-26 23:05 UTC: student v1 (`hrstu-20261026-v1-8187`, one H100, ≈10 min of node time)
+- **Data:**
+  - C1t1 label farm: 2,699 games, 226k decisions (train 168k / dev 21k / roster-hash test 37.6k);
+  - F1 volume pretraining: 109k decisions;
+  - `hr_val` cross-pool test: 440 games, 33k decisions.
+- **Results** (top-1 vs search argmax; KL to the search policy; value Brier):
+
+| Model | Roster-hash test | `hr_val` |
+|---|---|---|
+| v0 | 49.7% / 0.475 / 0.185 | 49.9% / 0.480 / 0.176 |
+| Control (C1t1 only, paper same-input control) | 53.3% / 0.431 / 0.178 | 53.6% / 0.433 / 0.173 |
+| **Main** (F1 pretraining + C1t1) | **54.5% / 0.411 / 0.176** | **55.3% / 0.415 / 0.171** |
+
+- The search's root-value Brier is 0.214 / 0.200.
+- No pool overfitting: the unseen `hr_val` rosters score as well as the test split.
+- **Learning curve:** the control gains ≈3 points per doubling and is not flattening; F1 pretraining is worth ≈8× the C1t1 data at 21k decisions.
+- **Latency:** 6.6 ms on the Mac (numpy); 44 ms numpy / 33 ms torch on the Azure node CPU.
+- **Lever screens submitted:** `hrlev-20261027-sb{015,03,05}-9231` (student-blend λ = 0.15 / 0.3 / 0.5 vs vanilla, C1t1, dev set A).
