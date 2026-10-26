@@ -57,3 +57,14 @@ Concurrency was conservative, so C1t1 and C2 may gain ≈20–40% when tuned (no
 | Sealed test, 12,000 games at **C1t1** | ≈50 h | ≈20 h |
 
 **Conclusion:** the pre-registered n = 12,000 at C2 cannot fit in the D6–D7 window on this cluster. The sealed design must be resized (see the status note to the user).
+
+## 2026-10-26: decision logging (`declog-test`)
+- One F1 game on the diverse pool with `--log-decisions`: 40 decision records (22 A + 18 B), ≈11.7 KB each without world states.
+- **Fields:**
+  - public view, including Foul Play's inferences (impossible items, speed range);
+  - every sampled world's opponent sets and weight;
+  - both sides' per-world MCTS visits and average scores;
+  - the choice.
+- Foul Play tests are still at 737 passed.
+- **Storage:** ≈0.5 MB per game uncompressed, so 100k games ≈ 47 GB raw. Gzip per game before upload; node disks are 128 GB.
+- **To check before belief training:** opponent item encodings (`None` vs unknown vs removed) in the public view.
