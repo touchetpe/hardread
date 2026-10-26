@@ -1,0 +1,92 @@
+diff -ru a/fp/hardread_levers.py b/fp/hardread_levers.py
+--- a/fp/hardread_levers.py	2026-10-26 18:17:56
++++ b/fp/hardread_levers.py	2026-10-26 18:18:34
+@@ -9,6 +9,9 @@
+     argmax  play the move with the highest chance-weighted visit share
+     value   among moves with >= 75% of the top visit share, play the highest
+             chance-weighted mean search score
++    student-blend  q = (1 - lam) * visit share + lam * student policy (tools/student/fp_student.py),
++            then Foul Play's rule on q (sample among q >= 75% of max q). Env: HARDREAD_STUDENT_CKPT
++            or HARDREAD_STUDENT_URL, HARDREAD_STUDENT_LAMBDA (0.3), HARDREAD_STUDENT_SELECT (sample)
+ HARDREAD_LEVER_WORLDS   worlds vs search time per world, at equal total compute
+     fp           upstream (default)
+     double-half  twice the worlds at half the time each
+@@ -16,17 +19,23 @@
+ """
+ import logging
+ import os
++import sys
++from pathlib import Path
+ 
+ logger = logging.getLogger(__name__)
+ 
+ SELECT = os.environ.get("HARDREAD_LEVER_SELECT", "fp")
+ WORLDS = os.environ.get("HARDREAD_LEVER_WORLDS", "fp")
+-_SELECT_CHOICES = ("fp", "argmax", "value")
++_SELECT_CHOICES = ("fp", "argmax", "value", "student-blend")
+ _WORLDS_CHOICES = ("fp", "double-half", "half-double")
+ if SELECT not in _SELECT_CHOICES:
+     raise ValueError(f"HARDREAD_LEVER_SELECT must be one of {_SELECT_CHOICES}, got {SELECT!r}")
+ if WORLDS not in _WORLDS_CHOICES:
+     raise ValueError(f"HARDREAD_LEVER_WORLDS must be one of {_WORLDS_CHOICES}, got {WORLDS!r}")
++if SELECT == "student-blend":
++    sys.path.insert(0, os.environ.get("HARDREAD_STUDENT_DIR",
++                                      str(Path(__file__).resolve().parents[2] / "tools" / "student")))
++    import fp_student  # noqa: E402
+ 
+ 
+ def describe():
+@@ -56,10 +65,14 @@
+     return share, mean_score
+ 
+ 
+-def select_move(mcts_results):
++def select_move(mcts_results, battle=None):
+     """Return the lever's choice, or None to keep Foul Play's own selection."""
+     if SELECT == "fp":
+         return None
++    if SELECT == "student-blend":
++        share, _ = aggregate(mcts_results)
++        probs, _latency = fp_student.student_probs_for_battle(battle, sorted(share))
++        return fp_student.lever_select(mcts_results, probs)
+     share, mean_score = aggregate(mcts_results)
+     if SELECT == "argmax":
+         choice = max(share, key=lambda m: (share[m], mean_score[m]))
+diff -ru a/fp/search/main.py b/fp/search/main.py
+--- a/fp/search/main.py	2026-10-26 18:17:56
++++ b/fp/search/main.py	2026-10-26 18:18:34
+@@ -10,6 +10,7 @@
+ 
+ from fp.search.poke_engine_helpers import battle_to_poke_engine_state
+ from fp import hardread_decision_log
++from fp import hardread_levers
+ from fp import hardread_policy
+ 
+ logger = logging.getLogger(__name__)
+@@ -95,7 +96,7 @@
+         logger.info("Iterations {}: {}".format(index, res.total_visits))
+         mcts_results.append((res, chance, index))
+ 
+-    choice = select_move_from_mcts_results(mcts_results)
++    choice = hardread_levers.select_move(mcts_results, battle) or select_move_from_mcts_results(mcts_results)
+     logger.info("Choice: {}".format(choice))
+     if hardread_decision_log.enabled():
+         try:
+diff -ru a/fp/websocket_client.py b/fp/websocket_client.py
+--- a/fp/websocket_client.py	2026-10-26 19:11:09
++++ b/fp/websocket_client.py	2026-10-26 19:11:09
+@@ -1,3 +1,4 @@
++import os
+ import asyncio
+ import websockets
+ import requests
+@@ -50,7 +51,8 @@
+     async def receive_message(self):
+         message = await self.websocket.recv()
+         logger.debug("Received message from websocket: {}".format(message))
+-        if hardread_policy.enabled():  # HardRead: capture battle history (default off)
++        if hardread_policy.enabled() or os.environ.get("HARDREAD_LEVER_SELECT") == "student-blend":
++            # HardRead: capture battle history (default off; the student-blend lever needs it too)
+             hardread_policy.record(message)
+         return message
+ 
