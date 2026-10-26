@@ -71,3 +71,10 @@ Every reported run lists:
 - **Development set B** (G2 gate on D4, n ≥ 1,000 at C1t1): the `hr_val` pool. Its rosters are never used to train the student, the belief model or Glimmer.
 - Lever screens and gates use the same design as the primary: side-swapped pairings, with the treatment seat alternating every pairing (`run_match.py --treat ... --treat-seat alternate`).
 - Nothing in §1–§3 changes.
+
+### A2 (2026-10-27, before any sealed game): contamination filter for external replays
+- **Rule:** any model trained on external human replays (Metamon raw, crawled public replays) must first drop every game in which either team's 6-species roster equals an `hr_val` roster or a reserved/sealed roster (split v1).
+- **Covers:** the belief model, the student and Glimmer SFT.
+- **Reason:** the sealed and `hr_val` teams come from real ladder teams, so those teams' revealed sets appear in public replays (29% of human belief rows matched).
+- **How the filter is built:** it reads only the reserved teams' species lists. No sets, items or spreads of sealed teams are read.
+- Nothing else changes.
