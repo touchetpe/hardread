@@ -451,11 +451,13 @@ def turn_summary(rec, cal, estimator="branch_cond"):
             "user_action": rec.get("user_action"), "opp_action": rec.get("opp_action"), "skipped": rec.get("skipped")}
 
 
-def load_abs_calibrator(path=None):
+def load_abs_calibrator(path=None, human=False):
+    """Absolute-scale calibrator; human=True prefers the one fitted on top-50 ladder games ("absolute_human")."""
     p = Path(path) if path else Path(__file__).resolve().parent / "calibrator.json"
     if not p.exists():
         return None
-    d = json.loads(p.read_text()).get("absolute")
+    all_ = json.loads(p.read_text())
+    d = (all_.get("absolute_human") if human else None) or all_.get("absolute")
     return AbsCal(d["a"], d["b"]) if d else None
 
 

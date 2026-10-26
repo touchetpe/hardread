@@ -57,5 +57,11 @@
   "fit_on": "luck v2 farm run, label farm C1t1, 250 games x 2 seats, 18,120 turn-start decisions (4 worlds x 10k iterations)",
   "brier_oof": 0.1544,
   "note": "the review's own 4 x 1 s search gives a larger MCTS correction term than 10k iterations"
+ },
+ "absolute_human": {
+  "a": 0.6006,
+  "b": 0.1318,
+  "kind": "absolute: P(win) = sigmoid(a * 0.0125 * A + b)",
+  "fit_on": "255 top-50 ladder games (human_eval.py, default drafts), tested on 258 others: Brier 0.195, ECE 0.027 (farm calibrator: 0.196, 0.042)"
  }
 }

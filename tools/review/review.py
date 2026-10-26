@@ -34,14 +34,15 @@ def _round(x, n=3):
 
 
 def review(log_lines, side, team_text, worlds=4, search_ms=1000, hax_worlds=4, hax_iterations=10000,
-           processes=4, calibrator_path=None, skip_hax=False, progress=None, luck_estimator="branch_cond"):
+           processes=4, calibrator_path=None, skip_hax=False, progress=None, luck_estimator="branch_cond",
+           human=True):
     import reconstruct as R
     from calibrate import load_calibrator
     from evaluate import Evaluator
     from luck import LuckMeter, load_abs_calibrator, turn_summary
 
     cal_root = load_calibrator(calibrator_path)
-    cal_abs = load_abs_calibrator(calibrator_path)
+    cal_abs = load_abs_calibrator(calibrator_path, human=human)  # reviews are of human games by default
     # Win probability on the absolute scale (eval + search correction) when an absolute calibrator exists;
     # the raw MCTS root value is relative to each root's own eval (see value.py).
     if cal_abs is not None:
@@ -151,7 +152,7 @@ def review(log_lines, side, team_text, worlds=4, search_ms=1000, hax_worlds=4, h
             "explains about 20-25% of outcome variance and mirrors between the two seats (tools/review/README.md). "
             "Damage-roll luck is only counted where a roll decides a KO (poke-engine averages other rolls).",
             "Win probabilities are absolute values (poke-engine eval + search correction) mapped by a calibrator fit "
-            "on bot self-play outcomes, not on human games.",
+            "on top-50 ladder games (flatter than the self-play one: human games swing back more often).",
             "Decision cost compares your choice with the engine's preferred option at the same search budget; "
             "small costs (below ~0.02) are within search noise.",
             "When the replay hides your move (fainted first, full paralysis, sleep, flinch), the action is unknown; "

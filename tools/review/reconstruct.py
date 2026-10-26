@@ -760,6 +760,31 @@ def legal_actions(battle, iterations=200):
     return sorted(o.move_choice for o in res.side_one)
 
 
+def _species_match(mons, details):
+    """The team member a switch line's species refers to (exact, then forme prefix, then base species)."""
+    sp = _norm(details.split(",")[0])
+    for test in (lambda m: _norm(m.details.split(",")[0]) == sp or _norm(m.species) == sp,
+                 lambda m: sp.startswith(_norm(m.species)) or _norm(m.species).startswith(sp),
+                 lambda m: _norm(default_nickname(m.species)) == _norm(default_nickname(details.split(",")[0]))):
+        c = [m for m in mons if test(m)]
+        if c:
+            return c[0]
+    return None
+
+
+def maxhp_by_log_nickname(raw, side, mons):
+    """Nickname -> max HP, from the log's |switch|/|drag|/|replace| lines ("p1a: Nick|Species, L..|"), so the
+    user's percent HP is scaled correctly even when the pasted export has no nicknames."""
+    out = {m.nickname: m.maxhp for m in mons}
+    for l in raw:
+        p = l.split("|")
+        if len(p) > 3 and p[1] in ("switch", "drag", "replace") and p[2].startswith(side) and ": " in p[2]:
+            m = _species_match(mons, p[3])
+            if m is not None:
+                out.setdefault(p[2].split(": ", 1)[1], m.maxhp)
+    return out
+
+
 def players_from_log(lines):
     names = {}
     for l in lines:
@@ -769,7 +794,8 @@ def players_from_log(lines):
     return names
 
 
-def reconstruct(log, side, team, fmt="gen9ou", compute_legal=True, oracle_choices=None, legal_iterations=200):
+def reconstruct(log, side, team, fmt="gen9ou", compute_legal=True, oracle_choices=None, legal_iterations=200,
+                cure_healing_wish=True):
     """Rebuild the user's decisions. Returns (decisions, info).
 
     oracle_choices: optional list of true choices (validation only) used *only* to set
@@ -780,7 +806,7 @@ def reconstruct(log, side, team, fmt="gen9ou", compute_legal=True, oracle_choice
     raw = log.split("\n") if isinstance(log, str) else list(log)
     names = players_from_log(raw)
     opp = "p2" if side == "p1" else "p1"
-    lines, own_mode = normalize_log(raw, side, {m.nickname: m.maxhp for m in tracker_probe})
+    lines, own_mode = normalize_log(raw, side, maxhp_by_log_nickname(raw, side, tracker_probe))
     try:
         tp = next(i for i, l in enumerate(lines) if l.startswith("|teampreview"))
     except StopIteration:
@@ -795,7 +821,8 @@ def reconstruct(log, side, team, fmt="gen9ou", compute_legal=True, oracle_choice
     battle.mode = battle_mode(spec.battle_type)
     battle.opponent.name = opp
     battle.user.name = side
-    battle.user.team_dict = export_to_dict(sets_to_export(sets))
+    # Foul Play's export parser reads the first "(...)" as the species, so give it no nicknames
+    battle.user.team_dict = export_to_dict(sets_to_export([dict(x, name="") for x in sets]))
 
     tracker = UserTracker(sets, side, names.get(side, side))
     tracker.apply_preview([l.split("|")[3] for l in lines[:tp] if l.startswith(f"|poke|{side}|")])
@@ -859,6 +886,10 @@ def reconstruct(log, side, team, fmt="gen9ou", compute_legal=True, oracle_choice
                 choice = guess_unrevealed_move(d.battle)
         if choice is None:
             return
+        if d.kind == "revival":
+            # the move that executed was Revival Blessing; Foul Play's speed inference would read the
+            # chosen "switch X" as a move name when the opponent moves next (KeyError in all_move_json)
+            choice = "revivalblessing"
         battle.user.last_selected_move = LastUsedMove(d.active_name or "", choice.removesuffix("-tera").removesuffix("-mega"),
                                                       d.turn)
 
@@ -927,10 +958,14 @@ def reconstruct(log, side, team, fmt="gen9ou", compute_legal=True, oracle_choice
                     d.action_source = "log"
         elif tag == "-heal" and "[from] move: Revival Blessing" in line and who == side:
             finish_open()
+            fainted = ["switch " + _norm(m.details.split(",")[0]) for m in tracker.mons if m.hp <= 0]
             d = flush("switch", i)
             if d is not None:
-                d.action = "switch " + _norm(p[2].split(": ", 1)[1])
+                revived = tracker.find(p[2])
+                d.action = "switch " + _norm(revived.details.split(",")[0])
                 d.action_source = "log"
+                d.kind = "revival"           # Showdown's menu here is the fainted Pokemon
+                d.revival_options = fainted
 
         if tag in ("move", "cant", "faint", "upkeep") and turn >= 1:
             actions_started = True
@@ -970,6 +1005,10 @@ def reconstruct(log, side, team, fmt="gen9ou", compute_legal=True, oracle_choice
                 open_dec.action_source = "log-cant"
 
         tracker.feed(line)
+        if cure_healing_wish and tag == "-heal" and who == opp \
+                and re.search(r"\[from\] move: (Healing Wish|Lunar Dance)", line) and len(p) > 3 and " " not in p[3].strip():
+            # Showdown cures status silently here; Foul Play would keep the opponent's old status
+            pending.append(f"|-curestatus|{p[2]}|none|[from] move: Healing Wish")
         pending.append(line)
 
         if tag == "turn":
@@ -1000,6 +1039,9 @@ def reconstruct(log, side, team, fmt="gen9ou", compute_legal=True, oracle_choice
     for d in decisions:
         if d.action is None and d.kind == "move":
             infer_unrevealed(d)
+        if d.kind == "revival":
+            # poke-engine has no revival menu (it would offer live switches); report Showdown's menu
+            d.legal = list(getattr(d, "revival_options", None) or ([d.action] if d.action else []))
     info = {"side": side, "opponent": opp, "own_hp_mode": own_mode, "players": names,
             "final_battle": final_battle, "winner_name": winner, "lines": lines,
             "user_won": None if winner is None else winner == names.get(side),
@@ -1115,8 +1157,10 @@ def validate_side(job):
         log = to_public_log(log)
     oracle = [r["choice"] for r in recs] if use_oracle else None
     try:
+        # farm truth is the live bot's view, which keeps the opponent's status after Healing Wish (a Foul Play
+        # bug); validate fidelity to that view. Reviews use cure_healing_wish=True (the correct state).
         decs, info = reconstruct(log, player, _team_from_norm_sets(recs[0]["own_team"]), compute_legal=legal,
-                                 oracle_choices=oracle)
+                                 oracle_choices=oracle, cure_healing_wish=False)
     except Exception as e:  # noqa: BLE001
         import traceback
         return {"crash": f"{type(e).__name__}: {e}", "trace": traceback.format_exc(), "n": len(recs), "rows": []}

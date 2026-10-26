@@ -18,6 +18,7 @@ $PY tools/review/review.py REPLAY.json --team TEAM.txt --side p1 --out review.js
 | `luck.py` | **Luck v2** (the validated hax meter):<br>• chance outcome classes from `generate_instructions`, valued on the absolute scale;<br>• sampled worlds conditioned on the damage the log shows;<br>• hidden actions as a move mixture.<br>Subcommands: `farm` (self-play runs; optional student evaluator) and `analyze` (the four checks with bootstrap CIs). |
 | `hax.py` | Luck v1 (superseded; failed the sanity check). Its branch-matching helpers are reused by `luck.py`. |
 | `review.py` | The CLI that combines the above into a JSON review. |
+| `human_eval.py` | The review pipeline at scale on human replays (`run`), on farm games with the bot's own choices (`farm`, noise floor), and `analyze` (calibration, luck checks, decision cost vs rating). |
 | `fpenv.py` | Imports and configures Foul Play in-process. |
 
 **How the request is synthesized.** Live, Foul Play gets the user's exact state from Showdown's `|request|` JSON. Offline, `UserTracker` rebuilds it from the team export and the log, following Showdown's rules for:
@@ -58,7 +59,25 @@ Belief inputs (impossible items and abilities, speed range, choice-item flag, us
 - **Public-format proxy:** 79 extra HP mismatches beyond 1%.
 - **Belief inputs equal: 98.6%.** The rest is the opponent's speed range (295 decisions). Foul Play's speed inference reads its own last selected move, which the log does not reveal when the user's Pokemon fell before moving.
 
-**Human replays:** a 53-turn Gen 9 OU ladder replay (1566 vs 1792) with a team drafted from what the replay reveals reconstructs cleanly: 58 decisions, 4 actions hidden. There is no ground truth for it.
+**Human replays** (`tools/human/reconstruct_check.py`, 50 top-50 ladder games, both seats, teams drafted from the replay; no ground truth, cross-checked against `parse_replays.py`):
+
+| Run | Clean decisions | Turn-start state clean | Failed sides |
+|---|---|---|---|
+| Drafted teams without nicknames, before the fixes | 77.8% (4,337) | 74.2% | 1 |
+| **Drafted teams without nicknames, after the fixes** | **99.98%** (4,371 / 4,372) | **100%** | **0** |
+| With nicknames, before → after | 99.98% → 99.98% (4,371 / 4,372) | 99.97% → 100% | 1 → 0 |
+
+**Fixes:**
+- **Nicknames.** The user's percent HP is now scaled through a nickname → species → max-HP map built from the log's own `|switch|`/`|drag|`/`|replace|` lines, so an export without nicknames works.
+  - Foul Play's export parser reads the first "(…)" as the species, so it now gets a nickname-free export (a nickname like "Surf's Up (2007)" had broken team setup).
+- **Revival Blessing.** The action is built from the revived Pokémon's species, not its nickname.
+  - The decision is tagged `revival`, and its menu is Showdown's (the fainted Pokémon), since poke-engine has no revival menu.
+  - Foul Play's `last_selected_move` stays `revivalblessing`. A "switch X" there crashed its speed inference (`KeyError: 'switch…'`).
+- **Healing Wish / Lunar Dance on the opponent.** Showdown cures status silently; the reconstruction now injects a `-curestatus` before the `-heal`.
+  - The live bot's own view keeps the stale status (a Foul Play bug), so farm validation runs with `cure_healing_wish=False` (fidelity to the live view). Reviews use the correct state.
+  - With the cure on, farm views differ at 72 of 21,351 decisions, exactly where the live bot's view was wrong.
+
+The single remaining unclean decision in both human runs is a Revival Blessing choice, for which `parse_replays.py` writes no row to compare against.
 
 ## Calibration (same 250 games; out-of-fold, 5 folds by game)
 
@@ -113,7 +132,7 @@ Belief inputs (impossible items and abilities, speed range, choice-item flag, us
 
 **So costs below about 0.02 WP are noise.** The 1566-rated human in the public replay averaged 0.032 WP per decision, about 20 times the bot's average. That review used a team drafted from the replay, so read it as an illustration.
 
-**Scale change.** These numbers use the raw-root-value scale (v1). `review.py` now prices options on the absolute scale; the same human review then costs 0.014 WP per decision (turning point unchanged: turn 11, 0.25). The bot noise floor has not yet been re-measured on that scale.
+**Scale change.** These numbers use the raw-root-value scale (v1). `review.py` now prices options on the absolute scale; the same human review then costs 0.014 WP per decision (turning point unchanged: turn 11, 0.25). Re-measured on the absolute scale (4 worlds × 20k iterations, 956 farm bot decisions): mean 0.0077, median 0, p90 0.028, 4.3% above 0.05. This cheaper search is noisier than the 4 × 1 s one; see the human-games section.
 
 ## Luck ("hax meter"): v2 passes the self-play checks
 
@@ -201,6 +220,126 @@ The search-valued estimator wins on every check, so **luck v2 keeps search valua
 - the realised branch's probability;
 - the counterfactual swing, WP(realised) − WP(other outcomes).
 
+## Human games (top-50 Gen 9 OU ladder, `human_eval.py`)
+
+**Data:** `scratch_ds/human/` (2,154 public replays, Jul 1 – Oct 26 2026, pseudonymised).
+- 520 random games with at least 3 turns, both seats; **513 games / 1,019 game-sides** analysed.
+- 2 sides failed on Foul Play's known `Invalid PokemonMoveIndex: 4` panic.
+- 55% of games end by forfeit or timeout.
+
+**Pipeline per game-side:**
+1. Reconstruct from the public (percent-HP) log, with a team export without nicknames.
+2. Search every decision with the review search at fixed iterations: 4 worlds × 20k (in place of 4 × 1 s, for budget). This gives per-option absolute values.
+3. Compute luck v2 records: 3 worlds × 10k iterations, hidden-action mixture.
+4. Calibrate win probability with the farm absolute calibrator (fitted on the same 10k-iteration valuation).
+
+**Teams.** The *user's own* side is drafted from what that player revealed during the whole replay; the opponent always stays belief-based (Foul Play's sampler), as in a real review.
+- **Not an information leak:** the player knows their full team, so the draft gives the review nothing a real user lacks.
+- **Less than a real export:** unrevealed fields are guesses, never the true set.
+
+**Draft A (default, the 513-game run)** is `tools/human/reconstruct_check.draft_team`:
+- Leftovers when the item is unrevealed;
+- the first listed ability;
+- Serious nature and 85 EVs in every stat;
+- moves padded from common sets.
+
+**Draft B (Smogon, the 146-game paired check)** is `draft_team_smogon`:
+- the same reveals;
+- the rest taken from the most common Smogon set consistent with them (nature, EVs, item, ability, tera, moves).
+
+Draft A's under-invested sets make the user's own Pokémon weaker than the real ones, which biases luck (below).
+
+### Win-probability calibration
+Turn-start decisions, farm absolute calibrator.
+
+| Brier (ECE) | n | All | Turns 1–5 | 6–15 | 16–30 | 31+ |
+|---|---|---|---|---|---|---|
+| **Humans, all games (forfeits counted as results)** | 32,274 (513 games) | **0.203** (0.052) | 0.251 | 0.215 | 0.183 | 0.182 |
+| Humans, KO-ended games only | 16,432 (255) | 0.206 (0.060) | 0.253 | 0.224 | 0.188 | 0.172 |
+| Humans, forfeit/timeout games only | 15,842 (258) | 0.201 (0.046) | 0.249 | 0.206 | 0.177 | 0.191 |
+| Self-play reference (250 farm games; 2-parameter calibrator, in-sample) | 18,120 | 0.154 (0.021) | 0.234 | 0.184 | 0.126 | 0.116 |
+| The review's own search values (4 × 20k), humans, all | 32,291 | 0.203 (0.054) | 0.252 | 0.216 | 0.182 | 0.182 |
+
+**Calibration shifts on humans.** Human outcomes are less extreme than the engine predicts.
+
+| Predicted | Human win rate | Self-play win rate |
+|---|---|---|
+| 0.05 | 0.12 | 0.04 |
+| 0.15 | 0.26 | 0.16 |
+| 0.85 | 0.79 | 0.82 |
+| 0.95 | 0.92 | 0.96 |
+
+**Human-specific calibrator** (fitted on 255 games, tested on the other 258): P = σ(0.60 · 0.0125·A + 0.13), much flatter than the farm calibrator (slope 0.97).
+
+| On the 258 test games | Brier | ECE | Log loss |
+|---|---|---|---|
+| Human calibrator | 0.195 | **0.027** | 0.570 |
+| Farm calibrator | 0.196 | 0.042 | 0.576 |
+
+**Reading:**
+- Resolution (Brier) is the same; reliability is better.
+- Forfeits change little: forfeit games are slightly *more* predictable than KO games (forfeiters quit lost positions).
+- Saved as `calibrator.json` → `absolute_human`. Use it for human reviews.
+
+### Luck on humans
+
+**Draft A, 513 games:**
+
+| Check | Result |
+|---|---|
+| corr(Σluck, outcome), p1 | **0.41** [0.34, 0.48] |
+| corr, both seats | 0.39 [0.33, 0.44] |
+| corr, KO-ended games | 0.41 [0.30, 0.51] |
+| Var(outcome − Σluck) / Var(outcome), p1 | 0.86 [0.78, 0.94] |
+| Variance ratio, both seats | 0.88 [0.82, 0.94] |
+| Variance ratio, KO-ended games | 0.89 [0.76, 1.04] |
+| Seat-symmetrised variance ratio | **0.80** [0.74, 0.87] (corr 0.45) |
+| Mirror corr(L_p1, L_p2) | −0.49 [−0.59, −0.39] |
+| Mean luck per decision | **+0.0030** [0.0024, 0.0036] |
+| Event-count baseline on the same games | 0.14 [0.06, 0.23] |
+
+**Draft A vs draft B, paired on the same 146 games:**
+
+| | Bias per decision | Mirror | corr p1 | Variance ratio p1 / symmetrised | WP Brier (ECE) |
+|---|---|---|---|---|---|
+| Draft A (default) | +0.0032 [0.0021, 0.0043] | −0.31 [−0.56, −0.08] | 0.35 | 0.92 / 0.84 | 0.198 (0.052) |
+| **Draft B (Smogon sets)** | **+0.0004** [−0.0006, 0.0014] | **−0.60** [−0.76, −0.45] | **0.41** | **0.85 / 0.79** | **0.192 (0.036)** |
+
+**Reading:**
+- **Draft B gets close to the self-play numbers.** The positive bias and the weak mirror on humans came from the under-invested default drafts: survivals and KOs that are routine with the real sets look lucky from the user's seat. With realistic sets, as from a real export, the bias vanishes and the mirror doubles; the 513-game run used draft A, so its luck bias and mirror understate what a real review gets.
+- **Interpreting the variance ratio on humans:** it is not the pure chance share it is in identical-bot self-play.
+  - Outcome variance here also contains skill differences between players.
+  - Luck can correlate with skill: good players take fewer coin flips when ahead, and force the opponent into them.
+  - A ratio below 1 still means luck explains part of the outcome. The ~14–20% removed is luck plus any luck–skill covariance, so treat it as an upper bound on the chance share, and the symmetrised number as the best single estimate.
+- **Beyond the event-count floor:** luck correlates with the result 2.8× better than the net count of visible chance events.
+
+### Decision cost on humans
+Per decision, absolute scale, review search 4 × 20k.
+
+| | Decisions | Mean | Median | p90 | Share > 0.02 | Share > 0.05 | Agrees with the engine's best |
+|---|---|---|---|---|---|---|---|
+| All humans | 34,593 | 0.023 | 0.005 | 0.070 | 34% | 16.5% | 41% |
+| Top-50 players | 17,710 | 0.023 | 0.005 | 0.070 | 34% | 16.4% | 41% |
+| Their opponents | 16,883 | 0.023 | 0.005 | 0.069 | 34% | 16.5% | 41% |
+| **Noise floor: the farm bot's own choices** (C1t1), same search | 956 | **0.0077** | 0 | 0.028 | 14% | 4.3% | 60% |
+
+**Does cost separate ratings? No, not among these players.** The rating range is narrow: p10 1588, p90 1843.
+- corr(mean cost per player-game, rating) = 0.03 [−0.02, 0.09] over 1,011 player-games.
+- Within a game, the lower-cost player is the higher-rated one 48.7% of the time (n = 501).
+- The lower-cost player wins 43.8% (n = 504). That is a scale confound: in lopsided positions all options sit near WP 0 or 1, so costs are small, and losing positions dominate there.
+- Restricted to balanced positions (WP 0.25–0.75): the lower-cost player wins 53.2% (n = 459, within noise), and the top-50 vs opponent mean cost is 0.0285 vs 0.0294.
+
+**What does work:** humans (top-ladder players) average 3× the bot's noise floor, and 16.5% of their decisions cost more than 0.05 WP (bots: 4%). So the review separates human decisions from the engine's.
+
+**Why it doesn't separate players:**
+- the cheap search (20k iterations);
+- drafted user sets;
+- the narrow rating band.
+
+**Next tests:** the full 4 × 1 s search, and a wider rating range (for example Metamon's raw replays).
+
+**Cost:** about 45 s CPU per game-side for search + luck on this budget setting; the full review setting is about 1.5 min per game.
+
 ## Review cost per game (M4 Max, while other jobs shared the CPU)
 
 **v2:**
@@ -226,7 +365,7 @@ The search-valued estimator wins on every check, so **luck v2 keeps search valua
   - **Residual bias:** −0.0005 per decision.
   - **When every sampled world fails the damage check** (5% of turns), the realised branch can be misread. Example: the real attacker's damage is underestimated in all worlds, so a no-crit KO is matched to the 4% crit branch.
   - **Calibration source:** the calibration and all checks are on bot self-play, not human games.
-- **Calibration source.** The calibrator was fitted on live C1t1 root values from bot self-play. It is applied to the review's 4 × 1 s values (corr 0.988 with live values; mean difference 0.018) and to short-MCTS branch values, and to human games. Early turns carry almost no signal.
+- **Calibration source.** The farm calibrators come from bot self-play; human games need the flatter `absolute_human` calibrator (above). Early turns carry almost no signal.
 - **Public replays.** Own HP is estimated from percent. The in-game team order is taken from the export; it affects only internal indices. Nicknames are resolved from switch lines.
 - **Untested or unsupported:**
   - user-side Illusion/Zoroark, Transform, Revival Blessing (none in the data), Imprison, Skill Swap / Role Play on the user;
