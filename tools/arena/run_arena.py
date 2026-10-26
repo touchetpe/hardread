@@ -129,8 +129,16 @@ def play_game(idx, run_dir, args, team_hr, team_ab):
     ready = wait_for(log_ab_path, "ABYSSAL_READY", 120, pab)
     # HardRead player challenges (side A).
     env = clean_env()
-    cfg = args.player if args.player != "llm" else args.policy_cfg
-    if args.player == "llm":
+    cfg = args.player if args.player not in ("llm", "student") else args.policy_cfg
+    if args.player == "student":
+        env.update({"HARDREAD_POLICY": "student", "HARDREAD_POLICY_LOG": str(policy_log)})
+        if args.student_url:
+            env["HARDREAD_STUDENT_URL"] = args.student_url
+        if args.student_ckpt:
+            env["HARDREAD_STUDENT_CKPT"] = str(Path(args.student_ckpt).resolve())
+        if args.log_history:
+            env["HARDREAD_POLICY_LOG_HISTORY"] = "1"
+    elif args.player == "llm":
         env.update({"HARDREAD_POLICY": "llm", "HARDREAD_LLM_URL": args.llm_url,
                     "HARDREAD_LLM_MODEL": args.llm_model, "HARDREAD_LLM_MAX_TOKENS": str(args.llm_max_tokens),
                     "HARDREAD_LLM_TIMEOUT": str(args.llm_timeout), "HARDREAD_POLICY_LOG": str(policy_log)})
@@ -224,7 +232,7 @@ def summarize(results, args, run_id, wall):
     for r in results:
         kinds.update(r["failure_kinds"])
     s = {"run_id": run_id, "player": args.player,
-         "cfg": args.player if args.player != "llm" else args.policy_cfg,
+         "cfg": args.player if args.player not in ("llm", "student") else args.policy_cfg,
          "llm_url": args.llm_url if args.player == "llm" else None,
          "llm_model": args.llm_model if args.player == "llm" else None,
          "serializer": args.serializer if args.player == "llm" else None,
@@ -261,8 +269,10 @@ def summarize(results, args, run_id, wall):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--player", default="F1", choices=list(rm.CONFIGS) + ["llm"],
-                    help="Vanilla Foul Play at a run_match config, or 'llm' (HardRead policy hook)")
+    ap.add_argument("--player", default="F1", choices=list(rm.CONFIGS) + ["llm", "student"],
+                    help="Vanilla Foul Play at a run_match config, 'llm' or 'student' (HardRead policy hook)")
+    ap.add_argument("--student-url", default=None, help="student: tools/student/infer.py serve endpoint")
+    ap.add_argument("--student-ckpt", default=None, help="student: .npz checkpoint (needs numpy in the venv)")
     ap.add_argument("--policy-cfg", default="F1", choices=rm.CONFIGS,
                     help="llm only: search params used to sample the worlds for the legal-action menu")
     ap.add_argument("--llm-url", default="http://127.0.0.1:18045/v1/chat/completions")
