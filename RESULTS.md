@@ -189,3 +189,27 @@ Concurrency was conservative, so C1t1 and C2 may gain ≈20–40% when tuned (no
   - always the first menu item: 26%.
 - **Diagnosis:** only 1–2 of about 57 target tokens carry the decision.
 - **Next (v0):** target = search argmax, choice-token loss weighting, soft-target distillation on the choice token, 50k examples.
+
+## 2026-10-26 ≈22:00 UTC: luck meter v2 passes (`tools/review/`, commit above)
+- **Root cause of v1's failure:** poke-engine's MCTS scores a position as sigmoid(eval(leaf) − root eval). Branch values from separate searches therefore had no common reference, and a KO's gain was subtracted out.
+- **Fix:** an absolute scale, A = eval + logit(MCTS value) / 0.0125. The Python port of poke-engine's evaluation matches its Rust evaluation to 1e-4 on 300 states.
+- **Checks, over 500 self-play games (999 game-sides, 95% bootstrap intervals):**
+
+| Check | Result | Verdict |
+|---|---|---|
+| Var(outcome − Σluck) / Var(outcome), seat-symmetrised | **0.77 [0.71, 0.84]** | pass |
+| corr(Σluck, outcome) | 0.45 | — |
+| Mirror corr(L_A, L_B) per game | **−0.81** (v1: −0.55) | pass |
+| Mean luck per decision | −0.0005 [−0.0010, −0.0001] | close; residual ≈ −0.02 win probability per game |
+| Event-count baseline | corr 0.19; luck correlates 2.4× better | pass |
+
+- **Replication:** each 250-game half passes, including the games the student never trained on.
+- **Estimator ablations:**
+  - an events-only estimator mirrors best (−0.90) but removes almost no variance (0.96–0.98);
+  - the student as branch evaluator is worse on every check (0.87 / 0.90).
+- **Absolute value as win probability:** Brier **0.154** vs 0.206 for the raw root value; seat mirror gap 0.061 → 0.030. The review graph and decision costs now use it.
+- **Cost:** luck ≈ 8.6 s CPU per game-side; a full review takes ≈27 s for a 14-turn game and ≈92 s for a 53-turn game.
+- **Gaps:**
+  - chance after a mid-turn pivot switch is not counted;
+  - damage rolls count only where they decide a KO;
+  - validated on bot self-play only; human replays come next.
