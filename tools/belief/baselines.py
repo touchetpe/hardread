@@ -156,6 +156,111 @@ class UsagePrior:
                 "n": 0}
 
 
+# ---------------------------------------------------------------- (a') revealed-set prior
+ALT_PRIOR = HARDREAD / "scratch_ds" / "metamon" / "priors" / "alt_usage_prior.json"
+
+
+class RevealedPrior(UsagePrior):
+    """Revealed-by-end-of-game counts from 2.02M human games (tools/metamon/setpriors.py), slice 2026H1|ge1500
+    (fallback all|ge1500, then all|all, then Smogon). Item/ability/tera: distribution over REVEALED values ('?'
+    dropped); moves: per-game reveal rate count/n_seen (ranks like inclusion, under-states P(move in set));
+    nature/EV spread is never revealed, so it comes from the Smogon stats. Same view constraints as `usage`."""
+
+    def __init__(self, path=ALT_PRIOR, slices=("2026H1|ge1500", "all|ge1500", "all|all")):
+        super().__init__()
+        raw = json.loads(Path(path).read_text())["slices"]
+        self.alt = [{toid(k): v for k, v in raw[sl].items()} for sl in slices if sl in raw]
+        self.alt_missing = defaultdict(int)
+
+    def alt_entry(self, name):
+        cands = [toid(name), species_key(name)]
+        e = dex_entry(name) or {}
+        for key in ("changesFrom", "baseSpecies"):
+            if e.get(key):
+                cands.append(toid(e[key]))
+        for table in self.alt:
+            for c in cands:
+                if c in table and table[c].get("n_seen", 0) >= 20:
+                    return table[c]
+        return None
+
+    def base(self, name):
+        key = ("alt", name)
+        if key not in self.cache:
+            smog = UsagePrior.base(self, name)
+            ent = self.alt_entry(name)
+            if ent is None:
+                self.alt_missing[name] += 1
+                self.cache[key] = smog
+            else:
+                def dist(field):
+                    return {("none" if toid(k) in ("", "nothing") else toid(k)): c
+                            for k, c in ent.get("seen:" + field, {}).items() if k != "?" and c > 0}
+                n_seen = max(1, ent.get("n_seen", 1))
+                self.cache[key] = {"items": dist("item"), "abilities": dist("ability"), "tera": dist("tera"),
+                                   "moves": {toid(k): min(1.0, c / n_seen) for k, c in ent.get("seen:move", {}).items()},
+                                   "spreads": (smog or {}).get("spreads", [])}
+                for f, sk in (("items", "items"), ("abilities", "abilities"), ("tera", "tera")):
+                    if not self.cache[key][f] and smog:
+                        self.cache[key][f] = smog[sk]
+        return self.cache[key]
+
+
+# ---------------------------------------------------------------- (b') Foul Play's own belief from decision log v3
+def fp_hist_to_pred(h, revealed):
+    """fp_belief histogram (n draws of Foul Play's sampler AFTER its damage pruning) -> prediction dict."""
+    n = (h or {}).get("n") or 0
+    if not n:
+        return {"item": {}, "ability": {}, "tera": {}, "nature": {}, "evclass": {}, "spread": {}, "moves": {}, "n": 0}
+    acc = {a: defaultdict(float) for a in CAT_ATTRS}
+    for k, c in h.get("item", {}).items():
+        acc["item"]["none" if k in ("None", "", "none") else toid(k)] += c
+    for k, c in h.get("ability", {}).items():
+        acc["ability"]["?" if k in ("None", "") else toid(k)] += c
+    for k, c in h.get("tera", {}).items():
+        acc["tera"]["?" if k in ("None", "") else toid(k)] += c
+    for k, c in h.get("spread", {}).items():
+        nat, _, evs = k.partition("|")
+        try:
+            evs = [int(float(x)) for x in evs.split(",")] if evs else [0] * 6
+        except ValueError:
+            evs = [0] * 6
+        acc["nature"][canon_nature(nat)] += c
+        acc["evclass"][ev_class(evs)] += c
+        acc["spread"][spread_class(nat, evs)] += c
+    out = {a: _norm(acc[a]) for a in CAT_ATTRS}
+    out["moves"] = {toid(m): round(min(1.0, c / n), 6) for m, c in sorted(h.get("moves", {}).items(), key=lambda kv: -kv[1])
+                    if toid(m) not in revealed}
+    out["n"] = n
+    return out
+
+
+def load_fp_beliefs(raw_paths, need):
+    """decision uid (extract.py convention <run>/g####/<A|B>/<j>) -> fp_belief['pkmn'] from the raw chunk tarballs."""
+    import re
+    import tarfile
+    pat = re.compile(r"g(\d{4})_([ab])\.decisions\.jsonl$")
+    out = {}
+    for path in raw_paths:
+        with tarfile.open(path) as tar:
+            for m in tar.getmembers():
+                base = Path(m.name).name
+                mm = pat.match(base)
+                if not m.isfile() or base.startswith("._") or not mm:
+                    continue
+                run = m.name.split("/")[0]
+                j = 0
+                for line in tar.extractfile(m).read().decode().splitlines():
+                    if not line.strip():
+                        continue
+                    duid = "{}/g{}/{}/{:03d}".format(run, mm.group(1), mm.group(2).upper(), j)
+                    j += 1
+                    if duid in need:
+                        r = json.loads(line)
+                        out[duid] = (r.get("fp_belief") or {})
+    return out
+
+
 # ---------------------------------------------------------------- (b) Foul Play's sampler
 _FP = {}
 
@@ -262,7 +367,8 @@ def group_names(exs):
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--examples", required=True)
-    ap.add_argument("--method", required=True, choices=["usage", "fp", "played"])
+    ap.add_argument("--method", required=True, choices=["usage", "revealed", "fp", "fpbelief", "played"])
+    ap.add_argument("--raw", nargs="*", default=[], help="fpbelief: the raw chunk tarballs (decision log v3)")
     ap.add_argument("--out", required=True)
     ap.add_argument("--splits", default="test", help="comma-separated splits to predict (default test)")
     ap.add_argument("--n", type=int, default=64, help="fp: samples per view")
@@ -282,14 +388,34 @@ def main():
                 p["uid"] = e["uid"]
                 out.write(json.dumps(p, separators=(",", ":")) + "\n")
                 n_out += 1
-        elif args.method == "usage":
-            prior = UsagePrior()
+        elif args.method == "fpbelief":
+            bel = load_fp_beliefs(args.raw, {e["duid"] for e in exs})
+            miss = 0
+            ms = []
+            for e in exs:
+                b = bel.get(e["duid"]) or {}
+                if b.get("ms") is not None:
+                    ms.append((b["ms"], b.get("samples")))
+                h = (b.get("pkmn") or {}).get(e["view"]["name"])
+                miss += h is None
+                p = fp_hist_to_pred(h, {toid(m) for m in e["view"].get("moves") or []})
+                p["uid"] = e["uid"]
+                out.write(json.dumps(p, separators=(",", ":")) + "\n")
+                n_out += 1
+            info["examples_without_fp_belief"] = miss
+            if ms:
+                info["logged_ms_per_decision_snapshot_mean"] = round(sum(m for m, _ in ms) / len(ms), 1)
+                info["samples"] = ms[0][1]
+        elif args.method in ("usage", "revealed"):
+            prior = UsagePrior() if args.method == "usage" else RevealedPrior()
             for e in exs:
                 p = prior.predict(e)
                 p["uid"] = e["uid"]
                 out.write(json.dumps(p, separators=(",", ":")) + "\n")
                 n_out += 1
             info["species_missing_from_smogon"] = dict(prior.missing)
+            if args.method == "revealed":
+                info["species_missing_from_revealed_prior"] = dict(prior.alt_missing)
         else:
             groups = defaultdict(list)
             for e in exs:
@@ -299,13 +425,14 @@ def main():
                 keys = keys[: args.max_games]
             jobs = [(group_names(groups[k]), groups[k], args.n, args.seed) for k in keys]
             tot = defaultdict(float)
+            done = {}
             if args.workers > 1:
                 import multiprocessing as mp
                 with mp.get_context("spawn").Pool(args.workers) as pool:
                     results = pool.imap_unordered(fp_group, jobs, chunksize=1)
                     for i, (preds, st) in enumerate(results):
                         for p in preds:
-                            out.write(json.dumps(p, separators=(",", ":")) + "\n")
+                            done[p["uid"]] = p
                         n_out += len(preds)
                         for k, v in st.items():
                             tot[k] += v
@@ -316,10 +443,13 @@ def main():
                 for job in jobs:
                     preds, st = fp_group(job)
                     for p in preds:
-                        out.write(json.dumps(p, separators=(",", ":")) + "\n")
+                        done[p["uid"]] = p
                     n_out += len(preds)
                     for k, v in st.items():
                         tot[k] += v
+            for e in exs:  # write in example order (the benchmark streams predictions in lockstep)
+                if e["uid"] in done:
+                    out.write(json.dumps(done[e["uid"]], separators=(",", ":")) + "\n")
             info.update({k: round(v, 3) for k, v in tot.items()})
             info["groups"] = len(jobs)
             if tot["calls"]:

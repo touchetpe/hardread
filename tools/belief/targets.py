@@ -179,6 +179,30 @@ def spread_speed_ok(name, nature, evs, speed_range, scarf_possible, level=100):
     return bool(scarf_possible) and lo <= int(sp * 1.5) <= hi
 
 
+def norm_roster(roster):
+    """Order- and format-free roster key: sorted Showdown ids of the 6 species ('Great Tusk|Kingambit|...')."""
+    return "|".join(sorted(toid(x) for x in roster.split("|")))
+
+
+def excluded_rosters():
+    """Rosters that must never be trained on: the hr_val rosters (data/pools-v1.json) and the reserved/sealed
+    rosters of the v1 split (their species lists are read only to build this exclusion set; nothing else of those
+    teams is read). Returned as norm_roster keys, e.g. to drop human games played with these rosters."""
+    keys = set()
+    if POOLS.exists():
+        keys |= {norm_roster(r) for r in json.loads(POOLS.read_text()).get("val_rosters", [])}
+    split = HARDREAD.parent / "data/teams/splits/hl_05_26-gen9ou-split-v1.json"
+    validated = HARDREAD.parent / "data/teams/validated/hl_05_26-gen9ou.jsonl"
+    if split.exists() and validated.exists():
+        reserved = set(json.loads(split.read_text())["reserved_files"])
+        with open(validated) as f:
+            for line in f:
+                r = json.loads(line)
+                if Path(r["file"]).name in reserved:
+                    keys.add("|".join(sorted(toid(x) for x in r["species"])))
+    return keys
+
+
 def roster_key(team):
     return "|".join(sorted(s["species"] for s in team))
 
@@ -325,10 +349,46 @@ def load_examples(path, splits=None):
     return exs
 
 
+def capped(examples, max_per_mon, seed=0):
+    """Keep at most `max_per_mon` rows per (game, side, opponent Pokemon), chosen at random (seeded per group).
+
+    Streams: rows of one game must be contiguous, as extract.py / partial_targets.py write them (a
+    non-contiguous group is just capped per contiguous run). Consecutive decisions repeat the same Pokemon state,
+    so capping loses little and makes every (game, side, Pokemon) weigh about the same."""
+    import random as _random
+    if not max_per_mon:
+        yield from examples
+        return
+    key, buf = None, []
+
+    def flush():
+        groups = defaultdict(list)
+        for e in buf:
+            groups[(e["side"], e["skey"])].append(e)
+        for (side, sk), rows in groups.items():
+            if len(rows) > max_per_mon:
+                rng = _random.Random("{}|{}|{}|{}".format(rows[0]["game"], side, sk, seed))
+                rows = sorted(rng.sample(rows, max_per_mon), key=lambda e: (e["turn"], e["k"]))
+            yield from rows
+
+    for e in examples:
+        k = e["game"]
+        if k != key:
+            yield from flush()
+            key, buf = k, []
+        buf.append(e)
+    yield from flush()
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("inputs", nargs="+", help="decision files from tools/dataset/extract.py (.jsonl[.gz])")
     ap.add_argument("--out", required=True)
+    ap.add_argument("--max-per-mon", type=int, default=0,
+                    help="keep at most N decisions per (game, side, opponent Pokemon) (training files; 0 = all)")
+    ap.add_argument("--force-split", default=None,
+                    help="put every row in this split (e.g. 'test' for the hr_val farm, the pre-registered S-A test set)")
+    ap.add_argument("--seed", type=int, default=0)
     args = ap.parse_args()
     val_rosters = set(json.loads(POOLS.read_text()).get("val_rosters", [])) if POOLS.exists() else set()
     stats = Counter()
@@ -338,24 +398,31 @@ def main():
     dq_examples = defaultdict(list)
     rosters = defaultdict(set)
     Path(args.out).parent.mkdir(parents=True, exist_ok=True)
-    with open_text(args.out, "wt") as out:
+
+    def gen():
         for r in iter_jsonl(args.inputs):
             stats["records"] += 1
             for e in examples_from_decision(r, stats):
-                out.write(json.dumps(e, separators=(",", ":")) + "\n")
-                stats["examples"] += 1
-                stats["examples_" + e["split"]] += 1
-                rosters[e["split"]].add(e["roster"])
-                if e["roster"] in val_rosters:
-                    stats["examples_from_hr_val_rosters"] += 1
-                states[e["item_state"]] += 1
-                for k in ("item", "ability", "tera"):
-                    hidden_counts[k] += e["hidden"][k]
-                hidden_counts["moves_hidden_total"] += len(e["hidden"]["moves"])
-                for k, v in e["dq"].items():
-                    dq_counts[k] += 1
-                    if len(dq_examples[k]) < 5:
-                        dq_examples[k].append([e["uid"], e["species"], v])
+                if args.force_split:
+                    e["split"] = args.force_split
+                yield e
+
+    with open_text(args.out, "wt") as out:
+        for e in capped(gen(), args.max_per_mon, args.seed):
+            out.write(json.dumps(e, separators=(",", ":")) + "\n")
+            stats["examples"] += 1
+            stats["examples_" + e["split"]] += 1
+            rosters[e["split"]].add(e["roster"])
+            if e["roster"] in val_rosters:
+                stats["examples_from_hr_val_rosters"] += 1
+            states[e["item_state"]] += 1
+            for k in ("item", "ability", "tera"):
+                hidden_counts[k] += e["hidden"][k]
+            hidden_counts["moves_hidden_total"] += len(e["hidden"]["moves"])
+            for k, v in e["dq"].items():
+                dq_counts[k] += 1
+                if len(dq_examples[k]) < 5:
+                    dq_examples[k].append([e["uid"], e["species"], v])
     report = {"stats": dict(stats), "item_state": dict(states), "hidden": dict(hidden_counts),
               "rosters": {k: len(v) for k, v in rosters.items()},
               "data_quality": dict(dq_counts), "data_quality_examples": dict(dq_examples)}

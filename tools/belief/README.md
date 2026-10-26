@@ -1,188 +1,241 @@
-# S-A: hidden-set inference benchmark and learned belief v0
+# S-A: hidden-set inference benchmark and learned belief (v0, v1)
 
-L2 "Reading the Opponent": how well can the opponent's hidden set (item, ability, tera type,
-moves, nature/EV spread) be inferred from public battle evidence, and how does a learned belief
-compare with the champion bot's own (Foul Play's set sampler)?
+L2 "Reading the Opponent": how well can the opponent's hidden set (item, ability, tera type, moves, nature/EV
+spread) be inferred from public battle evidence, and how does a learned belief compare with the champion bot's own
+(Foul Play's set sampler)?
 
 ## Files
 
 | File | What |
 |---|---|
-| `targets.py` | extractor output → one example per (decision, alive opponent Pokémon in the view): public view + context, true attributes (labels), which ones are hidden, the decision's sampled worlds for that Pokémon, data-quality flags, roster split |
-| `baselines.py` | three beliefs per example: `usage` (Smogon prior + view constraints), `fp` (Foul Play's sampler rebuilt offline, N = 64), `played` (the logged worlds) |
-| `benchmark.py` | S-A metrics → JSON + markdown |
-| `model.py`, `train.py` | learned belief v0 (PyTorch MLP, residual on the usage prior), learning curve |
-| `run_all.sh` | fetch → extract → examples → baselines → train → benchmark → learning curve |
+| `targets.py` | extractor output → one example per (decision, alive opponent Pokémon in the view): public view + context, true attributes (labels), which ones are hidden, the decision's sampled worlds for that Pokémon, data-quality flags, roster split. Options: `--max-per-mon N` (training files: at most N decisions per game, side and opponent Pokémon), `--force-split test` (the hr_val farm). It also holds `excluded_rosters()` (hr_val + reserved rosters) and `capped()` |
+| `human_prep.py` | human partial-label examples (`tools/metamon/partial_targets.py`) → capped train/dev/test, **dropping hr_val and reserved rosters** |
+| `baselines.py` | beliefs per example: `usage` (Smogon prior + view constraints), `revealed` (revealed-set prior from 2.02M human games), `fpbelief` (**Foul Play's own belief**, decision log v3), `fp` (Foul Play's sampler rebuilt offline, no damage pruning), `played` (the logged worlds) |
+| `model.py`, `train.py` | learned belief: v0 (farm full labels) and v1 (plus human partial labels: masked losses, reveal-propensity correction, `--init` fine-tuning, `--worlds` hybrid) |
+| `predict.py` | predictions from a saved checkpoint (e.g. v0 on a new test set) |
+| `benchmark.py` | S-A metrics, streaming, with a paired bootstrap over games → JSON + markdown |
+| `run_v1.sh` | the v1 pipeline behind the Oct 27 results; `run_all.sh` is the v0 pipeline (Oct 26) |
 
-## Benchmark spec (S-A v0)
+## Benchmark spec (S-A v1)
 
-**Rows.** One row per (bot decision, alive opponent Pokémon in the bot's view); in Gen 9 OU team preview shows all six, so every alive opponent Pokémon is in the view from turn 0. Fainted Pokémon are dropped (Foul Play doesn't sample them, and they don't matter for play). Every decision counts once per Pokémon, so long games and Pokémon that stay unrevealed weigh more.
+**Test sets:**
+1. **hr_val farm (the pre-registered S-A test, PREREGISTRATION §5).** Vanilla Foul Play self-play at C1t1 on the 596 `hr_val` rosters (`hrval-20261026-n{1,2}-9231`), with decision log v3. All rows: 146,225 rows from 33,253 decisions in 440 games, covering 290 hr_val rosters. These rosters are never trained on.
+2. **Held-out human games.** The metamon 2026H1 subset (rating ≥ 1500). Rows come from the roster-hash test split, with hr_val and reserved rosters removed, at one decision per (game, side, opponent Pokémon): 88,087 rows from 15,674 games and 3,494 rosters. **Labels are only what the opponent revealed by the end of the game.**
+3. (v0, Oct 26: hr_train games held out by roster hash, `results/`.)
 
-**Labels.** The true set from the Showdown battle log (`opp_team`). All names are Showdown ids (lowercase alphanumerics). The view species is matched to the true set by National Dex number; the species clause makes it unique, so `ogerponwellspringtera` ↔ Ogerpon-Wellspring and `landorustherian` ↔ Landorus-Therian work. Battle-only formes map to their base forme (`skey`) for the priors and the model. True sets are labels only, never model inputs.
+**Rows.** One row per (decision, alive opponent Pokémon in the view). Every decision counts once per Pokémon.
 
 **Scored only when hidden in the view:**
-- **item:** only when Foul Play's item is `unknownitem` and `removed_item` is null (encoding below).
-- **ability:** only when the view's ability is null. `ability (>1 legal)` restricts to species with more than one legal ability; the others are trivial.
-- **tera:** only when the Pokémon hasn't terastallized.
-- **moves:** the true moves not yet revealed.
-- **spread:** always hidden. Scored as nature (neutral natures merged into `serious`), EV class (the two stats with the most EVs, e.g. `atk+spe`), and spread = `nature|EV class`.
+- **item:** Foul Play's item is `unknownitem` and `removed_item` is null.
+- **ability:** the view ability is null. `ability (>1)` restricts to species with more than one legal ability.
+- **tera:** not terastallized.
+- **moves:** the true moves not yet revealed. For human games: the hidden moves revealed later.
+- **nature, EV class (the two stats with the most EVs), spread = nature|EV class:** farm only.
 
-**Metrics:**
-- top-1 accuracy;
-- **mean p(true)**: the probability the belief puts on the truth, i.e. the expected accuracy of one draw. It is unbiased for sampled beliefs at any sample count, so it is the fair way to compare the 4–8 logged worlds with N = 64 or exact distributions;
-- NLL = −ln max(p_true, ε) with **ε = 10⁻³** (a miss costs at most 6.9 nats);
-- multi-class Brier;
-- zero-mass rate (p_true = 0).
+Human rows are scored only where the attribute is hidden *and* was revealed later, excluding forced labels.
 
-**Moves** are ranked by P(move in set), with revealed moves excluded. With k = the number of hidden true moves, the metrics are recall@k, `set` (top-k equals the hidden moves exactly), recall@4, and mean P(move) over the hidden moves.
+**Metrics.**
+- **Primary (pre-registered):** item NLL = −ln max(p_true, ε) with **ε = 10⁻⁴**.
+- **Secondary:** top-1, mean p(true) (the expected accuracy of one draw, unbiased for sampled beliefs), Brier, zero-mass rate; for moves, recall@k (k = the number of hidden labelled moves), recall@4 and mean P(move).
+- **95% CIs** come from a bootstrap over games (2,000 resamples). The **paired difference** to a reference method is computed on the same rows.
 
-**Strata and averages.** Results are stratified by turn bucket (0 = preview, 1–5, 6–10, 11–20, 21+) and by the number of revealed moves. The per-species macro average covers species with ≥30 scored rows.
+**Comparison as pre-registered:** learned reader vs Foul Play's sampler (`fp_belief`), paired by example, bootstrap by game.
 
-**Held out by roster.** `split` = SHA-1 of the opponent roster (sorted Showdown species joined by `|`, the `data/pools-v1.json` format), giving 20% test, 10% dev (early stopping) and 70% train. Every decision log so far comes from the **hr_train** pool, so tonight's test set is held out *by roster within hr_train*, not hr_val. Re-point to hr_val decision logs once they exist (`targets.py` already counts any hr_val-roster rows). Reserved/sealed rosters are never read.
+## Foul Play's item encoding
 
-## Foul Play's item encoding (the open TODO in RESULTS.md)
-
-Checked in `fp/battle/state.py`, `fp/battle/protocol.py` (`set_item`, `remove_item`), `fp/battle/inference.py` and `fp/search/poke_engine_helpers.py`:
+Checked in `fp/battle/state.py`, `fp/battle/protocol.py` (`set_item`, `remove_item`), `fp/battle/inference.py` and `fp/search/poke_engine_helpers.py`.
 
 | View `item` | `removed_item` | Meaning | `item_state` |
 |---|---|---|---|
 | `"unknownitem"` | null | never revealed (initial value; Illusion ending resets it) | `unknown`: the **only** scored case |
-| item id | null | revealed by a protocol message **or inferred**: `choicescarf` from speed order, `heavydutyboots` from hazards. `item_inferred` isn't logged | `known` |
-| null | item id | original item revealed, then knocked off, consumed or stolen (`-enditem`) | `removed` |
-| item id 2 | item id | original swapped away (Trick: when the bot is tricked, the opponent's `removed_item` is set), and it now holds id 2 | `removed` |
+| item id | null | revealed by a protocol message **or inferred** (`choicescarf` from speed order, `heavydutyboots` from hazards; `item_inferred` isn't logged) | `known` |
+| null | item id | original item revealed, then knocked off / consumed / stolen | `removed` |
+| item id 2 | item id | original swapped away (Trick, Thief), now holds id 2 | `removed` |
 | null | null | holds nothing, original unknown (Z-move path only) | `none_unexplained`: never seen |
 
-In the **logged worlds** (`worlds[].opp_sets`), "no item" is the **string `"None"`**: `battle_to_poke_engine_state` writes `pkmn.item = "None"` on the battle copy (also when `knocked_off`) before the sets are logged. An unsampled fainted Pokémon keeps `"unknownitem"`. The sampler (`populate_pkmn_from_set`) only replaces `unknownitem`, so null items stay null. In `PokemonSet.item_check`, `removed_item` counts as the original item.
+In the logged worlds (`worlds[].opp_sets`) "no item" is the **string `"None"`**: `battle_to_poke_engine_state` writes it on the battle copy before logging. In `fp_belief` histograms, values are `str()` of the sampled field, so a null is `"None"`.
 
 ## Baselines
 
-- **usage:** the Smogon chaos stats Foul Play uses (`fp/data/smogon_stats_cache/gen9ou-0.json`, byte-identical to the Azure farm's copy), full lists rather than Foul Play's top-10/20/6 truncation. Renormalised after:
-  - impossible items, plus choice items when `can_have_choice_item` is false;
+- **usage:** Smogon chaos stats (`fp/data/smogon_stats_cache/gen9ou-0.json`, the farm's copy) renormalised after the view's hard constraints:
+  - impossible items, and no choice item when Foul Play rules it out;
   - impossible abilities;
   - revealed moves (excluded);
-  - the speed range: a spread is kept if its speed, or ×1.5 when a Choice Scarf is still possible, is in `speed_range`. This is Foul Play's `speed_check`.
-- **fp:** an `fp` `Pokemon` is rebuilt from the v2 view fields, and `fp.search.standard_battles.sample_pokemon` runs 64 times on deep copies. It uses a `StandardBattleMode` whose `TeamDatasets` and `SmogonSets` are initialised as in a real battle: `initialize_team_preview_datasets("gen9ou", <the game's 12 team-preview species>)`, from `fp/modes/standard_battle.py`. Identical views within a game share one draw of 64.
-- **played:** the decision's logged worlds, chance-weighted. That is 4 worlds at C1t1, or 8 while the opponent's active has revealed fewer than 3 moves. **This is Foul Play's real in-game belief.**
+  - the speed range on spreads.
+- **revealed_prior:** `scratch_ds/metamon/priors/alt_usage_prior.json`, slice `2026H1|ge1500` (fallback `all|ge1500`, `all|all`).
+  - **Item / ability / tera** follow the distribution of **revealed** values.
+  - **Moves** use the per-game reveal rate. That ranks moves correctly but under-states P(move in set).
+  - **Spread** comes from Smogon, since spreads are never revealed.
+  - The constraints are the same as for **usage**.
+- **fp_belief:** Foul Play's **own** belief. Decision log v3 records 64 draws of `sample_pokemon` per visible opponent Pokémon, on the live `battle.mode`, **after** its in-place reverse-damage pruning.
+  - This is the faithful champion baseline. It was read from the raw chunk tarballs (the extractor doesn't carry it).
+  - The snapshot costs 332 ms per decision in play.
+- **played:** the decision's 4–8 logged worlds (the same sampler, few draws).
+- **fp:** Foul Play's sampler rebuilt offline from the view. It has no damage pruning, so from turn 6 on it is worse than `played` on spreads (v0 report).
 
-**Reconstruction fidelity, and a hidden state.** At team preview and turns 1–5, `fp` and `played` agree on mean p(true) for every attribute, within noise. Later they diverge on spreads and items: `played` is better (EV class 0.59 → 0.85 at turn 21+). The cause is that Foul Play **prunes its dataset lists in place by reverse damage calculation** (`fp/battle/inference.py: update_dataset_possibilities → _do_check → possibilites.pop(i)` on `mode.team_datasets`/`mode.smogon_sets`). That state isn't in the v2 log, so `fp` is "Foul Play's sampler on the public view, without damage pruning". To make the real belief reconstructible offline, log v3 should record the surviving dataset entries per opponent species (indices or a hash).
+## Learned belief
 
-## Learned belief v0
+**v0 (Oct 26):** an MLP (2 × 512) over the public view of one opponent Pokémon.
+- **Inputs:**
+  - species;
+  - revealed moves;
+  - view item, ability and tera;
+  - Foul Play's flags (choice possible, impossible items and abilities);
+  - speed-range bounds;
+  - HP, status, turn.
+- **Team-context inputs** are zeroed by default: they let the net memorise rosters.
+- **Heads:** item, ability, tera, moves, nature, EV class, spread.
+- **Training:** a residual on the Smogon usage prior (the untrained net *is* the prior), the same hard constraints as the baselines, and early stopping on the farm dev split.
 
-`model.py` is an MLP (2 × 512, GELU, dropout 0.5) over:
-- species, with battle-only formes mapped plus a forme flag;
-- opponent teammates seen, own active species, own team: implemented but **zeroed by default** (`--drop-inputs`). At 811 games they let the net memorise training rosters: dropping them lowered dev loss from 6.93 to 6.85, and test mean p(true) rose slightly on every attribute. Re-test with more data;
-- revealed moves;
-- view item / removed item / ability / tera;
-- the terastallized flag;
-- Foul Play's flags (choice possible, impossible items, impossible abilities);
-- speed-range bounds, absolute and relative to the species' range;
-- HP fraction, status, active flag, turn, preview flag, fainted counts.
+**v1 (Oct 27)** (same net; `model.py`/`train.py`):
+- **Farm data:** C1t1 label farm (2,774 games) plus F1 volume farm (1,796 games), at most 4 decisions per (game, side, opponent Pokémon), train split only. That is 146,521 rows from 1,946 rosters.
+- **Human data:** metamon 2026H1, rating ≥ 1500, 57,310 games, both observers, with partial labels.
+  - Rows whose opponent roster is an hr_val or reserved roster are dropped (`targets.excluded_rosters()`): **4.44M of 15.39M rows (29%)**. The ladder replays contain the sealed rosters, so this filter is required.
+  - At most 3 decisions per (game, side, Pokémon), train split only. That is 870,906 rows from 42,109 games and 11,819 rosters; 1,816 of these rosters also occur in the farm.
+- **Masked losses:**
+  - item/ability/tera cross-entropy only on rows where the label is known;
+  - spread heads only on farm rows;
+  - the 4-move BCE only where all 4 moves are known;
+  - otherwise a positive-only listwise term on the revealed hidden moves (weight 0.25).
+- **Reveal-propensity correction (`--reveal`, on with `--human`).** Human labels are values that *got revealed*, so P(label = v) ∝ P(v | view)·r(v).
+  - A learned per-class vector log r(v) (item, ability, tera, moves) is added to the logits of human rows only. Farm rows, which have true labels, anchor P(v | view).
+  - True-set predictions omit the vector. The "revealed head" adds it.
+  - What it learned for items: Choice Band −1.6, Specs −1.3, Scarf −1.2, Loaded Dice −1.3, Heavy-Duty Boots −1.1, Assault Vest −0.8, against Leftovers +0.5, Life Orb +0.6, Sitrus +0.7, Air Balloon +0.7, Booster Energy +0.6.
+  - For abilities: Sand Stream +2.1, Intimidate +1.2, Electric and Psychic Surge +3.7 to +4.3, against Regenerator −3.4 and Unaware −3.4.
+- **`--init` fine-tuning:** pre-train on farm + human, then fine-tune on farm rows only (lr 3e-4).
+- **`--worlds 1`:** also reads the decision's logged worlds (only farm rows have them).
+- **Cost:** every run takes 1–3 min on the Mac (CPU, 5–6 threads; 1.0M rows), so no Azure job was needed.
 
-**Heads.** item, ability, tera, moves (multi-label), nature, EV class, spread.
+## Results (Oct 26, 2026, about 23:50 UTC = Oct 27 00:50 Paris; `scratch_ds/belief/results_v1/`)
 
-**Residual on the usage prior.** Each head adds `scale × log prior[species]` (Smogon) to a zero-initialised head, so the untrained net *is* the usage prior and training learns corrections. Training from scratch overfits within one epoch on a few hundred games.
+### 1. hr_val farm (pre-registered S-A test)
 
-**Training setup:**
-- The same hard constraints as the baselines are applied (masking).
-- Losses use only hidden attributes.
-- Each row is weighted by 1/(rows of the same Pokémon in the same game and side).
-- AdamW (lr 1e-3, wd 0.1), early stopping on dev loss.
-- `--extra-train` adds the F1 volume farm's **train-split** rows; test and dev rosters are excluded by construction.
-- `--worlds 1` (hybrid "v0+worlds") also feeds the decision's logged worlds as additive log-probabilities.
+The main table shows 95% CIs over games, with each method's paired difference to `fp_belief`. Full tables, strata and per-species values are in `results_v1/sa_hrval.md`.
+
+| Method | **item NLL (ε 1e-4)** | Δ vs fp_belief | item top-1 | item p(true) | ability (>1) top-1 | tera top-1 | moves R@k | EV class top-1 | spread top-1 |
+|---|---|---|---|---|---|---|---|---|---|
+| **fp_belief** (Foul Play, 64 draws, pruned) | 1.800 [1.720, 1.885] | (ref) | 0.562 | 0.443 | 0.885 | 0.375 | 0.576 | 0.791 | 0.675 |
+| usage prior | 1.301 [1.261, 1.340] | −0.500 [−0.563, −0.439] | 0.576 | 0.404 | 0.886 | 0.409 | 0.601 | 0.745 | 0.654 |
+| revealed-set prior | 1.457 [1.399, 1.512] | −0.344 [−0.415, −0.275] | 0.515 | 0.438 | 0.758 | 0.443 | 0.599 | 0.745 | 0.654 |
+| as played (4–8 worlds) | 2.603 [2.506, 2.701] | +0.803 [+0.766, +0.840] | 0.519 | 0.443 | 0.878 | 0.329 | 0.553 | 0.751 | 0.621 |
+| v0 (1,166 games) | 1.214 [1.172, 1.254] | −0.586 [−0.651, −0.524] | 0.596 | 0.458 | 0.888 | 0.437 | 0.595 | 0.755 | 0.656 |
+| v1 farm-only | 1.197 [1.152, 1.238] | −0.604 [−0.665, −0.544] | 0.604 | 0.469 | 0.893 | 0.440 | 0.601 | 0.760 | 0.659 |
+| v1 farm+human (joint) | 1.208 [1.167, 1.247] | −0.592 [−0.656, −0.531] | 0.593 | 0.461 | 0.890 | 0.446 | 0.601 | 0.758 | 0.654 |
+| v1 farm+human, no reveal correction | 1.279 [1.235, 1.319] | −0.521 [−0.590, −0.458] | 0.568 | 0.460 | 0.883 | 0.448 | 0.600 | 0.755 | 0.654 |
+| **v1 human pre-train → farm fine-tune** | **1.182** [1.141, 1.223] | **−0.618** [−0.682, −0.557] | 0.601 | 0.471 | 0.893 | 0.445 | **0.605** | 0.759 | 0.659 |
+| v0 + worlds | 1.207 [1.165, 1.249] | −0.593 [−0.655, −0.532] | 0.598 | 0.466 | 0.891 | 0.431 | 0.595 | 0.800 | 0.695 |
+| v1 farm-only + worlds | 1.190 [1.147, 1.231] | −0.610 [−0.672, −0.550] | 0.598 | 0.471 | 0.893 | 0.444 | 0.600 | 0.806 | 0.706 |
+| v1 farm+human + worlds | 1.199 [1.157, 1.239] | −0.602 [−0.663, −0.542] | 0.596 | 0.471 | 0.892 | 0.444 | 0.603 | 0.805 | 0.702 |
+| v1 pre-train → fine-tune + worlds | 1.175 [1.134, 1.215] | −0.626 [−0.689, −0.566] | 0.602 | 0.475 | 0.896 | 0.443 | 0.604 | 0.808 | 0.708 |
+| **same model, fp_belief as the worlds input at test time** | **1.172** [1.131, 1.212] | **−0.629** [−0.691, −0.569] | **0.605** | **0.475** | **0.897** | 0.442 | **0.605** | **0.814** | **0.716** |
+
+**Pre-registered comparison, learned reader vs Foul Play's sampler.** Item NLL is **−0.618 nats [−0.682, −0.557]** for the view-only v1, and −0.626 [−0.689, −0.566] with the worlds.
+
+The last row needs no retraining (`predict.py --worlds-from-fpbelief`). It is trained on 4–8 logged worlds; at test time it reads Foul Play's 64 pruned draws instead. It is the best belief on every attribute except tera.
+
+- **Not only calibration.** Paired with `fp_belief`, the learned reader is also ahead on:
+  - item top-1: +0.039 [+0.026, +0.052];
+  - item p(true): +0.028 [+0.021, +0.035];
+  - tera top-1: +0.070;
+  - moves: +0.029.
+- **Zero mass.** `fp_belief` puts zero mass on the true item in 9% of rows, and on the true tera in 16%.
+- **Smoothing doesn't close the gap.** Mixing `fp_belief` with 20% usage prior (`sa_hrval_smoothfp.md`) only brings it to 1.370.
+- **Where Foul Play still wins.** Its pruned belief is better on EV class (0.791 vs 0.759) and spread (0.675 vs 0.659), because the damage information isn't in the view. Adding the logged worlds recovers and passes it (0.808 / 0.708).
+- **By turn:** the learned reader's item p(true) goes from 0.434 at preview to 0.520 at turn 21+; `fp_belief` goes from 0.378 to 0.512. Its NLL is 1.25 → 1.08, against 1.80 → 1.84.
+
+**Ablation: farm-only vs farm+human, 3 seeds each** (item NLL, paired Δ to farm-only seed 0; `results_v1/sa_hrval_seeds.md`):
+
+| | seed 0 | seed 1 | seed 2 |
+|---|---|---|---|
+| farm-only | 1.197 (ref) | +0.004 [−0.002, +0.011] | −0.004 [−0.014, +0.004] |
+| farm+human, joint | +0.012 [−0.000, +0.023] | +0.001 [−0.012, +0.013] | +0.013 [+0.001, +0.025] |
+| human pre-train → farm fine-tune | **−0.014 [−0.022, −0.007]** | **−0.016 [−0.024, −0.008]** | **−0.012 [−0.021, −0.003]** |
+
+**Human data amount (joint training):** with 10% / 30% / 100% of the human games, the change is +0.001 / −0.001 / +0.012 on hr_val, so there is no gain.
+
+Dev loss on the farm dev split shows the same ordering. Farm-only scores 6.32 / 6.32 / 6.33. Joint farm+human scores 6.37 / 6.37 / 6.39, and 6.47 without the reveal correction. Pre-train then fine-tune scores 6.26 / 6.27 / 6.27.
+
+### 2. Held-out human games (revealed labels only)
+
+`results_v1/sa_human.md`: 88,087 rows from 15,674 games. Paired Δ is to the usage prior.
+
+| Method | item NLL | Δ vs usage | item top-1 | item p(true) | ability (>1) top-1 | tera top-1 | moves R@4 |
+|---|---|---|---|---|---|---|---|
+| usage prior | 1.390 [1.370, 1.409] | (ref) | 0.560 | 0.396 | 0.894 | 0.479 | 0.759 |
+| **revealed-set prior** | **1.006** [0.987, 1.024] | −0.384 [−0.396, −0.371] | **0.672** | **0.548** | 0.922 | **0.557** | **0.789** |
+| v0 | 1.220 [1.200, 1.239] | −0.170 | 0.633 | 0.470 | 0.902 | 0.512 | 0.756 |
+| v1 farm-only | 1.208 [1.187, 1.227] | −0.182 | 0.637 | 0.478 | 0.932 | 0.524 | 0.764 |
+| v1 farm+human (true-set head) | 1.164 [1.145, 1.182] | −0.227 | 0.640 | 0.484 | 0.934 | 0.543 | 0.770 |
+| v1 farm+human, **revealed head** (+ log r) | 1.080 [1.060, 1.099] | −0.310 | 0.664 | 0.536 | **0.953** | 0.538 | 0.784 |
+| v1 farm+human, no reveal correction | 1.078 [1.058, 1.096] | −0.312 | 0.662 | 0.527 | 0.949 | 0.541 | 0.778 |
+| v1 pre-train → fine-tune | 1.168 [1.148, 1.186] | −0.222 | 0.647 | 0.484 | 0.934 | 0.539 | 0.770 |
+
+- **Human labels help on human games.** Item NLL against farm-only is −0.044 [−0.050, −0.039], with seeds at −0.036 and −0.041. It improves with the amount of human data: −0.021 at 10%, −0.031 at 30%, −0.044 at 100%.
+- **The reveal correction behaves as designed.** With it, the true-set head is better on hr_val's true sets: 1.208 vs 1.279 without. Adding log r back reproduces the revealed-label fit (1.080 vs 1.078).
+- **Reveal-bias caveat.** These labels are the values that got revealed, a selection that depends on the value: Leftovers, Life Orb, berries and announcing abilities show; Choice items, Boots, Assault Vest and passive abilities rarely do. So this test measures P(revealed value | view). The revealed-set prior is fit to exactly that selection, on 2.02M games, so it wins here by construction. It is a *worse* true-set predictor on hr_val (item NLL 1.457 vs 1.301 for the Smogon prior; ability top-1 0.758). Claims about true sets come only from the farm test.
+
+### 3. Reading
+
+1. **On the pre-registered test, every learned reader beats Foul Play's own belief by about 0.6 nats of item NLL,** with CIs far from 0. It is also ahead on item and tera top-1, item p(true) and moves. Foul Play keeps an edge on EV class and spread from damage pruning, and the logged-worlds hybrid takes that edge back.
+2. **Human partial labels: about +0.01 nats worse on hr_val when mixed in jointly, and about 0.014 nats better (in all 3 seeds) as pre-training before farm fine-tuning.** Mixed in jointly, they don't help (or slightly hurt), even with the reveal correction. On human games they help clearly and in proportion to the amount.
+   - The likely reason is a **domain gap between the two "truths"**: hr_val sets are metamon's *predicted* hl_05_26 teams (hidden details filled in from statistics), while human labels are real revealed sets from 2026 play.
+   - Distinct human teams therefore don't buy what the farm learning curve suggested, at least not on this test. A truly-held-out set with real hidden sets would settle it.
+3. **The reveal-propensity correction is necessary** for using human labels at all: without it, hr_val item NLL rises by +0.07.
 
 ## How to run
 
 ```sh
-# everything, incremental downloads (read-only blob access via azure/fetch.sh)
-bash tools/belief/run_all.sh
-# or step by step (python3 = /usr/bin/python3 with torch; FP env for --method fp)
-python3 tools/dataset/extract.py data/samples/sample-F1-12.tar.gz --out scratch_ds/sample.jsonl.gz
-python3 tools/belief/targets.py scratch_ds/sample.jsonl.gz --out scratch_ds/belief/sample.examples.jsonl.gz
-python3 tools/belief/baselines.py --examples scratch_ds/belief/sample.examples.jsonl.gz --method usage --out U.jsonl.gz
-../environments/foulplay/bin/python tools/belief/baselines.py --examples ... --method fp --workers 12 --out F.jsonl.gz
-python3 tools/belief/train.py --examples ... [--extra-train vol.examples.jsonl.gz] --out-dir scratch_ds/belief/v0
-python3 tools/belief/benchmark.py --examples ... --pred usage=U.jsonl.gz --pred fp=F.jsonl.gz ... --out-md out.md
+bash tools/belief/run_v1.sh          # v1: fetch, examples, human prep, baselines, all runs, both benchmarks
+bash tools/belief/run_all.sh         # v0 (Oct 26)
+# single steps (python3 = /usr/bin/python3 with torch)
+python3 tools/belief/baselines.py --examples val.examples.jsonl.gz --method fpbelief --raw scratch_ds/chunks/val/*.tar.gz --out F.jsonl.gz
+python3 tools/belief/train.py --examples lab.examples.jsonl.gz --extra-train vol.examples.jsonl.gz --human human.train.jsonl.gz \
+    --out-dir D --fractions 1.0 --tag _farmhuman --predict hrval=val.examples.jsonl.gz --predict-revealed human=human.test1.jsonl.gz
+python3 tools/belief/train.py ... --init D/model_f1.0_farmhuman.pt --lr 3e-4 --tag _ft     # (farm-only fine-tune)
+python3 tools/belief/benchmark.py --examples val.examples.jsonl.gz --eps 1e-4 --bootstrap 2000 --ref fp_belief --pred fp_belief=F.jsonl.gz --pred v1=...
 ```
 
-Outputs go to `scratch_ds/belief/` (gitignored), and results to `scratch_ds/belief/results/`.
+Data lives in `scratch_ds/` (gitignored):
+- `belief/v1data/`: farm examples and hr_val baselines;
+- `belief/human/`: human splits;
+- `belief/v1/`: runs and predictions;
+- `belief/results_v1/`: benchmark tables.
 
-## Current results
+Prediction files must follow the example order (every tool here writes them that way). The benchmark streams them in lockstep.
 
-Run of Oct 26, 2026, about 18:45 UTC (`scratch_ds/belief/results/`). The setup:
+## Data notes and caveats
 
-- **Data:** 29 C1t1 chunks (fetched 18:10 UTC): 725 games, 61,150 decisions, 274,891 rows. That is 187k train / 27k dev / 60k test rows over 611 / 92 / 162 rosters.
-- **Test set:** 162 held-out rosters (within hr_train), 272 games, 13,074 decisions, 60,154 rows.
-- **Extra training data:** for the `+vol` models, the train split of 4 F1 volume chunks (598 games, 137k rows).
-
-36 C1t1 chunks were on disk at 18:43. `bash tools/belief/run_all.sh` refreshes everything; it takes about 30 min on an idle Mac.
-
-**Mean p(true)** (the belief's probability on the truth; moves: mean P(move in set) over the hidden moves):
-
-| Method | item | ability (>1 legal) | tera | moves | nature | EV class | spread |
-|---|---|---|---|---|---|---|---|
-| usage prior | 0.421 | 0.827 | 0.293 | 0.525 | 0.581 | 0.578 | 0.438 |
-| fp (offline sampler, N=64, no damage pruning) | 0.425 | 0.843 | 0.291 | 0.502 | 0.614 | 0.614 | 0.464 |
-| played (Foul Play's in-game worlds) | 0.471 | 0.852 | 0.292 | 0.507 | 0.676 | **0.720** | 0.560 |
-| v0, C1t1 only (647 games) | 0.464 | 0.854 | **0.324** | 0.545 | 0.674 | 0.673 | 0.554 |
-| v0, C1t1 + F1 volume (1,166 games) | 0.468 | **0.861** | 0.321 | **0.548** | 0.675 | 0.678 | 0.557 |
-| v0 + worlds (hybrid), C1t1 + F1 volume | **0.484** | **0.861** | 0.321 | 0.536 | **0.707** | **0.733** | **0.600** |
-
-**Top-1 accuracy** (moves: recall@k of the hidden moves) and **NLL** (ε = 10⁻³):
-
-| Method | item | ability (>1) | tera | moves R@k | moves set | nature | EV class | spread | NLL item / tera / spread |
-|---|---|---|---|---|---|---|---|---|---|
-| usage prior | 0.566 | 0.873 | 0.449 | 0.604 | 0.195 | 0.779 | 0.758 | 0.668 | 1.25 / 1.63 / 1.07 |
-| fp | 0.527 | 0.859 | 0.409 | 0.581 | 0.159 | 0.734 | 0.717 | 0.615 | 1.56 / 2.25 / 1.37 |
-| played | 0.536 | 0.869 | 0.354 | 0.557 | 0.143 | 0.753 | 0.779 | 0.645 | 2.03 / 3.08 / 1.44 |
-| v0, C1t1 only | 0.578 | 0.880 | 0.466 | 0.606 | 0.191 | 0.775 | 0.768 | 0.673 | 1.19 / 1.57 / 0.88 |
-| v0, C1t1 + vol | 0.577 | 0.879 | 0.460 | 0.606 | 0.187 | 0.764 | 0.778 | 0.680 | 1.17 / 1.56 / 0.86 |
-| v0 + worlds | **0.603** | 0.881 | 0.455 | **0.608** | 0.189 | **0.802** | **0.820** | **0.721** | **1.15** / 1.57 / **0.78** |
-
-**Scored rows:**
-- item 39,549 (66% of rows);
-- ability 47,609, of which 27,035 for species with >1 legal ability;
-- tera 56,839;
-- moves 56,605;
-- spread 60,154.
-
-Strata (turn bucket, revealed moves) and per-species macro averages are in `results/sa_c1t1.md`.
-
-**Learning curve** (dev loss of the summed heads; test mean p(true)). Fractions are of training *games*, nested:
-
-| Training data | games | rows | best dev loss | item | tera | moves | EV class | spread |
-|---|---|---|---|---|---|---|---|---|
-| usage prior (untrained net) | 0 | 0 | 7.59–7.63 | 0.421 | 0.293 | 0.525 | 0.578 | 0.438 |
-| C1t1 10% | 57 | 17k | 7.49 | 0.418 | 0.289 | 0.525 | 0.580 | 0.462 |
-| C1t1 30% | 200 | 61k | 7.13 | 0.457 | 0.312 | 0.529 | 0.644 | 0.516 |
-| C1t1 100% | 647 | 187k | 6.70 | 0.464 | 0.324 | 0.545 | 0.673 | 0.554 |
-| C1t1 + vol, 10% | 113 | 33k | 7.23 | 0.439 | 0.292 | 0.521 | 0.623 | 0.506 |
-| C1t1 + vol, 30% | 355 | 104k | 6.99 | 0.447 | 0.309 | 0.528 | 0.652 | 0.533 |
-| C1t1 + vol, 100% | 1,166 | 325k | 6.58 | 0.468 | 0.321 | 0.548 | 0.678 | 0.557 |
-
-**Reading the learning curve:**
-- Dev loss falls roughly linearly in log(games) and hasn't flattened at about 1.2k games.
-- All runs stop early (0.5–1 epoch), because consecutive decisions repeat the same Pokémon. **The number of distinct teams is the binding resource**, not decisions.
-- F1 volume games help: adding about 520 F1 games to all 647 C1t1 games moves dev loss from 6.70 to 6.58. Per game they are worth somewhat less than C1t1 games on this C1t1 test (the views come from different play), but they are about 15× cheaper to produce.
-
-**Takeaways:**
-1. The champion's belief has little edge over a usage prior except where it uses damage. Its **offline sampler (`fp`) is no better than the Smogon prior overall**: it is worse in top-1 and NLL everywhere. In mean p(true) it is +0.03 on nature and EV class but −0.02 on moves. A likely cause is that TeamDatasets sets are drawn uniformly, not by count. Its **in-game belief (`played`) is clearly better on EV class, nature and item**, thanks to reverse-damage pruning, which the v2 log doesn't capture.
-2. **Learned v0 (public view only) matches the in-game belief** on item, ability, nature and spread, and beats it on tera (+0.03) and moves (+0.04). It trails on EV class (0.673 vs 0.720) because it doesn't see damage. As a full calibrated distribution, its NLL is far better than 4–8 sampled worlds.
-3. **The hybrid (v0 + the logged worlds) is the best belief on 5 of 7 attributes.** The learned prior and Foul Play's damage-pruned worlds are complementary.
-4. **Hard-constraint errors.** In 0.41% of hidden-item rows (752 / 184,198), Foul Play's own constraints exclude the true item. Examples: Choice Scarf ruled out on Gholdengo; Leftovers marked impossible on Zamazenta, Corviknight and Dondozo; Life Orb on Golduck and Kingambit; Booster Energy on Raging Bolt. Every belief that applies these constraints gives such rows zero mass. A soft constraint is a cheap v1 fix.
-
-**Sampler cost.** One `sample_pokemon` call costs 1.2 ms on a single core with the Mac idle, and 2.4–4.3 ms under load. With N = 64, a view costs 75–150 ms on one core. Dataset initialisation costs 0.7–1.8 s per game. In play, Foul Play calls the sampler once per alive opponent Pokémon per world, about 20–40 calls or 25–100 ms per decision, which is small next to a 2 s search.
-
-## Caveats
-
-- **The "true" sets are metamon's *predicted* teams** (hl_05_26, hidden details predicted from replays), probably filled with usage-style statistics. So the usage prior may be artificially strong here. Real ladder opponents could favour data-driven beliefs differently.
-- Every decision counts once per alive opponent Pokémon. Rows within a game are highly correlated, so the effective sample is about 160 rosters and 270 games. Differences under about 0.01 are noise: one seed, no confidence intervals yet.
-- The test set is held out by roster *within hr_train*. hr_val decision logs will replace it.
-- The F1 volume farm (`hrvol-20261026-n1-a612`) packed chunks c000–c003 and then **started c004 at 17:02 UTC, which was still not packed at 18:43** (normally about 8 min). It may be hung; check the job. Nothing was touched.
+- **hr_val farm:** 440 games, 33,253 decisions, decision log v3 everywhere (no row without `fp_belief`). View vs truth:
+  - 151 ability mismatches (Gardevoir's Trace: the view shows the traced ability);
+  - 28 wrong view items: Illusion, where a Zoroark's Life Orb is attributed to Indeedee; an Air Balloon on Ogerpon-Wellspring; a speed-inferred Scarf on a Boots Talonflame;
+  - 15 revealed moves not in the true set (the same Illusion case);
+  - 244 Ogerpon-Tera forme abilities (expected).
+- **Hard constraints:** Foul Play's own constraints exclude the true hidden item in about 0.4% of rows (v0 report), which costs those rows the ε floor.
+- **Sealed rosters appear in the human data.** 29% of human rows had an hr_val or reserved opponent roster. They were removed before any split. Anything else trained on these replays (student, Glimmer SFT) should apply the same filter.
+- **One decision per Pokémon counts once,** so rows are correlated within a game. The CIs resample games, and the training seeds vary by about 0.005–0.01 nats.
 
 ## Next steps
 
-1. **Log v3:** per opponent species, the surviving TeamDatasets/SmogonSets entries after damage pruning (or their indices). Without them, Foul Play's real belief can't be reconstructed offline beyond the 4–8 logged worlds.
-2. **v1 model:** add damage evidence from the public log (`history_end` cuts: damage %, move, crit, attacker/defender, field) through a small sequence encoder. This is what closes the EV-class gap without Foul Play's calculator. Also use soft constraints and team context once there are thousands of games.
-3. **Scale data:** the curve is still rising. F1 volume games are cheap and nearly as useful per game, so train on the full overnight volume farm and keep C1t1 for evaluation.
-4. Add bootstrap confidence intervals over rosters to `benchmark.py`, and 3 seeds per learning-curve point.
-5. **Pilot in play:** replace `sample_pokemon` with draws from the hybrid belief (the oracle hook shows where), then run A/A versus vanilla at C1t1.
+1. Log `fp_belief` (v3) in the label farm too, and train the hybrid on `fp_belief` histograms (64 pruned draws) instead of 4–8 worlds. This is the cleanest "learned prior + Foul Play's damage pruning" combination. Feeding them at test time to a model trained on worlds already helps (row "fp_belief as the worlds input": EV class 0.814, spread 0.716).
+2. Add damage evidence from the public log (a sequence encoder over `history_end`) to close the EV-class gap without Foul Play's calculator.
+3. Human data:
+   - per-species or exposure-aware reveal propensities (the `yturn`/`final` fields), or a "revealed within k turns" target;
+   - a real-set check (own-side full teams of human players are not available; ladder team dumps could serve);
+   - weight human rows down instead of fine-tuning.
+4. Pilot in play: sample worlds from v1 (pre-train → fine-tune + worlds) instead of `sample_pokemon`, then run A/A at C1t1 on hr_val rosters (development set B).
+
+## v0 history (Oct 26; `results/`, test = hr_train held out by roster)
+
+- **Data:** 725 C1t1 games plus 598 F1 games; 60,154 test rows.
+- **Mean p(true), item / EV class / spread:**
+
+  | Method | item | EV class | spread |
+  |---|---|---|---|
+  | usage | 0.421 | 0.578 | 0.438 |
+  | offline `fp` | 0.425 | 0.614 | 0.464 |
+  | played | 0.471 | 0.720 | 0.560 |
+  | v0 | 0.468 | 0.678 | 0.557 |
+  | v0 + worlds | 0.484 | 0.733 | 0.600 |
+
+- **Learning curve:** dev loss went 7.49 → 7.13 → 6.70 for 57 → 200 → 647 C1t1 games, and 6.58 with F1 games added.
+- **Reconstruction check:** offline `fp` matches `played` at turns 0–5 and diverges later because of the damage pruning that v3 now logs.

@@ -158,6 +158,15 @@ def featurize(examples, voc):
         f["wi_" + k] = np.zeros((N, W * (4 if k == "moves" else 1)), np.int64)
         f["ww_" + k] = np.zeros((N, W * (4 if k == "moves" else 1)), np.float32)
     for i, e in enumerate(examples):
+        if e.get("fpb"):
+            # test-time alternative: Foul Play's own belief histogram (decision log v3, 64 pruned draws) instead of the
+            # 4-8 worlds; each head gets its top values with their probabilities (moves: marginal P(move in set))
+            for k, dist in fpb_dists(e["fpb"]).items():
+                top = sorted(dist.items(), key=lambda kv: -kv[1])[:f["wi_" + k].shape[1]]
+                for j, (t, pr) in enumerate(top):
+                    f["wi_" + k][i, j] = voc["move" if k == "moves" else k](t)
+                    f["ww_" + k][i, j] = pr
+            continue
         worlds = e.get("played") or []
         tot = sum(c for c, _ in worlds) or 1.0
         for j, (c, ws) in enumerate(worlds[:W]):
@@ -172,11 +181,56 @@ def featurize(examples, voc):
             for q, m in enumerate((ws.get("moves") or [])[:4]):
                 f["wi_moves"][i, j * 4 + q] = voc["move"](toid(m))
                 f["ww_moves"][i, j * 4 + q] = c
+    # v1: partial labels (human rows from tools/metamon/partial_targets.py carry `scored`/`ymask`).
+    # Farm rows keep the full-label masks (hidden attributes; all 4 moves; spread heads). Human rows: item/ability/tera
+    # only where hidden AND revealed later (and not *_forced), no spread heads, the 4-move BCE only when all 4 moves
+    # were revealed, and a positive-only ranking target (y_pos) for the revealed hidden moves.
+    src_h = np.array(["scored" in e for e in examples], np.bool_)
+    f["src_h"] = src_h
+    f["m_spread"] = ~src_h
+    f["m_moves_complete"] = np.ones(N, np.bool_)
+    f["y_pos"] = np.zeros((N, 4), np.int64)
+    for i, e in enumerate(examples):
+        if not src_h[i]:
+            continue
+        sc, ym = e["scored"], e["ymask"]
+        f["m_item"][i] = bool(sc["item"]) and not ym.get("item_forced")
+        f["m_ability"][i] = bool(sc["ability"]) and not ym.get("ability_forced")
+        f["m_tera"][i] = bool(sc["tera"])
+        f["m_moves_complete"][i] = bool(ym.get("moves_complete"))
+        ids = [voc["move"](toid(m)) for m in e["hidden"]["moves"]][:4]
+        f["y_pos"][i, :len(ids)] = ids
     # dedup weight: 1 / number of examples of the same opponent Pokemon in the same game and side
     cnt = Counter((e["game"], e["side"], e["skey"]) for e in examples)
     f["w"] = np.array([1.0 / cnt[(e["game"], e["side"], e["skey"])] for e in examples], np.float32)
     f["w"] *= len(examples) / max(1e-9, f["w"].sum())
     return f
+
+
+def fpb_dists(h):
+    """fp_belief histogram -> per-head distributions over the model's value strings."""
+    n = h.get("n") or 0
+    out = {k: Counter() for k in WORLD_HEADS}
+    if not n:
+        return {}
+    for k, c in h.get("item", {}).items():
+        out["item"]["none" if k in ("None", "", "none") else toid(k)] += c / n
+    for k, c in h.get("ability", {}).items():
+        out["ability"]["?" if k in ("None", "") else toid(k)] += c / n
+    for k, c in h.get("tera", {}).items():
+        out["tera"]["?" if k in ("None", "") else toid(k)] += c / n
+    for k, c in h.get("spread", {}).items():
+        nat, _, evs = k.partition("|")
+        try:
+            evs = [int(float(x)) for x in evs.split(",")] if evs else [0] * 6
+        except ValueError:
+            evs = [0] * 6
+        out["nature"][canon_nature(nat)] += c / n
+        out["evclass"][ev_class(evs)] += c / n
+        out["spread"][spread_class(nat, evs)] += c / n
+    for m, c in h.get("moves", {}).items():
+        out["moves"][toid(m)] += min(1.0, c / n)
+    return out
 
 
 def legal_ability_matrix(voc):
@@ -248,8 +302,16 @@ def prior_tables(voc, smooth=0.02):
 
 
 class BeliefNet(nn.Module):
-    def __init__(self, voc, d=64, hidden=512, dropout=0.1, n_dense=24, priors=None, worlds=False, world_alpha=0.05):
+    def __init__(self, voc, d=64, hidden=512, dropout=0.1, n_dense=24, priors=None, worlds=False, world_alpha=0.05,
+                 reveal=False):
         super().__init__()
+        self.use_reveal = reveal
+        if reveal:
+            # v1 reveal-propensity correction: human labels are values that GOT REVEALED, so for human rows
+            # P(label = v) ∝ P(v | view) · r(v); log r(v) is a learned per-class vector added to the logits of human
+            # rows only (farm rows, with true labels, anchor P(v | view)). Predictions of true sets omit it.
+            self.reveal_bias = nn.ParameterDict({k: nn.Parameter(torch.zeros(len(voc[v]))) for k, v in
+                                                 (("item", "item"), ("ability", "ability"), ("tera", "tera"), ("moves", "move"))})
         self.use_worlds = worlds
         self.world_alpha = world_alpha
         if worlds:  # + log of the (smoothed) in-game world distribution, learned scale per head
@@ -331,42 +393,86 @@ def constrain(logits, b, legal_ab, choice_ids):
     return out
 
 
-def losses(out, b, n_moves, weight=None):
-    """Mean losses per head (weighted when `weight` is given); item/ability/tera only where hidden."""
+def losses(out, b, n_moves, weight=None, reveal_bias=None, rank_weight=0.25):
+    """Mean losses per head (weighted when `weight` is given).
+
+    Farm rows (full labels): item/ability/tera CE where hidden, nature/EV class/spread CE, 4-move BCE: exactly v0.
+    Human rows (partial labels, b["src_h"]): CE only where the label is known (masks from featurize), plus the reveal
+    bias on their logits when `reveal_bias` is given; no spread heads; the move BCE only on rows whose 4 moves are all
+    known, and a positive-only listwise term on the others: -mean over revealed hidden moves of log softmax(logits)."""
     B = out["item"].shape[0]
-    w = torch.ones(B, device=out["item"].device) if weight is None else weight
+    dev = out["item"].device
+    w = torch.ones(B, device=dev) if weight is None else weight
+    hm = b.get("src_h")
+    hmf = hm.float().unsqueeze(1) if hm is not None else None
+
+    def logits(k):
+        if reveal_bias is not None and hm is not None and k in reveal_bias:
+            return out[k] + hmf * reveal_bias[k].unsqueeze(0)
+        return out[k]
+
+    def wmean(v, m):
+        return (v * w[m]).sum() / w[m].sum().clamp(min=1e-9)
+
     L = {}
     for k in ("item", "ability", "tera"):
         m = b["m_" + k]
         if m.any():
-            ce = F.cross_entropy(out[k][m], b["y_" + k][m], reduction="none")
-            L[k] = (ce * w[m]).sum() / w[m].sum()
+            L[k] = wmean(F.cross_entropy(logits(k)[m], b["y_" + k][m], reduction="none"), m)
         else:
             L[k] = out[k].sum() * 0
+    ms = b.get("m_spread")
     for k in ("nature", "evclass", "spread"):
-        L[k] = (F.cross_entropy(out[k], b["y_" + k], reduction="none") * w).sum() / w.sum()
-    tgt = torch.zeros(out["moves"].shape, device=out["moves"].device)
-    tgt.scatter_(1, b["y_moves"], 1.0)
-    tgt[:, 0] = 0.0
-    bce = F.binary_cross_entropy_with_logits(out["moves"], tgt, reduction="none").sum(1) / 4.0
-    L["moves"] = (bce * w).sum() / w.sum()
+        if ms is None:
+            L[k] = (F.cross_entropy(out[k], b["y_" + k], reduction="none") * w).sum() / w.sum()
+        elif ms.any():
+            L[k] = wmean(F.cross_entropy(out[k][ms], b["y_" + k][ms], reduction="none"), ms)
+        else:
+            L[k] = out[k].sum() * 0
+    mc = b.get("m_moves_complete")
+    if mc is None:
+        mc = torch.ones(B, dtype=torch.bool, device=dev)
+    if mc.any():
+        tgt = torch.zeros(out["moves"][mc].shape, device=dev)
+        tgt.scatter_(1, b["y_moves"][mc], 1.0)
+        tgt[:, 0] = 0.0
+        bce = F.binary_cross_entropy_with_logits(out["moves"][mc], tgt, reduction="none").sum(1) / 4.0
+        L["moves"] = wmean(bce, mc)
+    else:
+        L["moves"] = out["moves"].sum() * 0
+    if "y_pos" in b:
+        mp = (b["y_pos"] > 0).any(1) & ~mc
+        if mp.any():
+            logp = F.log_softmax(logits("moves")[mp], dim=1)
+            pos = b["y_pos"][mp]
+            valid = (pos > 0).float()
+            nll = -(logp.gather(1, pos) * valid).sum(1) / valid.sum(1).clamp(min=1)
+            L["moves_rank"] = rank_weight * wmean(nll, mp)
     return L
 
 
-def to_pred_dicts(out, voc, examples, top=40):
-    """Convert constrained logits to the benchmark's prediction format."""
+def to_pred_dicts(out, voc, examples, min_p=5e-5, top_moves=48, reveal_bias=None):
+    """Convert constrained logits to the benchmark's prediction format.
+
+    Categorical heads keep every class with p >= min_p (5e-5, below the pre-registered 1e-4 NLL floor, so item NLL is
+    exact); moves keep the top 48. With `reveal_bias` the item/ability/tera/moves logits get the learned reveal
+    propensity added: the prediction is then P(value that will be revealed | view), the target of human-game labels."""
+    out = dict(out)
+    if reveal_bias is not None:
+        for k, v in reveal_bias.items():
+            out[k] = out[k] + v.detach().to(out[k].device).unsqueeze(0)
     probs = {k: F.softmax(out[k].float(), dim=1).cpu().numpy() for k in ("item", "ability", "tera", "nature", "evclass", "spread")}
     pm = torch.sigmoid(out["moves"].float()).cpu().numpy()
     preds = []
     for i, e in enumerate(examples):
         p = {"uid": e["uid"], "n": 0}
-        for k, vk in (("item", "item"), ("ability", "ability"), ("tera", "tera"), ("nature", "nature"),
-                      ("evclass", "evclass"), ("spread", "spread")):
+        for k in ("item", "ability", "tera", "nature", "evclass", "spread"):
             row = probs[k][i]
-            idx = np.argsort(-row)[:top]
-            p[k] = {voc[vk].itos[j]: round(float(row[j]), 6) for j in idx if row[j] >= 1e-6 and j > 1}
+            idx = np.nonzero(row >= min_p)[0]
+            idx = idx[np.argsort(-row[idx])]
+            p[k] = {voc[k].itos[j]: round(float(row[j]), 6) for j in idx if j > 1}
         revealed = {toid(m) for m in e["view"].get("moves") or []}
-        idx = np.argsort(-pm[i])[: top + 8]
+        idx = np.argsort(-pm[i])[: top_moves + 8]
         p["moves"] = {voc["move"].itos[j]: round(float(pm[i][j]), 6) for j in idx
                       if j > 1 and voc["move"].itos[j] not in revealed}
         preds.append(p)
