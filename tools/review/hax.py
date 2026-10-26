@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Chance-only luck per turn ("hax meter"), AIVAT-style.
+"""Chance-only luck per turn ("hax meter"), AIVAT-style -- v1, SUPERSEDED by luck.py.
+
+v1 valued each chance branch with an MCTS rooted at the branch. poke-engine scores MCTS leaves relative
+to the root's own static eval, so those values were not comparable across branches, and v1's summed luck
+did not predict outcomes (r = 0.02). luck.py (v2) values branches on an absolute scale (value.py).
+The helpers below (branch features, realised-branch selection) are reused by luck.py.
 
 For each turn N where the user chose an action at the start of the turn:
   1. Take the reconstructed decision state (the user's view at the start of turn N).

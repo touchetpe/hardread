@@ -49,5 +49,13 @@
    -0.0011,
    0.0008
   ]
+ },
+ "absolute": {
+  "a": 0.9664,
+  "b": 0.0166,
+  "kind": "absolute: P(win) = sigmoid(a * 0.0125 * A + b), A = eval(s) + logit(V_mcts(s))/0.0125 (value.py)",
+  "fit_on": "luck v2 farm run, label farm C1t1, 250 games x 2 seats, 18,120 turn-start decisions (4 worlds x 10k iterations)",
+  "brier_oof": 0.1544,
+  "note": "the review's own 4 x 1 s search gives a larger MCTS correction term than 10k iterations"
  }
 }

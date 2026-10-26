@@ -33,14 +33,21 @@ def _round(x, n=3):
     return None if x is None else round(x, n)
 
 
-def review(log_lines, side, team_text, worlds=4, search_ms=1000, hax_worlds=4, hax_iterations=20000,
-           processes=4, calibrator_path=None, skip_hax=False, progress=None):
+def review(log_lines, side, team_text, worlds=4, search_ms=1000, hax_worlds=4, hax_iterations=10000,
+           processes=4, calibrator_path=None, skip_hax=False, progress=None, luck_estimator="branch_cond"):
     import reconstruct as R
     from calibrate import load_calibrator
     from evaluate import Evaluator
-    from hax import HaxMeter
+    from luck import LuckMeter, load_abs_calibrator, turn_summary
 
-    cal = load_calibrator(calibrator_path)
+    cal_root = load_calibrator(calibrator_path)
+    cal_abs = load_abs_calibrator(calibrator_path)
+    # Win probability on the absolute scale (eval + search correction) when an absolute calibrator exists;
+    # the raw MCTS root value is relative to each root's own eval (see value.py).
+    if cal_abs is not None:
+        cal, key_root, key_opt = cal_abs, "root_A", "A"
+    else:
+        cal, key_root, key_opt = cal_root, "root_value", "value"
     t0 = time.time()
     quiet = io.StringIO()
     with contextlib.redirect_stdout(quiet):  # Foul Play prints a few diagnostics to stdout
@@ -59,9 +66,10 @@ def review(log_lines, side, team_text, worlds=4, search_ms=1000, hax_worlds=4, h
     t2 = time.time()
     luck = []
     if not skip_hax:
-        with HaxMeter(hax_worlds, hax_iterations, processes=processes, calibrator=cal) as hm, \
+        with LuckMeter(hax_worlds, hax_iterations, processes=processes, hidden_mix=True) as lm, \
                 contextlib.redirect_stdout(quiet):
-            luck = hm.game_luck(decs, info, evals)
+            recs = lm.game_records(decs, info, evals)
+        luck = [dict(turn_summary(r, cal_abs or cal, luck_estimator), turn=r["turn"]) for r in recs]
     t_hax = time.time() - t2
     luck_by_turn = {t["turn"]: t for t in luck}
 
@@ -69,24 +77,24 @@ def review(log_lines, side, team_text, worlds=4, search_ms=1000, hax_worlds=4, h
     for d in decs:
         e = evals[d.idx]
         opts = e["options"]
-        wp = cal(e["root_value"])
+        wp = cal(e[key_root])
         ranked = sorted(opts.items(), key=lambda kv: (-kv[1]["share"], -(kv[1]["value"] or 0)))
         best = e["best"]
-        chosen_wp = cal(opts[d.action]["value"]) if d.action in opts and opts[d.action]["value"] is not None else None
-        best_wp = cal(opts[best]["value"]) if best and opts[best]["value"] is not None else None
+        chosen_wp = cal(opts[d.action][key_opt]) if d.action in opts and opts[d.action].get(key_opt) is not None else None
+        best_wp = cal(opts[best][key_opt]) if best and opts[best].get(key_opt) is not None else None
         cost = max(0.0, best_wp - chosen_wp) if chosen_wp is not None and best_wp is not None else None
         cost_range = None
         if d.action is None and d.candidates and best_wp is not None:
-            vals = [cal(opts[m]["value"]) for m in d.candidates if m in opts and opts[m]["value"] is not None]
+            vals = [cal(opts[m][key_opt]) for m in d.candidates if m in opts and opts[m].get(key_opt) is not None]
             if vals:
                 cost_range = [_round(max(0.0, best_wp - max(vals))), _round(max(0.0, best_wp - min(vals)))]
         decisions.append({
             "turn": d.turn, "k": d.k, "kind": d.kind, "action": d.action, "action_source": d.action_source,
             "candidates_if_hidden": d.candidates if d.action is None else None,
-            "win_prob": _round(wp), "root_value_raw": e["root_value"],
+            "win_prob": _round(wp), "root_value_raw": e["root_value"], "root_A": e.get("root_A"),
             "engine_best": best, "engine_best_win_prob": _round(best_wp), "chosen_win_prob": _round(chosen_wp),
             "decision_cost": _round(cost), "decision_cost_range_if_hidden": cost_range,
-            "top_alternatives": [{"action": m, "win_prob": _round(cal(o["value"])) if o["value"] is not None else None,
+            "top_alternatives": [{"action": m, "win_prob": _round(cal(o[key_opt])) if o.get(key_opt) is not None else None,
                                   "share": o["share"]} for m, o in ranked[:3]],
             "opponent_policy_top": list(e["opp_policy"].items())[:3],
             "search_seconds": e["seconds"]})
@@ -101,7 +109,8 @@ def review(log_lines, side, team_text, worlds=4, search_ms=1000, hax_worlds=4, h
         tc = (dd["decision_cost"] or 0.0) + sum(x["decision_cost"] or 0.0 for x in extra)
         turns.append({"turn": t, "win_prob": dd["win_prob"], "action": dd["action"],
                       "opponent_action": lk.get("opp_action"), "luck": lk.get("luck"),
-                      "luck_events": lk.get("events"), "luck_realised_prob": lk.get("realised_prob"),
+                      "luck_events": lk.get("visible_events"), "luck_realised_prob": lk.get("realised_prob"),
+                      "chance_swing_vs_counterfactual": lk.get("counterfactual_swing"),
                       "luck_note": lk.get("skipped"),
                       "decision_cost": _round(tc), "engine_best": dd["engine_best"],
                       "forced_switches": [{"action": x["action"], "decision_cost": x["decision_cost"],
@@ -130,16 +139,19 @@ def review(log_lines, side, team_text, worlds=4, search_ms=1000, hax_worlds=4, h
     meta = {
         "players": info["players"], "side": side, "opponent_side": info["opponent"], "own_hp": info["own_hp_mode"],
         "engine": {"search": f"{worlds} worlds x {search_ms} ms (Foul Play sampler + poke-engine MCTS)",
-                   "luck": f"{hax_worlds} sampled worlds x every chance branch, valued by {hax_iterations}-iteration MCTS",
-                   "calibrator": getattr(cal, "kind", "identity")},
+                   "luck": f"luck v2 ({luck_estimator}): up to {hax_worlds} damage-consistent sampled worlds x every "
+                           f"chance outcome class, absolute values (eval + {hax_iterations}-iteration MCTS correction)",
+                   "calibrator": "absolute (eval + search)" if cal_abs is not None else getattr(cal, "kind", "identity")},
         "seconds": {"reconstruct": round(t_rec, 1), "evaluate": round(t_eval, 1), "luck": round(t_hax, 1),
                     "total": round(time.time() - t0, 1)},
         "caveats": [
-            "Luck is chance-only (crits, misses, secondary effects, speed ties, KO damage rolls, random targets) and "
-            "belief-averaged: it is computed in opponent sets sampled from what you knew, not in the true sets. "
-            "EXPERIMENTAL: on bot self-play the summed luck does not yet predict outcomes (see tools/review/README.md); "
-            "treat per-turn luck as a description of chance events, not as a validated luck/skill split.",
-            "Win probabilities are Foul Play's search values mapped by a calibrator fit on bot self-play.",
+            "Luck is chance-only (crits, misses, secondary effects, speed ties, KO damage rolls, random targets, "
+            "consecutive Protect) and belief-averaged: computed in opponent sets sampled from what you knew and "
+            "kept only if they reproduce the damage the replay shows. Validated on bot self-play (250 games): it "
+            "explains about 20-25% of outcome variance and mirrors between the two seats (tools/review/README.md). "
+            "Damage-roll luck is only counted where a roll decides a KO (poke-engine averages other rolls).",
+            "Win probabilities are absolute values (poke-engine eval + search correction) mapped by a calibrator fit "
+            "on bot self-play outcomes, not on human games.",
             "Decision cost compares your choice with the engine's preferred option at the same search budget; "
             "small costs (below ~0.02) are within search noise.",
             "When the replay hides your move (fainted first, full paralysis, sleep, flinch), the action is unknown; "

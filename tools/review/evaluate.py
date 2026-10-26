@@ -49,22 +49,34 @@ def sample_worlds(battle, worlds, seed=None):
     return b, b.mode.prepare_battles(b, worlds)
 
 
-def aggregate(results):
-    """results: list of (MctsResult, chance). Returns options, root_value, opponent policy."""
+def aggregate(results, evals=None):
+    """results: list of (MctsResult, chance). Returns options, root_value, opponent policy.
+
+    evals (optional, one static eval per world) adds absolute values on poke-engine's common scale:
+    A = eval(world) + logit(score)/K (see value.py; raw MCTS scores are relative to each root's eval).
+    """
+    import value as V
     total_chance = sum(c for _, c in results) or 1.0
     opts, opp = {}, {}
     root = 0.0
-    for res, c in results:
+    root_abs = 0.0
+    for i, (res, c) in enumerate(results):
         w = c / total_chance
         visits = sum(o.visits for o in res.side_one) or 1
-        root += w * sum(o.total_score for o in res.side_one) / visits
+        rv = sum(o.total_score for o in res.side_one) / visits
+        root += w * rv
+        if evals is not None:
+            root_abs += w * (evals[i] + V.logit(rv) / V.K)
         for o in res.side_one:
-            e = opts.setdefault(o.move_choice, {"value_num": 0.0, "value_den": 0.0, "share": 0.0, "visits": 0})
+            e = opts.setdefault(o.move_choice, {"value_num": 0.0, "value_den": 0.0, "share": 0.0, "visits": 0,
+                                                "A_num": 0.0})
             e["share"] += w * o.visits / visits
             e["visits"] += o.visits
             if o.visits:
                 e["value_num"] += w * o.total_score / o.visits
                 e["value_den"] += w
+                if evals is not None:
+                    e["A_num"] += w * (evals[i] + V.logit(o.total_score / o.visits) / V.K)
         v2 = sum(o.visits for o in res.side_two) or 1
         for o in res.side_two:
             opp[o.move_choice] = opp.get(o.move_choice, 0.0) + w * o.visits / v2
@@ -72,7 +84,12 @@ def aggregate(results):
     for m, e in opts.items():
         out[m] = {"value": round(e["value_num"] / e["value_den"], 4) if e["value_den"] else None,
                   "share": round(e["share"], 4), "visits": e["visits"]}
-    return out, round(root, 4), {m: round(p, 4) for m, p in sorted(opp.items(), key=lambda kv: -kv[1])}
+        if evals is not None:
+            out[m]["A"] = round(e["A_num"] / e["value_den"], 2) if e["value_den"] else None
+    opp_sorted = {m: round(p, 4) for m, p in sorted(opp.items(), key=lambda kv: -kv[1])}
+    if evals is not None:
+        return out, round(root, 4), opp_sorted, round(root_abs, 2)
+    return out, round(root, 4), opp_sorted
 
 
 class Evaluator:
@@ -92,13 +109,16 @@ class Evaluator:
     def search(self, battle, seed=None):
         t0 = time.time()
         _, sampled = sample_worlds(battle, self.worlds, seed)
-        futs = []
+        import value as V
+        futs, evals = [], []
         for i, (b, chance) in enumerate(sampled):
-            st = battle_to_poke_engine_state(b).to_string()
-            futs.append((self.pool.submit(get_result_from_mcts, st, self.search_ms, i, self.threads), chance))
+            st_obj = battle_to_poke_engine_state(b)
+            evals.append(V.evaluate(st_obj))
+            futs.append((self.pool.submit(get_result_from_mcts, st_obj.to_string(), self.search_ms, i, self.threads),
+                         chance))
         results = [(f.result(), c) for f, c in futs]
-        options, root, opp = aggregate(results)
-        return {"options": options, "root_value": root, "opp_policy": opp,
+        options, root, opp, root_abs = aggregate(results, evals)
+        return {"options": options, "root_value": root, "root_A": root_abs, "opp_policy": opp,
                 "worlds": len(sampled), "seconds": round(time.time() - t0, 3)}
 
     def evaluate_decision(self, d, seed=None):
