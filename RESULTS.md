@@ -18,7 +18,7 @@ These are tool and infrastructure measurements only, not scientific claims. Ever
 | oracle-test-p05 | Oracle at p = 0.5 | Completed; ≈half of the worlds substituted |
 | aa-F1-100 | A/A at F1, mirror team | 52–48 (n = 100, CI ±9.8 points), 0 failures |
 | pool-F1-6 | Diverse team pool | 6/6 completed, 27–92 s |
-| aa-pool-F1-200 | A/A at F1, diverse pool, **no side swap** | **A (challenger) won 118/200 = 59%**, outside the 95% band (±6.9 points; p ≈ 0.01). 0 failures; median game 38 s. **Warning: possible seat bias, mixed up with team strength because sides weren't swapped.** Follow-up: `hraa-20261026-310d28` (1,000 side-swapped pairs on Azure). |
+| aa-pool-F1-200 | A/A at F1, diverse pool, **no side swap** | **A (challenger) won 118/200 = 59%**, outside the 95% band (±6.9 points; p ≈ 0.01). 0 failures; median game 38 s. **Warning: possible seat bias, mixed up with team strength because sides weren't swapped.** Follow-up: `hraa-20261026-310d28` (1,000 side-swapped pairs on Azure). **Resolved below: no seat bias.** |
 
 ## 2026-10-26: Azure H100 Glimmer serving (`hrglimmer-20261026-9925f5`)
 
@@ -68,3 +68,13 @@ Concurrency was conservative, so C1t1 and C2 may gain ≈20–40% when tuned (no
 - Foul Play tests are still at 737 passed.
 - **Storage:** ≈0.5 MB per game uncompressed, so 100k games ≈ 47 GB raw. Gzip per game before upload; node disks are 128 GB.
 - **To check before belief training:** opponent item encodings (`None` vs unknown vs removed) in the public view.
+
+## 2026-10-26: side-swapped A/A on Azure (`hraa-20261026-310d28`)
+- **Setup:** vanilla vs vanilla Foul Play, F1, pool `gen9/hr_hl_dev`, 1,000 team pairings, each played twice with the teams swapped (2,000 games, A always challenges). One node, 14 games in parallel, 1,262 games/h.
+- **Result:** challenger A won **987 / 1,998 = 49.4%**. Paired by pairing (998 complete pairs): **49.35% ± 2.04** (95%). That is inside the pre-registered 50 ± 2.2 band, so **no seat bias** at F1.
+- **Team strength:** in 56.8% of pairings the same team won both games (50% if teams didn't matter). That explains the earlier unswapped 59%: team strength plus chance, not seat. All head-to-head runs keep `--side-swap`.
+- **Failures: 2 / 2,000 (0.1%), both Foul Play bugs, symmetric between sides:**
+  - g0160: both bots crashed with `ValueError: Unknown terrain magicroom` (`poke_engine_helpers.get_terrain_string`);
+  - g1731: A crashed with `PanicException: Invalid PokemonMoveIndex: 4` (a fifth move on one Pokémon, likely Illusion-related), then B hung.
+- **For the sealed test:** count bot crashes as losses for the crashing side, as pre-registered. Any HardRead fix to these bugs is reported separately from the levers.
+- The A/A is still to be repeated at C1t1 and with "our harness, levers off" before the freeze (D5–D6).
