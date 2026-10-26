@@ -2,3 +2,4 @@ foul-play/
 runs/
 showdown/runtime/logs/
 __pycache__/
+azure/pools/

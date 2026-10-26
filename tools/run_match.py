@@ -82,7 +82,8 @@ def bot_cmd(username, mode, cfg, team, opponent=None, log_level="INFO"):
 
 
 def play_game(idx, run_dir, cfg_a, cfg_b, team_a, team_b, timeout, log_level="INFO",
-              oracle_p=None, oracle_fields="all", oracle_seed=None, log_decisions=False, log_states=False):
+              oracle_p=None, oracle_fields="all", oracle_seed=None, log_decisions=False, log_states=False,
+              oracle_side="A"):
     tag = uuid.uuid4().hex[:6]
     name_a, name_b = f"hra{idx}{tag}", f"hrb{idx}{tag}"
     log_a = open(run_dir / f"g{idx:04d}_a.log", "w")
@@ -90,8 +91,12 @@ def play_game(idx, run_dir, cfg_a, cfg_b, team_a, team_b, timeout, log_level="IN
     t0 = time.time()
     # B accepts, A challenges.
     env_b = dict(os.environ)
-    for k in ("HARDREAD_ORACLE_TEAM", "HARDREAD_ORACLE_P", "HARDREAD_ORACLE_FIELDS", "HARDREAD_ORACLE_SEED"):
+    oracle_keys = ("HARDREAD_ORACLE_TEAM", "HARDREAD_ORACLE_P", "HARDREAD_ORACLE_FIELDS", "HARDREAD_ORACLE_SEED")
+    for k in oracle_keys:
         env_b.pop(k, None)
+    if oracle_p is not None and oracle_side == "B":
+        # Evaluator-only: side B sees side A's true team.
+        env_b.update(oracle_env(team_a, oracle_p, oracle_fields, oracle_seed, idx))
     if log_decisions:
         env_b["HARDREAD_DECISION_LOG"] = str(run_dir / f"g{idx:04d}_b.decisions.jsonl")
         if log_states:
@@ -100,17 +105,15 @@ def play_game(idx, run_dir, cfg_a, cfg_b, team_a, team_b, timeout, log_level="IN
                           cwd=FOULPLAY_DIR, stdout=log_b, stderr=subprocess.STDOUT, env=env_b)
     time.sleep(2.0)
     env_a = dict(os.environ)
+    for k in oracle_keys:
+        env_a.pop(k, None)
     if log_decisions:
         env_a["HARDREAD_DECISION_LOG"] = str(run_dir / f"g{idx:04d}_a.decisions.jsonl")
         if log_states:
             env_a["HARDREAD_LOG_STATES"] = "1"
-    if oracle_p is not None:
+    if oracle_p is not None and oracle_side == "A":
         # Evaluator-only: side A sees side B's true team with probability p per Pokemon per world.
-        env_a["HARDREAD_ORACLE_TEAM"] = str(FOULPLAY_DIR / "fp" / "teams" / "teams" / team_b)
-        env_a["HARDREAD_ORACLE_P"] = str(oracle_p)
-        env_a["HARDREAD_ORACLE_FIELDS"] = oracle_fields
-        if oracle_seed is not None:
-            env_a["HARDREAD_ORACLE_SEED"] = str(oracle_seed + idx)
+        env_a.update(oracle_env(team_b, oracle_p, oracle_fields, oracle_seed, idx))
     pa = subprocess.Popen(bot_cmd(name_a, "challenge_user", cfg_a, team_a, opponent=name_b, log_level=log_level),
                           cwd=FOULPLAY_DIR, stdout=log_a, stderr=subprocess.STDOUT, env=env_a)
     status = "ok"
@@ -132,13 +135,31 @@ def play_game(idx, run_dir, cfg_a, cfg_b, team_a, team_b, timeout, log_level="IN
     turns = len(re.findall(r"\|turn\|", text_a)) or None
     if winner is None and status == "ok":
         status = "no_result"
-    oracle_hits = len(re.findall(r"Oracle applied", text_a))
+    text_o = text_a if oracle_side == "A" else (run_dir / f"g{idx:04d}_b.log").read_text(errors="replace")
+    oracle_hits = len(re.findall(r"Oracle applied", text_o)) if oracle_p is not None else 0
     return {"game": idx, "a": name_a, "b": name_b, "cfg_a": cfg_a, "cfg_b": cfg_b,
-            "oracle_p_a": oracle_p, "oracle_fields_a": oracle_fields if oracle_p is not None else None,
-            "oracle_hits_a": oracle_hits,
+            "oracle_p": oracle_p, "oracle_side": oracle_side if oracle_p is not None else None,
+            "oracle_fields": oracle_fields if oracle_p is not None else None,
+            "oracle_hits": oracle_hits,
             "team_a": team_a, "team_b": team_b, "winner": winner, "status": status,
             "seconds": round(dt, 1), "turns_logged": turns,
             "rc_a": pa.returncode, "rc_b": pb.returncode}
+
+
+def oracle_env(true_team, p, fields, seed, idx):
+    env = {"HARDREAD_ORACLE_TEAM": str(FOULPLAY_DIR / "fp" / "teams" / "teams" / true_team),
+           "HARDREAD_ORACLE_P": str(p), "HARDREAD_ORACLE_FIELDS": fields}
+    if seed is not None:
+        env["HARDREAD_ORACLE_SEED"] = str(seed + idx)
+    return env
+
+
+def oracle_side_for(i, seat, side_swap):
+    if seat != "alternate":
+        return seat
+    # Alternate the oracle seat every team pairing (every 2 games with --side-swap), so that
+    # each pairing block of 4 games covers both seats and both team assignments.
+    return "A" if ((i // 2) if side_swap else i) % 2 == 0 else "B"
 
 
 def main():
@@ -162,8 +183,10 @@ def main():
                     help="Private Showdown port for this run (18000/18002 belong to other lanes)")
     ap.add_argument("--reuse-server", action="store_true",
                     help="Use an already running server on --port instead of starting one")
-    ap.add_argument("--oracle-a-p", type=float, default=None,
-                    help="Evaluator-only: give side A side B's true sets with this probability")
+    ap.add_argument("--oracle-p", "--oracle-a-p", dest="oracle_a_p", type=float, default=None,
+                    help="Evaluator-only: give the oracle side its opponent's true sets with this probability")
+    ap.add_argument("--oracle-seat", default="A", choices=["A", "B", "alternate"],
+                    help="Which side gets the oracle (alternate: switch every pairing to cancel seat bias)")
     ap.add_argument("--oracle-fields", default="all")
     ap.add_argument("--oracle-seed", type=int, default=None)
     ap.add_argument("--log-decisions", action="store_true",
@@ -197,7 +220,8 @@ def main():
             futs = [ex.submit(play_game, i, run_dir, args.cfg_a, args.cfg_b,
                               pairs[i][0], pairs[i][1], args.timeout, args.log_level,
                               args.oracle_a_p, args.oracle_fields, args.oracle_seed,
-                              args.log_decisions, args.log_states)
+                              args.log_decisions, args.log_states,
+                              oracle_side_for(i, args.oracle_seat, args.side_swap))
                     for i in range(len(pairs))]
             with open(run_dir / "games.jsonl", "a") as out:
                 for f in futs:
@@ -215,11 +239,14 @@ def main():
     summary = {"run_id": run_id, "games": len(results), "completed": len(done),
                "a_wins": sum(r["winner"] == "A" for r in done),
                "b_wins": sum(r["winner"] == "B" for r in done),
+               "oracle_side_wins": (sum(r["winner"] == r["oracle_side"] for r in done)
+                                    if args.oracle_a_p is not None else None),
+               "failures": sum(r["status"] != "ok" for r in results),
                "wall_seconds": round(wall, 1),
                "mean_game_seconds": round(sum(r["seconds"] for r in results) / max(1, len(results)), 1),
                "games_per_hour": round(len(done) / wall * 3600, 1) if wall else None,
                "concurrency": args.concurrency, "cfg_a": args.cfg_a, "cfg_b": args.cfg_b,
-               "oracle_a_p": args.oracle_a_p, "oracle_fields": args.oracle_fields,
+               "oracle_p": args.oracle_a_p, "oracle_seat": args.oracle_seat, "oracle_fields": args.oracle_fields,
                "team_pool": args.team_pool, "seed": args.seed, "side_swap": args.side_swap}
     (run_dir / "summary.json").write_text(json.dumps(summary, indent=2))
     print("SUMMARY", json.dumps(summary), flush=True)
