@@ -33,3 +33,26 @@ These are tool and infrastructure measurements only, not scientific claims. Ever
 **Takeaways:**
 - Base Glimmer is usable for live play and asynchronous review at p95 ≈7 s.
 - Getting under 2 s needs the fine-tuned "act directly" model (planned SFT); flags won't do it.
+
+## 2026-10-26: Azure CPU farm test (`hrfarm-20261026-60eb6e`, one H100 node used as CPU only)
+
+**Node:** AMD EPYC 9V84, **40 physical cores (1 thread per core)**, 314 GB RAM. Setup took 96 s (Node, Rust, poke-engine build, Showdown at `c0845f33`).
+
+| Batch | Games | Failures | Median game | Throughput per node |
+|---|---|---|---|---|
+| F1, 10 in parallel | 160 | 0 | 32 s | **1,080 games/h** |
+| C1t1, 4 in parallel | 8 | 0 | 208 s | **60 games/h** |
+| C2, 2 in parallel | 4 | 0 | 313 s | **22.7 games/h** |
+
+Concurrency was conservative, so C1t1 and C2 may gain ≈20–40% when tuned (not yet measured).
+
+**Capacity implications** (4 always-on nodes; up to 10):
+
+| Use | 4 nodes | 10 nodes |
+|---|---|---|
+| Self-play data at F1 | ≈4,300 games/h ≈ **100k games/day** | ≈250k/day |
+| Self-play labels at C1t1 | ≈240 games/h ≈ 5,800/day | ≈14k/day |
+| Sealed test, 12,000 games at **C2** | ≈130 h | ≈53 h |
+| Sealed test, 12,000 games at **C1t1** | ≈50 h | ≈20 h |
+
+**Conclusion:** the pre-registered n = 12,000 at C2 cannot fit in the D6–D7 window on this cluster. The sealed design must be resized (see the status note to the user).
