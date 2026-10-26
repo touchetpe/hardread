@@ -235,3 +235,20 @@ Concurrency was conservative, so C1t1 and C2 may gain ≈20–40% when tuned (no
 - **Reading:** the act-directly model trained on 2.5k examples plays worse than base Glimmer with reasoning (31%, despite 31% illegal moves). Legality and speed are solved; strength is not.
 - **Official G-24h:** run with the v0 adapters (50k examples, weighted loss). Fallback per plan: the 25M student (or Foul Play) pilots Spar, and Glimmer reads and explains.
 - The student-alone vs abyssal measurement is running locally (`arena-student-vs-abyssal-40`).
+
+## 2026-10-26 ≈23:00 UTC: review engine on human games (513 random top-ladder games, 1,019 game-sides)
+- **Reconstruction fixes** (nicknames from switch lines, Revival Blessing, Healing Wish on the opponent): 99.98% clean without nicknames in the export (was 77.8%), no crashes. Farm reconstruction unchanged.
+- **Win-probability calibration:**
+  - raw absolute value on humans: Brier 0.203, ECE 0.052 (self-play: 0.154 / 0.021);
+  - humans are less extreme than the engine (predicted 5% → 12% actual, 95% → 92%);
+  - a human calibrator (slope 0.60), fitted on half the games, gives ECE 0.042 → 0.027 on the other half. The review uses it.
+- **Luck:**
+  - corr(Σluck, outcome) 0.41 [0.34, 0.48] vs 0.14 for the net chance-event count;
+  - variance ratio 0.80 symmetrised (on humans this is an upper bound on the luck share: luck and skill covary);
+  - mirror −0.49.
+  - **Drafting matters:** a realistic draft (most common Smogon set consistent with the reveals) removes the bias (+0.0004 per decision) and improves the mirror to −0.60.
+- **Decision cost** (4 worlds × 20k iterations):
+  - top-50 players and their opponents: mean 0.023, median 0.005;
+  - the bot's noise floor on the absolute scale: 0.0077;
+  - **it does not separate ratings** within 1588–1843 (corr 0.03).
+  - Next: full search, and the broad crawl's wider rating range.
