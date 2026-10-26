@@ -291,3 +291,25 @@ Concurrency was conservative, so C1t1 and C2 may gain ≈20–40% when tuned (no
 - **Learning curve:** the control gains ≈3 points per doubling and is not flattening; F1 pretraining is worth ≈8× the C1t1 data at 21k decisions.
 - **Latency:** 6.6 ms on the Mac (numpy); 44 ms numpy / 33 ms torch on the Azure node CPU.
 - **Lever screens submitted:** `hrlev-20261027-sb{015,03,05}-9231` (student-blend λ = 0.15 / 0.3 / 0.5 vs vanilla, C1t1, dev set A).
+
+## 2026-10-27 ≈00:00 UTC: S-A benchmark on the pre-registered test set (`hr_val`, log v3) — belief v1 (commit e8465e1)
+- **Test set:** 440 games, 33,253 decisions, 146,225 rows, 290 `hr_val` rosters.
+- **Metric:** item NLL (ε 1e-4); bootstrap CIs by game; paired Δ vs Foul Play's own belief (`fp_belief`, 64 draws after damage pruning).
+
+| Method | Item NLL | Δ vs fp_belief | Item top-1 |
+|---|---|---|---|
+| Foul Play's own belief (`fp_belief`) | 1.800 [1.720, 1.885] | ref | 0.562 |
+| Usage prior (Smogon) | 1.301 | −0.500 | 0.576 |
+| As-played worlds (4–8) | 2.603 | +0.803 | 0.519 |
+| v0 | 1.214 | −0.586 | 0.596 |
+| **v1 human pre-train → farm fine-tune** | **1.182** | **−0.618 [−0.682, −0.557]** | 0.601 |
+| v1 + `fp_belief` draws as input | **1.172** | **−0.629** | **0.605** |
+
+- `fp_belief` gives zero probability to the true item in 9% of rows.
+- Foul Play stays ahead on EV class and spread (its damage pruning). The worlds-input model wins those back (EV class 0.814, spread 0.716).
+- **Human data:**
+  - helps as pre-training (−0.014 item NLL, 3 seeds); joint training does not help on `hr_val`;
+  - on held-out human games (revealed labels), more human data helps steadily;
+  - reveal-bias correction is essential: Choice items and Boots are under-revealed, Leftovers and Life Orb over-revealed.
+- **Contamination filter** (pre-registration A2): 29% of human rows involved an `hr_val` or reserved roster and were dropped.
+- **Reading:** the L2 "reader beats the champion's belief" result (Ending B) holds on the pre-registered test. The engine lever (belief-weighted world sampling) is next.
