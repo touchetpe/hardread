@@ -1,8 +1,8 @@
-# HardRead pre-registration (draft v0.9, 2026-10-26)
+# HardRead pre-registration (v1, 2026-10-26)
 
-This file fixes the evaluation design before any sealed game is played. The git commit that adds it is the timestamp. A signed tag (`prereg-v1`) will freeze it once the open item below is decided, and before the first sealed game. Any later change is listed in a dated amendment section; nothing above it is edited.
+This file fixes the evaluation design before any sealed game is played. The annotated git tag `prereg-v1` on the commit that adds this version is the timestamp. Any later change is listed in a dated amendment section; nothing above it is edited.
 
-**Open item:** the primary sample size and configuration below are a proposal. Sealed games will not start until the team approves them.
+The sample size was approved by the team on 2026-10-26 ("you can even add more games").
 
 ## 1. Primary hypothesis (Ending A)
 **H1:** the HardRead engine beats vanilla Foul Play at the stated configuration.
@@ -15,7 +15,7 @@ This file fixes the evaluation design before any sealed game is played. The git 
 | Configuration | C1t1: 4 sampled worlds × 2,000 ms × 1 thread per world, for both sides. Student inference counts inside HardRead's time. |
 | Teams | `data/sealed-v1.json`: 1,000 teams, one per roster, from the 2,556 reserved rosters never used in development. Content SHA-256 `d60e036d…6311`. |
 | Pairing | Each game draws two different sealed teams (fixed seed). Each pairing is played twice with the teams swapped. The challenger seat alternates the HardRead side every pairing. |
-| Sample size **(proposed, pending approval)** | n = 6,000 games (3,000 pairings) at C1t1 on ≤ 10 nodes, at 4–5 games per node in parallel |
+| Sample size | **n = 10,000 games (5,000 pairings)** at C1t1 on ≤ 10 nodes, at 4–5 games per node in parallel (≈17 h on 10 nodes). Expected 95% half-width ≈ ±0.9 points (from the F1 A/A: ±2.04 at 998 pairings), so power ≈ 90% for a +1.5-point effect. |
 | Primary metric | HardRead's win rate. Estimate: mean over pairings of the pairing's HardRead score, with a 95% interval clustered by pairing. |
 | Test | Two-sided, α = 0.05 (normal approximation on pairing means). No interim looks; n is never cut. |
 | Failures | A bot crash or hang is a loss for that bot (vanilla Foul Play has known crash bugs: Magic Room terrain, fifth move index). Infrastructure interruptions are re-run with the same pairing and seed. |
@@ -58,3 +58,8 @@ Every reported run lists:
 - the Azure job names.
 
 `RESULTS.md` lists every run, including failures.
+
+## 8. Schedule
+- **D5–D6 (Oct 31 → Nov 1 10:00 Paris):** A/A checks at C1t1.
+- **D6 12:00 Paris:** freeze.
+- **D6 → D7:** the sealed primary (≈17 h), then the confirmatory C2 run (≈9 h) if the primary is significant. Then reveals-only, if time allows before the D7 analysis.
