@@ -122,3 +122,33 @@ Concurrency was conservative, so C1t1 and C2 may gain ≈20–40% when tuned (no
   - **Suspects:** short-horizon valuation of post-chance states (forced-replacement KOs), and fake luck from wrong sampled bulk.
   - **Fix in progress.** Until it passes, the product shows chance as events, labelled experimental.
 - **Review cost:** 25–200 s per game, ≈1.1 s per decision.
+
+## 2026-10-26 ≈20:30 UTC: second wave (cluster raised to 20 nodes by the owner)
+**Code** (Foul Play `df65fd8`; HardRead `4cadb43`; 737 Foul Play tests pass with everything off):
+- Engine levers are hooked in (`HARDREAD_LEVER_SELECT` = fp / argmax / value; `HARDREAD_LEVER_WORLDS` = fp / double-half / half-double).
+- `run_match.py --treat/--treat-seat` gives the levers to one side only, alternating its seat every pairing. Local smoke: 3 levers × 2 games, 0 failures; the lever was applied only on the treatment side.
+- **Decision log v3** (`HARDREAD_LOG_BELIEF_SAMPLES=N`) stores N draws of Foul Play's own set sampler for every visible opponent Pokémon. That is its true belief after its in-place damage pruning, which v2 could not rebuild offline. The random state is saved and restored, so play is unchanged. Cost ≈0.3 s per decision on the loaded Mac at N = 64.
+
+**Jobs** (all end 08:00 UTC Oct 27):
+- `hrval-20261026-n{1,2}-9231`: C1t1 self-play on `hr_val` with log v3. This is the held-out S-A test set and the student validation set.
+- `hrvol-20261026-n{2,3}-9231`: F1 volume farm on `hr_train` for belief training. Distinct teams are the binding resource, per the S-A learning curve.
+- `hrlev-20261026-{argmax,value,dbl}-n{1,2}-9231`: lever screens vs vanilla, C1t1, dev set A = `hr_train`. Same seeds across levers (common random numbers).
+
+**Earlier tonight:**
+- `hrvol-20261026-n1-a612` was cancelled at 17:05 UTC to free a node for the arena test. Its chunks c000–c003 are kept; c004 was lost.
+- Agent tests: `hrarena-20261026-00cc` completed (report pending), and `hrsft-20261026-smoke01-dbe8` is running.
+
+**Belief benchmark S-A** (`tools/belief/`, commit 4c6a2b3; 29 C1t1 chunks; held out by roster within `hr_train`):
+
+| Method | Item top-1 | Spread top-1 | Item mean p(true) |
+|---|---|---|---|
+| Usage prior | 0.566 | 0.668 | 0.421 |
+| Foul Play as played (logged worlds) | 0.536 | 0.645 | 0.471 |
+| Learned v0 | 0.577 | 0.680 | 0.468 |
+| v0 + logged worlds | 0.603 | 0.721 | 0.484 |
+
+- Item NLL: v0 1.19, as played 2.03.
+- Learning curve: dev loss falls linearly in log(games) and hasn't flattened. Distinct teams are the binding resource.
+- Foul Play's own constraints exclude the true item in 0.41% of hidden-item rows.
+
+**Value of information, provisional at 160 games per level:** 71.9 ± 6.0 (p = 1), 66.3 ± 7.1 (p = 0.5), 47.5 ± 7.6 (p = 0.25).
