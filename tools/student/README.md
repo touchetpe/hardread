@@ -1,5 +1,7 @@
 # HardRead student (tools/student)
 
+> **Current models: v1** (`scratch_ds/student/runs/v1/main/best.npz` = engine student, `.../control/best.npz` = paper control); see "Student v1 on Azure". The sections below document v0 (Mac, 68k decisions) and the design.
+
 A ≈25M-parameter policy/value network distilled from Foul Play's C1t1 self-play searches: 24.9M at inference, plus a 0.66M training-only opponent head.
 
 It has three uses:
@@ -244,6 +246,103 @@ Either way it is <2% of a C1t1 decision (≥ 4 worlds × 2 s, run in parallel).
 - **Events:** the recent-event tokens give a small, consistent policy gain (KL interval excludes 0).
 - **Opponent head:** it improves value calibration when it has the events, but does not reproduce Jaxcalibur's reported "≈3× efficiency" at this scale; without events it *hurts* the policy. The head itself reaches 35% top-1 against the opponent seat's search argmax (6,488 test decisions).
 - **Choice:** the main model uses C (events + opponent head, weight 0.5). The events also make the student's input match Glimmer's.
+
+## Student v1 on Azure (one H100): `azure/student/`
+**Package:**
+- `azure/student/run_student.py` runs on the node: mounted farm outputs → `extract.py` (36 processes) → encode (36 processes) → train → eval → export → latency.
+- `azure/student/submit_student.sh <hrstu-...> <timeout_s> "<description>"` submits it, with `DRY_RUN=1` to stage only.
+- **Code snapshot:**
+  - `tools/student/{encode,model,train,infer}.py`, `tools/dataset/extract.py`, `foul-play/fp/hardread_history.py`;
+  - v0's `best.pt`, shipped for v0/v1 comparison on the same test sets;
+  - v0's encoder state as JSON, so v0 and v1 encode identically.
+- **Job settings:** compute `${HR_AZ_CLUSTER}`, environment `pokemon-h100-axolotl-cuda13-training:20261026-9f7aa9a5704c`, experiment `hardread-student`, tags `project=pokemon-rl-research`, `lane=hardread-student`. Outputs go to `azureml://datastores/workspaceblobstore/paths/pokemon-rl-research/hardread/<job>/`.
+
+**Inputs** (`uri_folder`, `ro_mount`): every finished `*.tar.gz` present at job start in:
+- `hrlab-20261026-n{1..6}-01d4` (C1t1, `hr_train`: training, roster-hash test);
+- `hrvol-20261026-n1-a612`, `hrvol-20261026-n{2,3}-9231` (F1, `hr_train`: pretraining only; games involving test-split rosters are removed);
+- `hrval-20261026-n{1,2}-9231` (C1t1 on the `hr_val` pool, decision log v3: cross-pool test only).
+
+**Recipe:**
+- bf16 autocast, batch 512, data kept on the GPU, AdamW with warmup and cosine.
+- Up to 20 epochs, early stopping on dev (patience 3); events and opponent head on; seed 20261026.
+- **Runs:**
+  - `pretrain_f1` (≤10 epochs);
+  - `main_lr{2e-4,4e-4}`: F1 init → C1t1; the best on dev is `main`, the engine student;
+  - `control_lr{3e-4,6e-4}`: C1t1 only from scratch; the best on dev is `control`, the paper's same-input control;
+  - learning curves `lc_control/frac*` and `lc_main/frac*` (0.125, 0.25, 0.5), if time allows.
+- Every run writes `best.pt` whenever dev improves. Status and results are updated in the output folder as the job goes.
+
+### Results: job `hrstu-20261026-v1-8187` (Oct 26, 22:48–23:05 UTC; 10 min of node time)
+**Data present at job start:**
+
+| Group | Chunks | Games | Decisions | Use |
+|---|---|---|---|---|
+| C1t1 `hrlab` (`hr_train`) | 108 | 2,699 | 226,438 | train 167,728 decisions / 2,009 games; dev 21,064; **test 37,646 / 455 games** (10,106 with both rosters unseen) |
+| F1 `hrvol` (`hr_train`) | 12 | 1,796 | 143,037 | pretraining 108,579 decisions (dev 10,459; 23,999 decisions from games with test-split rosters removed) |
+| C1t1 `hrval` (`hr_val` pool) | 22 | 440 | 33,253 | **cross-pool test only** |
+
+**Selection:**
+- Main: learning rate 2e-4 beat 4e-4 on dev.
+- Control: learning rate 3e-4 beat 6e-4 on dev.
+- Early stopping triggered early, so the planned 10–20 epochs were not needed:
+  - main: best epoch 2 of 5;
+  - control: best epoch 4 of 7;
+  - F1 pretraining: best epoch 5 of 7.
+
+**Test metrics:**
+- Top-1 is shown as vs the played choice / vs the search argmax.
+- The value is what `infer` returns: outcome head plus dev Platt scaling.
+- The same v0 checkpoint is scored on the same test sets for comparison.
+
+| Model | Roster-hash test: top-1 | KL | Value Brier / ECE | hr_val cross-pool: top-1 | KL | Value Brier / ECE |
+|---|---|---|---|---|---|---|
+| v0 (68k C1t1 decisions) | 49.1 / 49.7% | 0.475 | 0.185 / 0.026 | 49.3 / 49.9% | 0.480 | 0.176 / 0.018 |
+| F1 pretraining only | 50.5 / 51.0% | 0.456 | 0.185 / 0.015 | 50.9 / 51.4% | 0.461 | 0.181 / 0.022 |
+| **control** (C1t1 only: the paper's same-input control) | 52.4 / 53.3% | 0.431 | 0.178 / 0.015 | 53.1 / 53.6% | 0.433 | 0.173 / 0.033 |
+| **main** (F1 → C1t1: the engine student) | **53.8 / 54.5%** | **0.411** | **0.176** / 0.029 | **54.6 / 55.3%** | **0.415** | **0.171** / 0.036 |
+| *references* | uniform 16.4%, max-damage 34.2%, played = argmax 88.6% | uniform 0.850 | search root value 0.214 | uniform 16.7%, max-damage 35.5%, played = argmax 89.0% | uniform 0.854 | search root value 0.200 |
+
+**Other numbers for main:**
+- Opponent head: 42.4% (roster-hash test) / 42.2% (cross-pool) top-1 vs the opponent's search argmax.
+- Both rosters unseen: 54.1 / 54.5%, KL 0.409.
+- Cross-pool by phase, top-1 vs search argmax: team preview 43.5%, turn start 55.1%, extra switches 58.8%.
+
+**Reading:**
+- **Cross-pool:** unseen `hr_val` rosters score as well as the `hr_train` test. No pool overfitting.
+- **Pretraining:** F1 pretraining is worth +1.2 points top-1 and −0.020 KL over the control at full data.
+- **v1 vs v0:** v1 beats v0 by +4.8 points and −0.064 KL.
+
+**Learning curves** (top-1 vs search argmax on the roster-hash test, KL in brackets):
+
+| C1t1 train decisions (games) | control (C1t1 only) | main (F1 init) |
+|---|---|---|
+| 21,011 (252) | 44.4% (0.548) | 52.0% (0.438) |
+| 42,566 (503) | 48.1% (0.498) | 52.5% (0.433) |
+| 86,178 (1,005) | 50.4% (0.469) | 53.1% (0.426) |
+| 167,728 (2,009) | 53.3% (0.431) | 54.5% (0.411) |
+
+- **Control:** about +3 points top-1 and −0.04 KL per doubling, with no sign of flattening.
+- **F1 pretraining:** worth ≈8× the C1t1 data at 21k decisions, and ≈1 doubling at 168k.
+
+**Latency** (main, 1 thread, real decisions with history):
+
+| Machine | numpy p50 / p95 | torch p50 |
+|---|---|---|
+| M4 Max (quiet) | **6.6 / 7.4 ms** | 7.8 ms |
+| Azure node CPU (AMD EPYC 9V84) | 43.6 / 43.9 ms | 32.7 ms |
+
+On the farm nodes the lever therefore costs ≈1.5–2% of a 2 s search (torch is faster there).
+
+**Files:**
+- Downloaded to `scratch_ds/student/runs/v1/`: `main/best.npz`, `main/best.pt`, `control/best.npz`, `results.json` (every metric, calibration table and learning-curve run), `data_counts.json`, `inputs.json`, `extract_stats.json`, `std_log_tail.txt`.
+- npz sha256: main `1ccefde3…ab75`, control `78bf3070…21ae`.
+- Every other checkpoint (pretraining, LR-sweep runs, learning-curve runs) is in the job output folder.
+
+**Next (v2):**
+- **Better value target:** the review lane found poke-engine MCTS scores are relative to the root's static evaluation. The absolute value `A = eval + logit(MCTS value) / 0.0125` (`tools/review/value.py`) predicts outcomes far better (Brier 0.154 vs 0.206). Use it as the search-value target once it can be computed for farm decisions.
+- **Training schedule:** shorter runs, or stronger regularisation and EMA, since dev peaks after 2–5 epochs.
+- **Seeds:** several, for the control-vs-main and events/opponent-head comparisons.
+
 
 ## Proposed lever: `HARDREAD_LEVER_SELECT=student-blend` (for the next head-to-head)
 **Exact rule, applied to each decision after the normal search:**

@@ -24,6 +24,7 @@ Losses (per decision; documented mix):
 The opponent's true sets (opp_team) are never read, except to define rosters for the split.
 """
 import argparse
+import contextlib
 import glob
 import json
 import math
@@ -43,7 +44,7 @@ import encode as E  # noqa: E402
 from model import build  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[2]
-CACHE = REPO / "scratch_ds" / "student" / "cache"
+CACHE = Path(os.environ.get("HARDREAD_STUDENT_CACHE") or (REPO / "scratch_ds" / "student" / "cache"))
 W_CHOICE, W_VSEARCH, W_VOUT = 0.1, 0.5, 0.5
 W_OPP = 0.5  # opponent-next-action auxiliary (--opp-weight; 0 disables the head)
 INT16_KEYS = {"ent_cat", "act_kind", "act_move", "act_type", "act_target", "field_cat", "ev_cat"} | {
@@ -229,25 +230,58 @@ def batch_actions(data, idx):
     return max(1, int(data["nlegal"][idx].max()))
 
 
+DEV_KEYS = tuple(E.KEYS) + ("pol", "choice", "rv", "outcome", "opp_idx", "opp_p", "has_opp")
+
+
+def _np32(a):
+    return a.astype(np.float32) if a.dtype == np.float64 else a
+
+
+def put_on_device(data, device):
+    """Copy the model inputs and targets to the device once (e.g. CUDA): batches are then gathered
+    there instead of being built in numpy and copied every step. Numpy copies stay for metrics."""
+    data["__dev__"] = {k: torch.from_numpy(np.ascontiguousarray(_np32(data[k]))).to(device) for k in DEV_KEYS}
+    return data
+
+
+def _index(data, idx, device):
+    return torch.as_tensor(idx, device=device) if "__dev__" in data else None
+
+
+def _take(data, k, idx, it, device):
+    if it is not None:
+        return data["__dev__"][k][it]
+    return torch.from_numpy(np.ascontiguousarray(_np32(data[k][idx]))).to(device)
+
+
 def to_batch(data, idx, device):
     A = batch_actions(data, idx)
+    it = _index(data, idx, device)
     b = {}
     for k in E.KEYS:
-        a = data[k][idx]
+        a = _take(data, k, idx, it, device)
         if k.startswith("act_"):
             a = a[:, :A]
         if k in INT16_KEYS:
-            a = a.astype(np.int64)
-        b[k] = torch.from_numpy(np.ascontiguousarray(a)).to(device)
+            a = a.long()
+        b[k] = a.contiguous()
     return b
+
+
+def amp_ctx(device, bf16):
+    """bf16 autocast on CUDA when asked; a no-op elsewhere (MPS/CPU stay fp32)."""
+    if bf16 and device.type == "cuda":
+        return torch.autocast("cuda", dtype=torch.bfloat16)
+    return contextlib.nullcontext()
 
 
 # ---------------------------------------------------------------- losses and metrics
 def losses(pol_logits, val_logits, data, idx, device, opp_logits=None, w_opp=0.0):
-    pi = torch.from_numpy(np.ascontiguousarray(data["pol"][idx][:, :pol_logits.shape[1]])).to(device)
-    choice = torch.from_numpy(data["choice"][idx].astype(np.int64)).to(device)
-    rv = torch.from_numpy(data["rv"][idx].astype(np.float32)).to(device)
-    out = torch.from_numpy(data["outcome"][idx].astype(np.float32)).to(device)
+    it = _index(data, idx, device)
+    pi = _take(data, "pol", idx, it, device)[:, :pol_logits.shape[1]].float()
+    choice = _take(data, "choice", idx, it, device).long()
+    rv = _take(data, "rv", idx, it, device).float()
+    out = _take(data, "outcome", idx, it, device).float()
     logp = F.log_softmax(pol_logits, -1)
     l_pol = -(pi * logp).sum(-1).mean()  # KL up to the target entropy
     l_choice = F.nll_loss(logp, choice)
@@ -258,9 +292,9 @@ def losses(pol_logits, val_logits, data, idx, device, opp_logits=None, w_opp=0.0
     parts = {"pol": l_pol.detach(), "choice": l_choice.detach(), "vsearch": l_vs.detach(), "vout": l_vo.detach()}
     if opp_logits is not None:
         # Dense target via scatter_add (gather-based versions returned NaN on MPS, torch 2.8).
-        oi = torch.from_numpy(data["opp_idx"][idx].astype(np.int64)).to(device)
-        op = torch.from_numpy(data["opp_p"][idx].astype(np.float32)).to(device)
-        oh = torch.from_numpy(data["has_opp"][idx].astype(np.float32)).to(device)
+        oi = _take(data, "opp_idx", idx, it, device).long()
+        op = _take(data, "opp_p", idx, it, device).float()
+        oh = _take(data, "has_opp", idx, it, device).float()
         tgt = torch.zeros_like(opp_logits).scatter_add_(1, oi, op)
         tgt = tgt * (opp_logits.detach() > -1e3).float()        # drop target mass on masked slots
         tot = tgt.sum(-1)
@@ -274,7 +308,7 @@ def losses(pol_logits, val_logits, data, idx, device, opp_logits=None, w_opp=0.0
 
 
 @torch.no_grad()
-def predict(model, data, idx, device, bs=1024, opp_stats=None):
+def predict(model, data, idx, device, bs=1024, opp_stats=None, bf16=False):
     """-> (P [N, MAX_ACT], V [N, 2]); fills opp_stats (dict) with the opponent head's per-row
     top-1 hit and cross-entropy vs its target when the model has that head."""
     model.eval()
@@ -283,7 +317,8 @@ def predict(model, data, idx, device, bs=1024, opp_stats=None):
     for s in range(0, len(idx), bs):
         sl = idx[s:s + bs]
         b = to_batch(data, sl, device)
-        pl, vl, ol = model(b)
+        with amp_ctx(device, bf16):
+            pl, vl, ol = model(b)
         if ol is not None and opp_stats is not None:
             olp = F.log_softmax(ol, -1).cpu().numpy()
             oi, op = data["opp_idx"][sl].astype(np.int64), data["opp_p"][sl]
@@ -386,6 +421,8 @@ def fit_platt(p, y, iters=50):
         a, b = a - step[0], b - step[1]
         if np.abs(step).max() < 1e-8:
             break
+    if not (np.isfinite(a) and np.isfinite(b) and 0.2 <= a <= 5.0 and abs(b) <= 3.0):
+        return 1.0, 0.0  # degenerate fit (e.g. near-constant predictions): keep the raw head
     return float(a), float(b)
 
 
@@ -447,7 +484,8 @@ def train_one(data, train_mask, dev_mask, enc, args, out_dir, device, tag):
         for s in range(spe):
             idx = perm[s * args.bs:(s + 1) * args.bs]
             b = to_batch(data, idx, device)
-            pl, vl, ol = model(b)
+            with amp_ctx(device, getattr(args, "bf16", False)):
+                pl, vl, ol = model(b)
             loss, parts = losses(pl, vl, data, idx, device, ol, args.opp_weight)
             opt.zero_grad(set_to_none=True)
             loss.backward()
@@ -464,7 +502,8 @@ def train_one(data, train_mask, dev_mask, enc, args, out_dir, device, tag):
         with torch.no_grad():
             for s in range(0, len(dv), 1024):
                 idx = dv[s:s + 1024]
-                pl, vl, ol = model(to_batch(data, idx, device))
+                with amp_ctx(device, getattr(args, "bf16", False)):
+                    pl, vl, ol = model(to_batch(data, idx, device))
                 _, parts = losses(pl, vl, data, idx, device, ol, args.opp_weight)
                 for k, v in parts.items():
                     dl[k] = dl.get(k, 0.0) + float(v) * len(idx) / len(dv)
@@ -479,6 +518,11 @@ def train_one(data, train_mask, dev_mask, enc, args, out_dir, device, tag):
         if dev_total < best - 1e-4:
             best, bad = dev_total, 0
             best_state = {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
+            if getattr(args, "save_every_best", False):  # checkpoint as training goes (partial: no calibration yet)
+                out_dir.mkdir(parents=True, exist_ok=True)
+                torch.save({"version": "hr-student-v1", "partial": True, "epoch": ep + 1, "model": best_state,
+                            "config": model.config, "encoder_state": enc.state, "dev_total": best},
+                           out_dir / "best.pt")
         else:
             bad += 1
             if bad >= args.patience:
@@ -486,7 +530,7 @@ def train_one(data, train_mask, dev_mask, enc, args, out_dir, device, tag):
                 break
     model.load_state_dict(best_state)
     # Value head used by infer.policy_value: the one with the lower dev log-loss vs the game outcome.
-    Pd, Vd = predict(model, data, dv, device)
+    Pd, Vd = predict(model, data, dv, device, bf16=getattr(args, "bf16", False))
     od = data["outcome"][dv]
     hd = od >= 0
     ll = {name: _vmetrics(Vd[hd, j], od[hd])["logloss"] for j, name in ((0, "search"), (1, "outcome"))}
@@ -529,6 +573,10 @@ def main():
     ap.add_argument("--no-events", action="store_true", help="ablation: no recent-event tokens")
     ap.add_argument("--opp-weight", type=float, default=W_OPP, help="opponent-action auxiliary weight (0 = no head)")
     ap.add_argument("--workers", type=int, default=6, help="encoding processes")
+    ap.add_argument("--bf16", action="store_true", help="bf16 autocast (CUDA only)")
+    ap.add_argument("--gpu-data", action="store_true", help="keep the encoded data on the device")
+    ap.add_argument("--save-every-best", action="store_true", help="write best.pt whenever dev improves")
+    ap.add_argument("--encoder-state", default=None, help="JSON encoder state (default: built from Foul Play data)")
     ap.add_argument("--calibrate-only", default=None,
                     help="fit dev Platt scaling for an existing checkpoint, save it in place, report test metrics")
     args = ap.parse_args()
@@ -536,7 +584,7 @@ def main():
     out_dir.mkdir(parents=True, exist_ok=True)
     device = pick_device(args.device)
     set_seed(args.seed)
-    enc = E.Encoder()
+    enc = E.Encoder(json.loads(Path(args.encoder_state).read_text())) if args.encoder_state else E.Encoder()
     if args.eval_only:
         ck = torch.load(args.eval_only, map_location="cpu", weights_only=False)
         enc = E.Encoder(ck["encoder_state"])
@@ -544,6 +592,8 @@ def main():
     data, files = load_data(args.data, enc, args.workers)
     print("loaded {} decisions from {} files in {:.0f}s".format(len(data["pol"]), len(files), time.time() - t0), flush=True)
     is_train, is_dev, is_test, both_unseen = split(data, args.test_roster_permille, args.dev_pct)
+    if args.gpu_data and device.type != "cpu":
+        put_on_device(data, device)
     te = np.flatnonzero(is_test)
     split_info = {"files": len(files), "decisions": int(len(data["pol"])), "games": int(len(set(data["game"]))),
                   "train_decisions": int(is_train.sum()), "train_games": int(len(set(data["game"][is_train]))),
