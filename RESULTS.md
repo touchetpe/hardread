@@ -152,3 +152,40 @@ Concurrency was conservative, so C1t1 and C2 may gain ≈20–40% when tuned (no
 - Foul Play's own constraints exclude the true item in 0.41% of hidden-item rows.
 
 **Value of information, provisional at 160 games per level:** 71.9 ± 6.0 (p = 1), 66.3 ± 7.1 (p = 0.5), 47.5 ± 7.6 (p = 0.25).
+
+## 2026-10-26 evening: arena, student, Glimmer SFT smoke
+### Arena (`tools/arena/`, commit f4583d6)
+- **"abyssal":** PokéChamp's heuristic bot `AbyssalPlayer`, pinned at commit `0f84c46` and run unmodified.
+- **Azure `hrarena-20261026-00cc`:**
+  - Foul Play F1 vs abyssal: **93/100** (95% CI 86–97%), 0 failures.
+  - Base Glimmer Q4_K_M through the HardRead policy hook: **9–20 (31%)**, **31% illegal** (268/863). Every illegal move is the 1,024-token cap hit while reasoning. p50 / p95 latency 14.7 / 17.8 s.
+- **Prompt parity:** the play-time prompt equals the training prompt on 863/863 decisions.
+
+### Student (`tools/student/`, commit 36f6858; lever in Foul Play `fb80f6f`)
+- **Model:** a 24.9M-parameter transformer: 12 Pokémon tokens, field, 16 recent public events, one token per legal action. Heads: policy, search value, win probability, opponent next action.
+- **Training data:** 1,100 C1t1 games (92k decisions), held out by roster hash.
+
+| Held-out metric | Student | Reference |
+|---|---|---|
+| Top-1 vs search argmax | **49.9%** | — |
+| Top-1 vs played choice | 49.2% | max-damage heuristic 34.7%, uniform 16.4% |
+| KL to search policy | 0.477 | uniform 0.861 |
+| Value Brier | **0.176** | search root value 0.208 |
+| CPU latency (numpy) | ≈8 ms | — |
+
+- **Learning curve:** +2–5 points per doubling of data.
+- **Ablations:**
+  - recent events: +0.95 points top-1;
+  - opponent-action head: improves value Brier, but not the policy at this scale.
+- **Standalone** (no search) vs Foul Play F1: 7 wins in 40 games.
+- **Lever `student-blend`** (q = 0.7·search share + 0.3·student): local smoke with the sidecar, 0 failures.
+
+### Glimmer SFT smoke (`hrsft-20261026-smoke01-dbe8`; pipeline commit fe214be)
+- **Run:** 160 steps × 16 = 2,560 action examples (C1t1, prompt v1.1). 12.6 s/step, about 0.79 s/example of about 1,225 tokens, 27 GiB peak.
+- **Format:** learned by step 10; greedy generation 24/24 legal, 0 malformed. The LoRA → GGUF conversion works with a one-line converter fix, and llama-server loads the adapter. The serving evaluation is pending.
+- **Decision quality (200 held-out decisions):**
+  - fine-tuned: top-1 34.0%, top-3 67%;
+  - base: 30.5% / 58%;
+  - always the first menu item: 26%.
+- **Diagnosis:** only 1–2 of about 57 target tokens carry the decision.
+- **Next (v0):** target = search argmax, choice-token loss weighting, soft-target distillation on the choice token, 50k examples.
