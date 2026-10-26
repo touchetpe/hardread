@@ -3,3 +3,4 @@ runs/
 showdown/runtime/logs/
 __pycache__/
 azure/pools/
+scratch_ds/
