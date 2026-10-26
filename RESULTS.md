@@ -78,3 +78,21 @@ Concurrency was conservative, so C1t1 and C2 may gain ≈20–40% when tuned (no
   - g1731: A crashed with `PanicException: Invalid PokemonMoveIndex: 4` (a fifth move on one Pokémon, likely Illusion-related), then B hung.
 - **For the sealed test:** count bot crashes as losses for the crashing side, as pre-registered. Any HardRead fix to these bugs is reported separately from the levers.
 - The A/A is still to be repeated at C1t1 and with "our harness, levers off" before the freeze (D5–D6).
+
+## 2026-10-26 evening: overnight farm (10 nodes, until 08:00 UTC Oct 27)
+- **Jobs:**
+  - value-of-information gate: `hrvoi-20261026-p{100,050,025}-a5fb`. Oracle p = 1 / 0.5 / 0.25 vs vanilla, C1t1, `hr_val` pool, 300 side-swapped pairings each, oracle seat alternating every pairing.
+  - label farm: `hrlab-20261026-n{1..6}-01d4`. C1t1 self-play on `hr_train`, decision log v2 plus Showdown battle logs, 25-game chunks.
+  - volume farm: `hrvol-20261026-n1-a612`. F1 self-play on `hr_train`, 150-game chunks.
+- **Earlier label submissions cancelled after minutes:**
+  - `*-fbb5`: wrong log level, which hides the win/loss line.
+  - `*-1621`: decision log v1, missing sampler fields.
+- **First chunks (16:45 UTC):**
+  - label farm: 125 games, 0 failures, 11,125 decisions (89 per game), all v2. 70% of decisions searched 8 worlds, because Foul Play doubles worlds while the opponent's active has fewer than 3 revealed moves.
+  - volume farm: 299 games, 23,211 decisions.
+  - The extractor found a history cut for every decision.
+- **Throughput:**
+  - label farm: ≈60 games/h per node at 5 in parallel;
+  - value-of-information jobs: ≈65 games/h per node at 4 in parallel (40 games in 37 min);
+  - volume farm: ≈1,200 games/h.
+- **Value-of-information gate, provisional after 40 games per level (do not cite):** oracle side wins 67.5% (p = 1), 67.5% (p = 0.5), 47.5% (p = 0.25), with intervals of ±11 to ±18. The full 600 games per level are expected around 01:30 UTC.
