@@ -1,0 +1,53 @@
+{
+ "calibrator": {
+  "kind": "platt",
+  "a": 1.1763680455801646,
+  "b": 0.030936305744811834
+ },
+ "chosen": "platt",
+ "fit_on": [
+  "scratch_ds/review/lab.jsonl.gz"
+ ],
+ "games": 250,
+ "decisions": 21351,
+ "out_of_fold_all": {
+  "raw_root_value": {
+   "n": 21351,
+   "brier": 0.2062,
+   "log_loss": 0.5891,
+   "ece": 0.0181,
+   "brier_skill_vs_base_rate": 0.1745
+  },
+  "isotonic": {
+   "n": 21351,
+   "brier": 0.2064,
+   "log_loss": 0.5896,
+   "ece": 0.0088,
+   "brier_skill_vs_base_rate": 0.1735
+  },
+  "platt": {
+   "n": 21351,
+   "brier": 0.206,
+   "log_loss": 0.5887,
+   "ece": 0.0075,
+   "brier_skill_vs_base_rate": 0.1753
+  },
+  "constant_0.5": {
+   "n": 21351,
+   "brier": 0.25,
+   "log_loss": 0.6931,
+   "ece": 0.0155,
+   "brier_skill_vs_base_rate": -0.001
+  }
+ },
+ "brier_delta_vs_raw_95ci": {
+  "isotonic": [
+   -0.0009,
+   0.0014
+  ],
+  "platt": [
+   -0.0011,
+   0.0008
+  ]
+ }
+}
