@@ -632,3 +632,28 @@ Diagnosis at Coord's request (Ag-Play's report). Method: overlap by file name, b
 - **A/A 1** `hraa1-20261027-j00…j08-c0d6`:
   - 9/9 first chunks; **179/180 decided (99.4%)**; no `--treat` (no `treat_side`), as specified.
 - No estimate was computed for G2 or the A/As. The checking script printed only counters.
+
+## 2026-10-27 ≈11:45 UTC: G2 on dev set B — `value` FAILS the G2 rule (research/28 S1.25, E2; pre-registered A1/A3a)
+- **Run:** `hrg2-20261027-value-j00…j09-d241`, all 10 Completed. 50/50 chunks fetched to `scratch_ds/g2/`; `rerun_chunks` empty, no chunk gaps.
+  - `hr_val` teams, C1t1 both sides, `--treat HARDREAD_LEVER_SELECT=value --treat-seat alternate`, seed bases 4,000,000 + 10,000·j.
+  - Fork `c04b38e`.
+  - Output: `scratch_ds/g2/result_value.json`, `scratch_ds/g2/failures_value.json`.
+- **Markers:** `--check-treat-markers` **valid: true**. Treatment 999/999 logs with markers (38,105 lines), vanilla 0, fallbacks 0.
+- **Result** (`pre_registered`, crash = loss for the crashing bot): **48.40 ± 2.71 [45.69, 51.11], z = −1.16, p = 0.25**, 1,000 games / 500 pairings. One undecided game: a treatment crash, counted as a loss.
+- **Verdict:** **G2 FAIL** (needs ≥ 52.0 with ≥ 1,000 games and valid markers). There is no second candidate: double-half did not qualify (A3a item 3).
+- **Per the pre-registered rules:** `value` is still the freeze configuration (a G2 FAIL is not a blocker), and the sealed run always runs.
+- **Reading:** dev B agrees with F1 (48.73 on fresh dev-A seeds). The screen's 54.18 was very likely a selection plus noise artefact. Ending A now looks unlikely: [J] ≈ 5–8%, down from ≈ 15%. Ending B (S-A and VoI) carries the science beat.
+
+## 2026-10-27 ≈11:45 UTC: S-A refresh (research/28 S1.10) — primary = the 440-game run; secondary = all 1,579 `hr_val` games, retrained models
+- **Primary (pre-registered comparison, first run).** Frozen models and data (`scratch_ds/belief/{v1,v1data,results_v1}_frozen_20261027`, npz sha `b66252ba…` / `1080a8af…`); 440 games, 33,253 decisions, 146,225 rows.
+  - v1 (human pre-train → farm fine-tune), item NLL 1.182 [1.141, 1.223]:
+    - vs Foul Play's belief: Δ −0.618 [−0.682, −0.557] (logged at ≈00:00 UTC);
+    - **vs the usage prior: Δ −0.118 [−0.136, −0.102]** (new; `results_v1_frozen_20261027/sa_hrval440_vs_usage.{json,md}`).
+  - v1 + fp_belief input: Δ −0.129 [−0.145, −0.113] vs usage.
+  - Item top-1 vs usage: v1 +0.024 [+0.011, +0.038].
+- **Secondary (enlarged test set, chosen after seeing the first result: a forking path, so secondary only).** `FETCH=1 bash tools/belief/run_v1.sh` at 08:25–11:45 UTC on all fetched chunks (label farm 264 chunks = 6,597 games; `hr_val` 79 chunks = 1,579 games; 124,611 decisions; 555,025 rows; 494 rosters seen). Output: `scratch_ds/belief/results_v1/sa_hrval.{json,md}`.
+  - Foul Play's belief 1.809; usage 1.303; v1 (human pre-train → farm fine-tune) **1.190 [1.165, 1.214]**, Δ vs fp_belief **−0.619 [−0.656, −0.583]**; v1 + fp_belief input 1.176, Δ −0.633.
+  - **The ordering and effect sizes match the primary.**
+  - A paired CI vs usage on the enlarged set is not computed yet (one benchmark call with `--ref usage`, as for the primary).
+- **Leak check** (entry ≈10:50 UTC): the `hr_val` test rosters never appear in any training set.
+- The `sa_human` benchmark (held-out human games) was still running at the handover; see PROGRESS.
