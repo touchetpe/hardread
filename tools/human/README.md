@@ -7,6 +7,7 @@ Public Pokemon Showdown replays of the top-50 users of the Gen 9 OU ladder (snap
 | `crawl_replays.py` | Polite, resumable crawler (standard library only) |
 | `parse_replays.py` | Raw shards to games / per-turn actions / revealed sets / summary (standard library only) |
 | `reconstruct_check.py` | Runs `tools/review/reconstruct.py` (read-only use) on sampled games from both seats and cross-checks it against the parser |
+| `crawl_broad.py` | Broader crawl: ladder users 51-500 plus rating-stratified global recent replays (see "Broad crawl" below) |
 
 ## Rerun
 
@@ -121,3 +122,55 @@ Before the parser fix, an earlier pass found Eject Button / Eject Pack switches 
 - **Metamon raw replays**, `huggingface.co/datasets/jakegrigsby/metamon-raw-replays`: 2,681,841 Gen 9 OU replays, 5.7 GB parquet (`id, format, players, log, uploadtime, formatid, rating`), cut-off 2026-05-19, pseudonymised players, ratings about 1069-2000 in the samples, no rating filter. The card states no licence (the parsed set is CC BY-NC 4.0); check before use.
 
 They would complement this set, not replace it: they are far larger (about 1,200x the games) and cover 2021 to May 2026, so they suit priors, species/set statistics and pre-training. They have no top-player selection, end before this metagame window (our window starts 2026-07-01), and the raw set's usernames are pseudonymised, so top players cannot be picked out. This set is small but current, labelled with the top-50 flag, and carries both players' decisions and chance events. The two schemas differ. The raw Metamon logs are the same protocol logs, so `parse_replays.py` should accept them with minor changes (needs top-50 and ladder inputs removed); not tested.
+
+## Broad crawl (more players and rating levels): `crawl_broad.py`
+
+Same rules as above (public JSON endpoints only, 1.1 s between requests, descriptive User-Agent, backoff, abort after 3 consecutive 403/429, private replays skipped, pseudonymisation, checkpoints, nothing committed). Additions: the request spacing only ever grows after a 429/5xx/timeout (x2, cap 10 s, never relaxed within a run), and the run stops after `--abort-after-failing-minutes` (default 30) without a single success. Window: uploads since 2026-07-01.
+
+```sh
+$PY tools/human/crawl_broad.py run --max-hours 8 [--interval 1.1]   # resumable; kill it any time (SIGTERM) and re-run
+$PY tools/human/crawl_broad.py status                               # band counts, sources, disk
+$PY tools/human/crawl_broad.py manifest
+$PY tools/human/parse_replays.py --broad <PROJECT_ROOT>/data/replays/gen9ou-broad/raw --out scratch_ds/human_broad
+```
+
+**What it fetches.**
+1. Ladder users 51-500 (fresh snapshot, `ladder_top500.json`, with Elo/GXE per user in `manifest.json`; the 5 users that were in the first top-50 snapshot are skipped, they are already in `gen9ou-top`): up to 100 in-window replays each, newest first, round-robin over users (source `top500`).
+2. The global recent-replays search without a user filter, `search.json?format=gen9ou&before=<t>`: the window is cut into 2,400 equal time slots, visited in a fixed random order, one page (51 rows) per slot, so any prefix is uniform in time. Each fetch picks the rating band (replay `rating` field) with the fewest games so far among bands that have candidates and fewer than 6,000 games (source `global`). The top-50 replays already crawled count toward the bands and are never re-fetched. Unrated replays are never chosen from the global listing.
+3. Fetch order alternates between the two queues; one listing request every 8 fetches after a 250-slot warm-up.
+
+Checkpoints: `index.jsonl` (id, source, rating, band; written with each 20-replay flush), `global_pages.jsonl` (one line per listed page), `search_top500/<user>.json`, `status.json` (every 5 min), `manifest.json` (every 30 min and at exit), `missing_ids.txt`, `run.lock`.
+
+**Raw data:** `<PROJECT_ROOT>/data/replays/gen9ou-broad/raw/` (32 shards of 500, 43 MB with listings). **Processed:** `hardread/scratch_ds/human_broad/` (58 MB; same tables as `human/`, parsed from the broad shards plus the top-50 shards, which are tagged `source = top50`). The top-50 outputs in `scratch_ds/human/` are unchanged (re-running the default parse reproduces them byte for byte). Pseudonyms use the same salt as `scratch_ds/human/PRIVATE/`, so a player has the same pseudonym in both datasets; `PRIVATE/player_map.json` stays local.
+
+**Extra columns** (games, actions and sets rows): `source` (`top50`, `top500`, `global`), `rating_band` (from the replay `rating` field: the lower player's post-game rating; bands `lt1300`, `1300-1499`, `1500-1699`, `1700-1899`, `1900plus`, `unrated`), `rating_band_pre` (same bands from the lower player's pre-game rating), and in games `top500` (`p1`, `p2`: player is among the 500 ladder entries of the snapshot). Free text: a second pass replaces any other player's username that turns up inside a nickname.
+
+### Result of the run (2026-10-26 22:19 to 2026-10-27 04:01 CET, stopped early)
+
+- 18,483 requests over 5 h 42 min at about 0.9 per second, all HTTP 200, no 403 or 429. The crawl stopped at 18,483 requests (target was 25-30k) because the replay host failed (below); it is resumable.
+- 15,612 new replays (7,806 `top500`, 7,806 `global`) plus the 2,167 top-50 replays reused = 17,779. 17,676 parsed; 103 skipped (forfeit before the first turn). 9,426 distinct players (38 top-50 users).
+- Listing: 445 users (ladder 51-500 minus 5) gave 12,997 in-window replays (11,529 after the 100-per-user cap and dedup; 7,806 fetched, about 3,700 left in the queue). The 2,400 global pages listed 119,131 unique in-window replays (the pages cover about 57% of the window's time; public gen9ou uploads run at about 1,800 per day, so roughly 215,000 in the window).
+- Rating mix of the global listing (the field is the lower player's rating): under 1300 54.6%, 1300-1499 21.9%, 1500-1699 14.6%, 1700-1899 4.7%, 1900+ 0.2%, unrated 4.1%. All 179 listed 1900+ replays were fetched (183 games with 1900+ in total, 21 of them from the top-500 route or top-50 set); 1700-1899 had about 3,100 listed candidates left; the other bands were limited by the crawl time.
+- **Games per band (parsed):** under 1300: 3,738; 1300-1499: 3,775; 1500-1699: 6,074 (the 6,000 cap only stops global top-ups; the top-500 route adds regardless); 1700-1899: 3,766; 1900+: 183; unrated: 140.
+- Source by band: under 1300: 3,536 global / 176 top500 / 26 top50; 1300-1499: 2,489 / 1,220 / 66; 1500-1699: 0 / 4,918 / 1,156 (the global top-up never needed this band: the lowest band is always picked first); 1700-1899: 1,564 / 1,314 / 888; 1900+: 162 / 15 / 6.
+- Disk: raw 43 MB, processed 58 MB. 
+
+**Endpoint behaviour.**
+- The global search works without a user filter and with `before=<unix time>` for any time in the window: 51 rows per page, ratings included, about one page per 40 minutes of uploads (about 1,800 public gen9ou replays per day).
+- At 04:01 the replay host (`replay.pokemonshowdown.com`, both search and replay JSON) began timing out (30 s) and then returning Cloudflare HTTP 522 for over an hour; at 05:10 `pokemonshowdown.com/ladder` answered in 16 s and the replay search still returned 522. The crawler slowed itself to 10 s per request (it never saw a 429), retried each replay 5 times, and was stopped by hand after about one hour without a success (the new `--abort-after-failing-minutes` guard does this automatically). The unflushed buffer (under 20 replays) was refetched on resume by design. To resume: re-run `crawl_broad.py run --interval 2` once the host answers.
+
+### Summary per rating band (`scratch_ds/human_broad/summary_by_band.json` and `.md`)
+
+Band = replay `rating` field (lower player). Games, turns, forfeit rate, species usage top 15, reveal rates, chance events per game, action mix and the higher-rated player's win rate are all in the files.
+
+| band | games | players | turns (mean) | forfeit or timeout | move / switch / tera move (turn decisions, hidden 6-11%) | item / ability / Tera revealed (seen Pokemon) | crits / misses per game |
+|---|---|---|---|---|---|---|---|
+| under 1300 | 3,738 | 5,204 | 24.0 | 48.6% | 71.6 / 14.9 / 2.3 | 43.4 / 35.1 / 11.7 | 1.00 / 0.51 |
+| 1300-1499 | 3,775 | 3,758 | 25.8 | 53.7% | 68.5 / 19.6 / 2.6 | 44.1 / 39.4 / 13.1 | 1.07 / 0.58 |
+| 1500-1699 | 6,074 | 1,916 | 27.4 | 50.8% | 67.8 / 20.8 / 2.5 | 46.9 / 41.6 / 13.3 | 1.12 / 0.54 |
+| 1700-1899 | 3,766 | 989 | 31.9 | 55.1% | 67.9 / 22.4 / 2.2 | 48.0 / 41.9 / 13.2 | 1.21 / 0.59 |
+| 1900+ | 183 | 124 | 35.6 | 59.0% | 67.1 / 24.5 / 2.1 | 45.8 / 40.2 / 13.8 | 1.33 / 0.57 |
+
+Reading: higher bands play longer games and switch more (14.9% to 24.5% of turn decisions) and reveal more; the lowest band forfeits less but has far more sleep turns (0.44 per game against 0.14) and more flinches. Species usage shifts too: Corviknight, Dragapult and Alomomola are more common in the lowest band, Zamazenta and Samurott-Hisui in the upper bands (full top 15 per band in the files).
+
+**Caveats.** The games are not a uniform sample: the 1500-1899 bands are dominated by the listings of top-500 users and the global sample covers about 57% of the window's time. The band label is the lower player's post-game rating, so it depends on the result: the higher-rated player's win rate by that band is biased (43% in 1700-1899) and should not be used; by the lower player's pre-game rating it is 54.4%, 53.3%, 53.1%, 52.9% and 47.0% (n = 164) for the five bands (`_higher_rated_win_pct_by_pre_game_band`). The 6-11% hidden-action rate falls as rating rises. Reconstruction was only checked on the top-50 set.

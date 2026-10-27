@@ -758,13 +758,29 @@ class GameParser:
 
 # ---------------------------------------------------------------------------- game-level driver
 
+BANDS = [("lt1300", 0, 1300), ("1300-1499", 1300, 1500), ("1500-1699", 1500, 1700),
+         ("1700-1899", 1700, 1900), ("1900plus", 1900, 10 ** 6)]
+
+
+def band_of(r):
+    if r is None:
+        return None
+    for name, lo, hi in BANDS:
+        if lo <= r < hi:
+            return name
+    return None
+
+
 class Pseudonymizer:
-    def __init__(self, out):
+    def __init__(self, out, salt_from=None):
         pdir = out / "PRIVATE"
         pdir.mkdir(parents=True, exist_ok=True)
         sp = pdir / "salt.txt"
         if not sp.exists():
-            sp.write_text(secrets.token_hex(16))
+            if salt_from is not None and Path(salt_from).exists():
+                sp.write_text(Path(salt_from).read_text())   # same pseudonyms as the top-50 dataset
+            else:
+                sp.write_text(secrets.token_hex(16))
         self.salt = sp.read_text().strip()
         self.map = {}
 
@@ -821,11 +837,24 @@ def _sanitize_log(rep_log, names, pseudo):
     return out
 
 
-def parse_all(raw_dir, out_dir, limit=None):
+def ranks500(top500, name):
+    return top500.get(norm(name), (None,))[0]
+
+
+def parse_all(raw_dir, out_dir, limit=None, broad=None):
     out_dir.mkdir(parents=True, exist_ok=True)
     ladder = json.loads((raw_dir / "ladder_top50.json").read_text())
     top = {u["userid"]: (i + 1, u) for i, u in enumerate(ladder["top50"])}
-    ps = Pseudonymizer(out_dir)
+    top500, src_of = {}, {}
+    if broad:
+        l5 = json.loads((broad / "ladder_top500.json").read_text())
+        top500 = {u["userid"]: (i + 1, u) for i, u in enumerate(l5["toplist"][:500])}
+        ip = broad / "index.jsonl"
+        if ip.exists():
+            for ln in ip.read_text().splitlines():
+                r = json.loads(ln)
+                src_of.setdefault(r["id"], r["source"])
+    ps = Pseudonymizer(out_dir, salt_from=DEFAULT_OUT / "PRIVATE" / "salt.txt" if broad else None)
     games_f = gzip.open(out_dir / "games.jsonl.gz", "wt")
     act_f = gzip.open(out_dir / "actions.jsonl.gz", "wt")
     set_f = gzip.open(out_dir / "sets.jsonl.gz", "wt")
@@ -843,6 +872,8 @@ def parse_all(raw_dir, out_dir, limit=None):
     profiles = defaultdict(lambda: {"n": 0, "items": Counter(), "abilities": Counter(), "tera": Counter(),
                                     "moves": Counter(), "n_item": 0, "n_ability": 0, "n_tera": 0})
     shards = sorted(raw_dir.glob("replays-*.jsonl.gz"))
+    if broad:
+        shards = sorted(broad.glob("replays-*.jsonl.gz")) + shards
     n_game = 0
     for sh in shards:
         with gzip.open(sh, "rt") as f:
@@ -882,6 +913,12 @@ def parse_all(raw_dir, out_dir, limit=None):
                 names = {"p1": s1.name, "p2": s2.name}
                 pseudo = {sd: ps.uid(nm) for sd, nm in names.items()}
                 uid = "human/" + rid
+                extra = {}
+                if broad:
+                    pre = [x for x in (s1.rating, s2.rating) if x is not None]
+                    rb = band_of(rep.get("rating") if rep.get("rating") is not None else (min(pre) if pre else None))
+                    extra = {"source": src_of.get(rid, "top50"), "rating_band": rb or "unrated",
+                             "rating_band_pre": band_of(min(pre)) if pre else "unrated"}
                 ranks = {sd: top.get(norm(nm), (None, None)) for sd, nm in names.items()}
                 intop = {sd: ranks[sd][0] is not None for sd in names}
                 r1, r2 = s1.rating, s2.rating
@@ -895,8 +932,9 @@ def parse_all(raw_dir, out_dir, limit=None):
                     opp = "p2" if sd == "p1" else "p1"
                     net[sd] = sum(chance_counts[sd][t] - chance_counts[opp][t] for t in CHANCE_NET_TYPES)
                 win_ab = None if g.winner == "tie" else ("A" if g.winner == "p1" else "B")
-                games_f.write(json.dumps({
-                    "uid": uid, "run_id": "human-gen9ou-top", "game": n_game - 1, "winner": win_ab,
+                games_f.write(json.dumps({**extra,
+                    **({"top500": {sd: ranks500(top500, names[sd]) is not None for sd in ("p1", "p2")}} if broad else {}),
+                    "uid": uid, "run_id": "human-gen9ou-broad" if broad else "human-gen9ou-top", "game": n_game - 1, "winner": win_ab,
                     "winner_player": g.winner, "status": "ok", "player_a": "p1",
                     "replay_id": rid, "uid_anon": ps.aid(rid), "format": "gen9ou",
                     "p1": pseudo["p1"], "p2": pseudo["p2"],
@@ -913,6 +951,7 @@ def parse_all(raw_dir, out_dir, limit=None):
                     r.update({"uid": uid, "player_uid": pseudo[sd], "top50": intop[sd],
                               "rating": s1.rating if sd == "p1" else s2.rating,
                               "won": None if g.winner == "tie" else int(g.winner == sd)})
+                    r.update(extra)
                     act_f.write(json.dumps(r) + "\n")
                     stats["decisions"][r["kind"]] += 1
                     if r["kind"] == "turn":
@@ -935,6 +974,7 @@ def parse_all(raw_dir, out_dir, limit=None):
                                "ability": m.ability, "ability_how": m.ability_how,
                                "tera_type": m.tera_type, "terastallized": m.terastallized,
                                "moves": m.moves, "n_moves_seen": len(m.moves)}
+                        row.update(extra)
                         set_f.write(json.dumps(row) + "\n")
                         stats["n_sets_rows"] += 1
                         stats["usage"][m.species_preview] += 1
@@ -1008,8 +1048,43 @@ def parse_all(raw_dir, out_dir, limit=None):
     for fh in (games_f, act_f, set_f):
         fh.close()
     (out_dir / "PRIVATE" / "player_map.json").write_text(json.dumps(
-        {h: {**v, "top50_rank": top.get(v["userid"], (None,))[0]} for h, v in ps.map.items()}, indent=1))
+        {h: {**v, "top50_rank": top.get(v["userid"], (None,))[0],
+             **({"ladder500_rank": top500.get(v["userid"], (None,))[0]} if broad else {})} for h, v in ps.map.items()},
+        indent=1))
     return stats, profiles, ladder
+
+
+def scrub_known_names(out_dir):
+    """Second pass (broad parse): a username of ANY player can appear in free text (a nickname) of another game.
+    Replace a log field (or its `a: b` / `a, b` parts) that equals a known userid (5+ characters) by the pseudonym."""
+    pmap = json.loads((out_dir / "PRIVATE" / "player_map.json").read_text())
+    by_id = {v["userid"]: h for h, v in pmap.items() if len(v["userid"]) >= 5}
+    tmp = out_dir / "games.jsonl.gz.tmp"
+    n = 0
+    with gzip.open(out_dir / "games.jsonl.gz", "rt") as fin, gzip.open(tmp, "wt") as fout:
+        for line in fin:
+            g = json.loads(line)
+            for i, ln in enumerate(g["log"]):
+                parts = re.split(r"(\|)", ln)
+                changed = False
+                for j, f in enumerate(parts):
+                    if f == "|" or len(f) < 5:
+                        continue
+                    sub = re.split(r"(: |, )", f)
+                    for t, seg in enumerate(sub):
+                        if seg in (": ", ", "):
+                            continue
+                        h = by_id.get(norm(seg))
+                        if h:
+                            sub[t] = h
+                            changed = True
+                            n += 1
+                    parts[j] = "".join(sub)
+                if changed:
+                    g["log"][i] = "".join(parts)
+            fout.write(json.dumps(g) + "\n")
+    os.replace(tmp, out_dir / "games.jsonl.gz")
+    return n
 
 
 def pct(xs, q):
@@ -1107,14 +1182,125 @@ def write_summary(stats, profiles, out_dir):
     return s
 
 
+def summarize_bands(out_dir):
+    """Per rating band summary, streamed from games / actions / sets of a broad parse."""
+    uid_band = {}
+    hr_pre = defaultdict(lambda: [0, 0])
+    B = defaultdict(lambda: {"games": 0, "turns": [], "end": Counter(), "chance": defaultdict(list), "hr_win": [0, 0],
+                             "teams": 0, "usage": Counter(), "seen": 0, "item": 0, "ability": 0, "tera": 0,
+                             "moves": 0, "tera_team": 0, "act": Counter(), "sources": Counter(), "players": set(),
+                             "top500_games": 0, "ratings": []})
+    with gzip.open(out_dir / "games.jsonl.gz", "rt") as f:
+        for line in f:
+            g = json.loads(line)
+            b = g["rating_band"]
+            uid_band[g["uid"]] = b
+            X = B[b]
+            X["games"] += 1
+            X["turns"].append(g["turns"])
+            X["end"][g["end_reason"]] += 1
+            X["sources"][g["source"]] += 1
+            X["players"].update((g["p1"], g["p2"]))
+            X["top500_games"] += bool(g["top500"]["p1"] or g["top500"]["p2"])
+            if g["ratings"].get("replay_field") is not None:
+                X["ratings"].append(g["ratings"]["replay_field"])
+            for t in CHANCE_NET_TYPES + ("thaw", "confusion_self_hit"):
+                X["chance"][t].append(sum(g["chance_counts"][sd].get(t, 0) for sd in ("p1", "p2")))
+            if g["higher_rated"] and g["winner_player"] in ("p1", "p2"):
+                hr_pre[g["rating_band_pre"]][1] += 1
+                hr_pre[g["rating_band_pre"]][0] += g["winner_player"] == g["higher_rated"]
+                X["hr_win"][1] += 1
+                X["hr_win"][0] += g["winner_player"] == g["higher_rated"]
+    team_has_tera = defaultdict(bool)
+    with gzip.open(out_dir / "sets.jsonl.gz", "rt") as f:
+        for line in f:
+            r = json.loads(line)
+            X = B[uid_band[r["uid"]]]
+            X["usage"][r["species_preview"]] += 1
+            team_has_tera[(r["uid"], r["player"])] |= bool(r["terastallized"])
+            if r["seen"]:
+                X["seen"] += 1
+                X["item"] += r["item"] is not None
+                X["ability"] += r["ability"] is not None
+                X["tera"] += bool(r["terastallized"])
+                X["moves"] += r["n_moves_seen"]
+    for (uid, pl), v in team_has_tera.items():
+        B[uid_band[uid]]["tera_team"] += v
+    with gzip.open(out_dir / "actions.jsonl.gz", "rt") as f:
+        for line in f:
+            r = json.loads(line)
+            if r["kind"] == "turn":
+                B[uid_band[r["uid"]]]["act"][r["action_type"]] += 1
+    out = {}
+    order = [b[0] for b in BANDS] + ["unrated"]
+    for b in order:
+        if b not in B:
+            continue
+        X = B[b]
+        n = max(X["games"], 1)
+        acts = sum(X["act"].values()) or 1
+        seen = max(X["seen"], 1)
+        out[b] = {
+            "games": X["games"], "unique_players": len(X["players"]), "sources": dict(X["sources"]),
+            "games_with_a_top500_player": X["top500_games"],
+            "rating_field": {"min": min(X["ratings"], default=None), "median": pct(X["ratings"], .5), "max": max(X["ratings"], default=None)},
+            "turns": {"mean": round(statistics.mean(X["turns"]), 1), "median": statistics.median(X["turns"]), "p90": pct(X["turns"], .9)},
+            "forfeit_or_timeout_pct": round(100 * (X["end"]["forfeit"] + X["end"]["timeout"]) / n, 1),
+            "forfeit_pct": round(100 * X["end"]["forfeit"] / n, 1),
+            "species_usage_top15": [{"species": sp, "team_pct": round(100 * c / (2 * n), 1)} for sp, c in X["usage"].most_common(15)],
+            "reveal_pct_of_seen": {"item": round(100 * X["item"] / seen, 1), "ability": round(100 * X["ability"] / seen, 1),
+                                   "tera_used": round(100 * X["tera"] / seen, 1), "mean_moves": round(X["moves"] / seen, 2)},
+            "teams_terastallizing_pct": round(100 * X["tera_team"] / (2 * n), 1),
+            "chance_per_game": {t: round(statistics.mean(v), 2) for t, v in X["chance"].items() if v},
+            "turn_action_mix_pct": {k: round(100 * v / acts, 1) for k, v in X["act"].most_common()},
+            "higher_rated_win_pct": round(100 * X["hr_win"][0] / X["hr_win"][1], 1) if X["hr_win"][1] else None,
+            "higher_rated_games": X["hr_win"][1],
+        }
+    out["_higher_rated_win_pct_by_pre_game_band"] = {
+        b: {"pct": round(100 * v[0] / v[1], 1), "games": v[1]} for b, v in sorted(hr_pre.items()) if v[1]}
+    out["_note"] = ("rating_band uses the replay `rating` field (lower player's post-game rating), so it is conditioned on "
+                    "the result and biases higher_rated_win_pct (upsets raise the lower rating); "
+                    "_higher_rated_win_pct_by_pre_game_band uses the lower player's pre-game rating instead. "
+                    "Games come from top-500 users' listings and from time-sampled global listings, not a uniform sample.")
+    (out_dir / "summary_by_band.json").write_text(json.dumps(out, indent=1))
+    lines = ["# Summary by rating band (replay `rating` field = lower player's rating)", "",
+             "| band | games | players | turns mean | forfeit+timeout % | higher-rated wins % | move/switch/tera_move % | item/ability/tera revealed % | crits/game | misses/game |",
+             "|---|---|---|---|---|---|---|---|---|---|"]
+    for b, v in out.items():
+        if b.startswith("_"):
+            continue
+        am = v["turn_action_mix_pct"]
+        lines.append(f"| {b} | {v['games']} | {v['unique_players']} | {v['turns']['mean']} | {v['forfeit_or_timeout_pct']} | "
+                     f"{v['higher_rated_win_pct']} | {am.get('move')}/{am.get('switch')}/{am.get('tera_move')} | "
+                     f"{v['reveal_pct_of_seen']['item']}/{v['reveal_pct_of_seen']['ability']}/{v['reveal_pct_of_seen']['tera_used']} | "
+                     f"{v['chance_per_game'].get('crit')} | {v['chance_per_game'].get('miss')} |")
+    lines.append("")
+    lines.append("Higher-rated win % by pre-game band (lower player's pre-game rating): " +
+                 ", ".join(f"{b} {v['pct']} (n={v['games']})" for b, v in out["_higher_rated_win_pct_by_pre_game_band"].items()))
+    lines.append("")
+    for b, v in out.items():
+        if b.startswith("_"):
+            continue
+        lines.append(f"- {b} top 15: " + ", ".join(f"{x['species']} {x['team_pct']}%" for x in v["species_usage_top15"]))
+    (out_dir / "summary_by_band.md").write_text("\n".join(lines))
+    return out
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--raw", default=str(DEFAULT_RAW))
     ap.add_argument("--out", default=str(DEFAULT_OUT))
     ap.add_argument("--limit", type=int, default=None)
+    ap.add_argument("--broad", default=None,
+                    help="broad crawl raw dir (data/replays/gen9ou-broad/raw): parse it together with --raw (the top-50 "
+                         "shards, source=top50) into --out and add rating_band, source, top500 columns")
     a = ap.parse_args()
-    stats, profiles, ladder = parse_all(Path(a.raw), Path(a.out), a.limit)
+    stats, profiles, ladder = parse_all(Path(a.raw), Path(a.out), a.limit, Path(a.broad) if a.broad else None)
     s = write_summary(stats, profiles, Path(a.out))
+    if a.broad:
+        n = scrub_known_names(Path(a.out))
+        print("scrubbed known usernames from free text:", n)
+        summarize_bands(Path(a.out))
     print(json.dumps({k: s[k] for k in ("games", "unique_players", "turns_per_game", "rating", "skipped")}, indent=1))
 
 
