@@ -27,7 +27,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 from names import action_name, dex, move_name, species_name, to_id  # noqa: E402
 
-PARSER_VERSION = "parse-note-v1"
+PARSER_VERSION = "parse-note-v3"
 
 ITEM_ALIASES = {
     "scarf": "choicescarf", "specs": "choicespecs", "band": "choiceband", "lefties": "leftovers",
@@ -91,7 +91,9 @@ def load_log(path):
 # ------------------------------------------------------------------ grounding / normalisation
 
 def _norm_note(note):
-    return " " + re.sub(r"[^a-z0-9\-' ]", " ", note.lower()) + " "
+    """Lowercase; keep letters, digits, - and ' plus clause punctuation (attribution needs clause breaks)."""
+    s = re.sub(r"([,.;:!?()])", r" \1 ", note.lower())
+    return " " + re.sub(r"[^a-z0-9\-' ,.;:!?()]", " ", s) + " "
 
 
 def _mentions(note_n, phrase):
@@ -175,9 +177,70 @@ def _resolve_species(v, allowed):
     return None
 
 
+# ------------------------------------------------------------------ attribution (Ag-App regression, 2026-10-27)
+# A move or item belongs to an opponent's set only if its own clause refers to that opponent (its name, or a
+# pronoun after it was named) with an attribution cue, and it is not the player's own ("I used Crunch",
+# "my Scarf", "so Crunch was safe"). Moves on the player's side of the review need the species name itself.
+CLAUSE_BREAK_RE = re.compile(r"[,.;:!?()]|\b(?:so|because|since|then|but|while|whereas|although|though)\b")
+OPP_PRONOUN_RE = re.compile(r"\b(?:it|its|it's|they|their|them|theirs|he|she|his|her|opponent|opp|foe)\b")
+CUE_RE = re.compile(r"\b(?:has|had|have|having|with|running|runs|run|ran|carr\w*|hold\w*|held|use|used|uses|"
+                    r"using|click\w*|go(?:es|ing)?\s+for|went\s+for|know\w*|pack\w*|lack\w*|no|not|never|without|"
+                    r"would|will|could|might|was|were|is|be|as|on)\b|'d\b|n't\b")
+# "it had X", "they run X", "she lacked X": a pronoun tightly bound to the move counts as naming the opponent
+TIGHT_PRONOUN_RE = re.compile(r"\b(?:it|they|he|she)\s+(?:[\w']+\s+)?(?:has|had|have|runs|ran|run|carries|carried|"
+                              r"holds|held|used|uses|knows|knew|packs|packed|lacks|lacked)\s+(?:no\s+|not\s+)?$")
+OWN_BEFORE_RE = re.compile(r"(?:\bi\s+(?:[\w']+\s+){0,2}?(?:used|use|clicked|click|went\s+for|go\s+for|chose|picked|"
+                           r"had|have|tried|kept)|\bmy|\bme|\bmine)\s+(?:[\w']+\s+)?$")
+
+
+def clause_before(note_n, pos):
+    """Text of the clause that ends at `pos` (from the last clause break)."""
+    head = note_n[:pos]
+    cut = 0
+    for m in CLAUSE_BREAK_RE.finditer(head):
+        cut = m.end()
+    return head[cut:]
+
+
+def attributed(note_n, ev, species, opp, own_moves=None, move_id=None):
+    """(ok, reason): is this mention (evidence span `ev`) stated about the opponent's `species`?"""
+    m = re.search(r"(?<![a-z0-9])" + re.escape(ev) + r"(?![a-z0-9])", note_n)
+    if not m:
+        return False, "not found in the note"
+    pos = m.start()
+    clause = clause_before(note_n, pos)
+    if OWN_BEFORE_RE.search(note_n[max(0, pos - 40):pos]):
+        return False, "the player's own (\"I used\", \"my\")"
+    named_here = species_evidence(clause, species) is not None
+    if not named_here:
+        tight = TIGHT_PRONOUN_RE.search(note_n[max(0, pos - 40):pos])
+        if move_id and own_moves and move_id in own_moves and not tight:
+            return False, "also on the player's side; the note does not name the opponent with it"
+        if not OPP_PRONOUN_RE.search(clause):
+            return False, "its clause does not refer to the opponent"
+        prev = [(note_n.rfind(" " + e), sp) for sp in opp for e in [species_evidence(note_n[:pos], sp)] if e]
+        prev = [x for x in prev if x[0] >= 0]
+        if not prev or max(prev)[1] != species:
+            return False, f"its clause refers to another Pokémon, not {species}"
+    if not CUE_RE.search(clause):
+        return False, "no wording links it to the opponent (has, with, used...)"
+    return True, None
+
+
+def own_moves_from_review(review):
+    """Move ids on the player's side of a review (own actions and the engine's options for the player)."""
+    out = set()
+    for d in (review or {}).get("decisions") or []:
+        acts = [d.get("action"), d.get("engine_best")] + [o.get("action") for o in d.get("top_alternatives") or []]
+        for a in acts:
+            if a and not str(a).startswith("switch "):
+                out.add(to_id(str(a).replace("-tera", "")))
+    return out
+
+
 # ------------------------------------------------------------------ keyword baseline
 
-def keyword_parse(note, own, opp):
+def keyword_parse(note, own, opp, own_moves=None):
     """Deterministic baseline: every species/item/move/ability/tera named in the note, attached to the nearest
     preceding opponent species (else the only one named)."""
     note_n = _norm_note(note)
@@ -212,7 +275,9 @@ def keyword_parse(note, own, opp):
     for iid, disp in dex()["items"].items():
         ev = item_evidence(note_n, iid)
         if ev:
-            put(owner(note_n.find(ev)), "item", iid, ev)
+            sp = owner(note_n.find(ev))
+            if sp and attributed(note_n, ev, sp, opp)[0]:
+                put(sp, "item", iid, ev)
     seen_moves = set()
     spans = []
     for mid, e in dex()["moves"].items():
@@ -222,13 +287,18 @@ def keyword_parse(note, own, opp):
             spans.append((m.start(), m.end(), mid, ev))
     spans = [x for x in spans if not any(o[0] <= x[0] and x[1] <= o[1] and (o[1] - o[0]) > (x[1] - x[0])
                                          for o in spans)]  # "Thunder" inside "Thunder Wave"
+    mentioned = []  # every move named and not the player's own: candidates for the expected action
     for pos, end, mid, ev in sorted(spans):
         before = note_n[max(0, pos - 40):pos]
         if re.search(OWN_RE + r"\s+(?:[\w']+\s+){0,1}$", before):
             continue  # the player's own move ("I used Defog")
+        mentioned.append((mid, ev))
+        sp = owner(pos)
+        if not sp or not attributed(note_n, ev, sp, opp, own_moves, mid)[0]:
+            continue  # e.g. "so Crunch was safe": the player's own move, not the opponent's
         seen_moves.add(mid)
         neg = re.search(r"\b" + NOT_RE + r"\s+(?:[\w']+\s+){0,4}$", before)
-        put(owner(pos), "moves_not" if neg else "moves_has", mid, ev)
+        put(sp, "moves_not" if neg else "moves_has", mid, ev)
     for aid in dex()["abilities"]:
         ev = ability_evidence(note_n, aid)
         if ev and aid not in ("noability",):
@@ -243,7 +313,7 @@ def keyword_parse(note, own, opp):
         after = [x for x in opp_named if sw.end() <= x[0] <= sw.end() + 30]  # "switch (out) to X": X is the target
         exp = {"kind": "switch", "species": after[0][1] if after else None}
     else:
-        hm = [(mid, ev) for mid in seen_moves for ev in [move_evidence(note_n, mid)]
+        hm = [(mid, ev) for mid, ev in mentioned
               if re.search(r"\b(?:click|use|go\s+for|fire\s+off|throw\s+out|expected|predicted|thought)\b[^.]{0,30}"
                            + re.escape(ev), note_n)]
         if hm:
@@ -271,9 +341,13 @@ def belief_tool(all_species):
                 "tera": {"type": "string"},
                 "moves_has": {"type": "array", "items": {"type": "string"}},
                 "moves_not": {"type": "array", "items": {"type": "string"}}}, "required": ["species"]}},
-            "expects_action": {"type": "object", "properties": {
-                "species": sp, "kind": {"type": "string", "enum": ["switch", "move", "tera"]},
-                "move": {"type": "string"}}, "required": ["kind"]},
+            "expects_action": {"type": "object",
+                               "description": "The opponent action the player expected. kind=switch: species is the "
+                                              "opponent Pokémon expected to come IN (not the one leaving). "
+                                              "kind=move: move is the move expected, species the user of it.",
+                               "properties": {
+                                   "species": sp, "kind": {"type": "string", "enum": ["switch", "move", "tera"]},
+                                   "move": {"type": "string"}}, "required": ["kind"]},
             "confidence": {"type": "string", "enum": ["sure", "think", "guess"]}},
             "required": ["sets", "confidence"]}}}
 
@@ -299,8 +373,9 @@ def glimmer_parse(note, own, opp, client, context=None):
 
 # ------------------------------------------------------------------ chips (normalise + ground) and belief
 
-def to_chips(raw, note, own, opp, source):
-    """Normalise each field to a dex id and keep it only if the note names it. -> (chips, dropped)."""
+def to_chips(raw, note, own, opp, source, own_moves=None):
+    """Normalise each field to a dex id and keep it only if the note names it and attributes it to that opponent
+    (attributed()). -> (chips, dropped)."""
     note_n = _norm_note(note)
     chips, dropped = [], []
 
@@ -325,8 +400,11 @@ def to_chips(raw, note, own, opp, source):
         if st.get("item"):
             iid = _resolve_item(st["item"])
             ev = item_evidence(note_n, iid) if iid else None
-            if iid and ev:
+            ok, why = attributed(note_n, ev, sp, opp) if ev else (False, None)
+            if iid and ev and ok:
                 chip(sp, "item", iid, dex()["items"][iid], ev)
+            elif iid and ev:
+                dropped.append({"field": "item", "value": st["item"], "reason": f"not attributed to {sp}: {why}"})
             else:
                 dropped.append({"field": "item", "value": st["item"], "reason": "unknown item" if not iid else
                                 "the note does not name it"})
@@ -348,8 +426,11 @@ def to_chips(raw, note, own, opp, source):
             for mv in st.get(field) or []:
                 mid = _resolve_move(mv)
                 ev = move_evidence(note_n, mid) if mid else None
-                if mid and ev:
+                ok, why = attributed(note_n, ev, sp, opp, own_moves, mid) if ev else (False, None)
+                if mid and ev and ok:
                     chip(sp, field, mid, move_name(mid), ev)
+                elif mid and ev:
+                    dropped.append({"field": field, "value": mv, "reason": f"not attributed to {sp}: {why}"})
                 else:
                     dropped.append({"field": field, "value": mv, "reason": "unknown move" if not mid else
                                     "the note does not name it"})
@@ -466,16 +547,16 @@ def read_check(review, turn, k, belief):
 
 # ------------------------------------------------------------------ entry points
 
-def parse(note, own, opp, parser="glimmer", client=None, context=None):
+def parse(note, own, opp, parser="glimmer", client=None, context=None, own_moves=None):
     t0 = time.time()
     meta = {}
     if parser == "glimmer":
         raw, meta = glimmer_parse(note, own, opp, client, context)
         if raw is None:  # fallback: keyword parser + chips (research/28 S2.4)
-            raw, parser = keyword_parse(note, own, opp), "keyword(fallback)"
+            raw, parser = keyword_parse(note, own, opp, own_moves), "keyword(fallback)"
     else:
-        raw = keyword_parse(note, own, opp)
-    chips, dropped = to_chips(raw, note, own, opp, parser)
+        raw = keyword_parse(note, own, opp, own_moves)
+    chips, dropped = to_chips(raw, note, own, opp, parser, own_moves)
     belief = belief_from_chips(chips)
     return {"version": PARSER_VERSION, "parser": parser, "note": note, "raw": raw, "chips": chips,
             "dropped": dropped, "belief": belief, "invented_number": has_invented_number(belief, note),
@@ -513,6 +594,9 @@ SMOKE_NOTES = [  # (log, side, review, turn, note) on the two local reviewed gam
     ("scratch_ds/review/games/lab-n4-c000_g0019.public.json", "p1",
      "scratch_ds/review/games/lab-n4-c000_g0019.review_bridge.json", 11,
      "no idea honestly, just clicked the strongest move"),
+    ("scratch_ds/review/games/lab-n4-c000_g0019.public.json", "p1",
+     "scratch_ds/review/games/lab-n4-c000_g0019.review_bridge.json", 9,
+     "I thought Iron Hands had no Ice Punch so Psychic was safe"),  # Ag-App regression: own move not credited
 ]
 
 
@@ -521,8 +605,9 @@ def smoke(client, out, root):
     for log, side, rv, turn, note in SMOKE_NOTES:
         own, opp = species_from_log(load_log(root / log), side)
         review = json.loads((root / rv).read_text())
-        g = parse(note, own, opp, "glimmer", client, context=f"turn {turn}")
-        kw = parse(note, own, opp, "keyword")
+        om = own_moves_from_review(review)
+        g = parse(note, own, opp, "glimmer", client, context=f"turn {turn}", own_moves=om)
+        kw = parse(note, own, opp, "keyword", own_moves=om)
         rc = read_check(review, turn, 0, g["belief"])
         valid = isinstance(g["belief"].get("sets"), dict) and g["belief"].get("confidence") in ("sure", "think",
                                                                                              "guess")
@@ -563,9 +648,11 @@ def main():
     if a.smoke:
         return smoke(client, a.out if a.out != "-" else "scratch_ds/agent/parser_smoke.json", root)
     own, opp = species_from_log(load_log(a.log), a.side)
-    res = parse(a.note, own, opp, a.parser, client, context=f"turn {a.turn}" if a.turn is not None else None)
-    if a.review and a.turn is not None:
-        res["read_check"] = read_check(json.loads(Path(a.review).read_text()), a.turn, a.k, res["belief"])
+    review = json.loads(Path(a.review).read_text()) if a.review else None
+    res = parse(a.note, own, opp, a.parser, client, context=f"turn {a.turn}" if a.turn is not None else None,
+                own_moves=own_moves_from_review(review) if review else None)
+    if review and a.turn is not None:
+        res["read_check"] = read_check(review, a.turn, a.k, res["belief"])
     txt = json.dumps(res, indent=1, ensure_ascii=False)
     print(txt) if a.out == "-" else Path(a.out).write_text(txt + "\n")
 

@@ -180,8 +180,8 @@ class TestVerifierPass(Base):
 
     def test_choices_swung_against_you(self):
         # smoke run 4 regression: "swung" is a neutral verb; "choices" names the slot
-        ok, rules, rep = self.rules(S(("Luck swung {l} against you while choices swung {c} against you.",
-                                       {"l": "#1.luck_pts", "c": "#1.choices_pts"})))
+        ok, rules, rep = self.rules(S(("Luck swung {l} against you while choices, yours and your opponent's, "
+                                       "swung {c} against you.", {"l": "#1.luck_pts", "c": "#1.choices_pts"})))
         self.assertTrue(ok, rep)
 
     def test_event_word_labels_luck(self):
@@ -282,6 +282,27 @@ class TestVerifierFail(Base):
     def test_r6_verdict_word_next_to_slot(self):
         v = self.s.call("get_verdict", {"turn": 2, "k": 0})
         self.assertIn(6, self.rules(S(("The verdict {v}: not a misread.", {"v": f"{v['id']}.verdict"})))[1])
+
+    def test_r2_choices_must_say_both_players(self):
+        self.assertIn(2, self.rules(S(("Luck swung {l} against you while choices swung {c} against you.",
+                                       {"l": "#1.luck_pts", "c": "#1.choices_pts"})))[1])
+
+    def test_r8_choices_cost(self):
+        # Ag-App regression (showcase 4): "choices cost 9 points" must be rejected (research/28 §B)
+        ok, rules, rep = self.rules(S(("Choices, yours and your opponent's, cost {c}.", {"c": "#1.choices_pts"})))
+        self.assertIn(8, rules)
+        d = self.dis[0]["id"]
+        self.assertIn(8, self.rules(S(("On turn {t}, your choice cost {g} by the engine's estimate.",
+                                       {"t": f"{d}.turn", "g": f"{d}.gap_pts"})))[1])
+
+    def test_r8_summed_and_coach_and_claims(self):
+        d = self.dis[0]["id"]
+        for text in ["In total, the engine preferred {best} by {g}.",
+                     "Altogether the engine preferred {best} by {g}.",
+                     "As your coach: the engine preferred {best} by {g}.",
+                     "The deterministic engine preferred {best} by {g}."]:
+            ok, rules, rep = self.rules(S((text, {"best": f"{d}.engine_best", "g": f"{d}.gap_pts"})))
+            self.assertIn(8, rules, text)
 
     def test_r7_certainty_with_low_probability(self):
         m = self.luck[0]["id"]

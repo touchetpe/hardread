@@ -12,6 +12,7 @@ template share (Wilson 95% CIs), tool calls per answer, latency p50/p95, verifie
 The misleading-sentence audit is a separate step (it needs the blinded rubric); this file lists the population.
 """
 import argparse
+import contextlib
 import hashlib
 import json
 import math
@@ -25,6 +26,7 @@ ROOT = HERE.parents[1]
 sys.path.insert(0, str(HERE))
 import explain  # noqa: E402
 from lexicon import LEXICON_VERSION  # noqa: E402
+from evallock import eval_lock  # noqa: E402
 from llm import GlimmerClient  # noqa: E402
 from verifier import VERIFIER_VERSION  # noqa: E402
 
@@ -97,7 +99,9 @@ def main():
     reviews = {}
     rows = []
     t0 = time.time()
-    with open(out_items, "w") as fo:
+    # recorded runs own the shared server (EVAL_LOCK); pilots run without it and label latency as an upper bound
+    lock = contextlib.nullcontext(None) if a.pilot else eval_lock(f"A1 record {Path(a.out).name}", 330 * len(items))
+    with lock as lock_line, open(out_items, "w") as fo:
         for i, it in enumerate(items):
             rp = it["review"]
             if rp not in reviews:
@@ -140,6 +144,9 @@ def main():
                                    "reasoning_strength": a.reasoning, "max_tokens": a.max_tokens},
                        "prompt_version": explain.PROMPT_VERSION, "verifier_version": VERIFIER_VERSION,
                        "lexicon_version": LEXICON_VERSION, "tools_agent_commit": git_head(), "host": a.host_note,
+                       "eval_lock": lock_line,
+                       "latency_label": "exclusive server (EVAL_LOCK)" if lock_line else
+                                        "shared server, upper bound (other clients may call :18131)",
                        "review_sha256": reviews},
         "n": n,
         "raw_pass": raw, "raw_pass_rate": round(raw / n, 4) if n else None, "raw_pass_ci95": wilson(raw, n),

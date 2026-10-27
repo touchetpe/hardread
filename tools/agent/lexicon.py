@@ -5,7 +5,7 @@ verifier's strictness is part of the eval protocol (EVAL_PROTOCOL_AGENT.md), so 
 """
 import re
 
-LEXICON_VERSION = "agent-lex-v2"
+LEXICON_VERSION = "agent-lex-v3"
 
 # ---- rule 2: phrase classes. Each class: trigger regex -> allowed (kind, pts-subkind or None) of a slot.
 PHRASE_CLASSES = [
@@ -30,6 +30,21 @@ TURN_ADJ_RE = re.compile(r"\bturns?\s*$", re.I)   # "turn {t}": the placeholder 
 NUMERIC_KINDS = {"pts", "wp", "prob", "percentile", "turn"}
 # "your choices cost you {c}": choices_pts is both players' choices together, never "yours"
 YOUR_CHOICES_RE = re.compile(r"\byour\s+(?:own\s+)?(?:choices|decisions|play|mistakes|moves)\b", re.I)
+# choices_pts must be described as both players' choices (research/28 §B: "Choices, yours and your opponent's")
+BOTH_PLAYERS_RE = re.compile(r"\bboth\b|\byours\s+and\s+(?:your\s+)?(?:opponent|rival)'?s\b|\byou\s+and\s+your\s+"
+                             r"(?:opponent|rival)\b|\beach\s+side\b|\beither\s+side\b|\bboth\s+players\b", re.I)
+
+# ---- rule 8: never-say wording (research/28 §B): cost framing, coach/analyzer framing, summed disagreements,
+# and claims the product must not make
+NEVER_SAY = [
+    ("cost framing", r"\bcost(?:s|ly|ing)?\b|\bthrew\s+away\b|\blost\s+you\b"),
+    ("coach/analyzer framing", r"\bcoach\w*|\btrainer\w*|\btutor\w*|\banaly[sz]er\w*|\bsports?\b"),
+    ("summed disagreements", r"\bin\s+total\b|\btotal(?:ed|led|s)?\b|\baltogether\b|\bsum(?:med|s)?\b|\bsum\s+of\b"
+                             r"|\badded\s+up\b|\badds\s+up\b|\bcumulative\w*"),
+    ("forbidden claim", r"\bdeterministic\w*|\bfine[- ]?tun\w*|\bverifi(?:ed|able)\b|\bSOTA\b|\bstate[- ]of[- ]the[- ]art\b"
+                        r"|\bstrongest\b"),
+]
+NEVER_SAY_RE = [(n, re.compile(rx, re.I)) for n, rx in NEVER_SAY]
 
 # ---- rule 3: number words (digits are checked separately)
 NUMBER_WORDS = [
@@ -50,9 +65,9 @@ DIGIT_RE = re.compile(r"\d")
 POL_STRONG_POS = [r"toward(?:s)?\s+you\b(?!r)", r"in\s+your\s+favou?r", r"helped\s+you", r"went\s+your\s+way",
                   r"\blucky\b", r"worked\s+for\s+you", r"benefit(?:ed|ted)?\s+you"]
 POL_STRONG_NEG = [r"against\s+you", r"toward(?:s)?\s+(?:your|the)\s+opponent", r"in\s+(?:your|the)\s+opponent'?s\s+favou?r",
-                  r"cost\s+you", r"hurt\s+you", r"went\s+their\s+way", r"\bunlucky\b", r"worked\s+against\s+you"]
+                  r"hurt\s+you", r"went\s+their\s+way", r"\bunlucky\b", r"worked\s+against\s+you"]
 POL_WEAK_POS = [r"\bhelped\b", r"\bgained?\b", r"\bbenefit(?:ed|ted)?\b"]
-POL_WEAK_NEG = [r"\bcost\b", r"\bhurt\b", r"\bdropped\b"]
+POL_WEAK_NEG = [r"\bhurt\b", r"\bdropped\b"]  # "cost" is never said (rule 8)
 
 
 def _compile(lst):

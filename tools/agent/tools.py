@@ -143,7 +143,7 @@ TOOL_SCHEMAS = [
 
 SUBMIT_SCHEMA = {"type": "function", "function": {
     "name": "submit_explanation",
-    "description": "Final answer: 1-3 short sentences. Text never contains digits or number words: each number, "
+    "description": "Final answer: one to three short sentences. Text never contains digits or number words: each number, "
                    "turn, name or verdict is a {placeholder} whose slot cites a tool field as \"#id.field\".",
     "parameters": {"type": "object", "properties": {
         "sentences": {"type": "array", "minItems": 1, "maxItems": 4, "items": {
@@ -355,9 +355,10 @@ class ToolSession:
                     "_raw": {"engine_best": d["engine_best"], "chosen": d["action"]}}))
         out = {"kind": kind, "moments": moments}
         if not moments:
-            out["note"] = ("no turn had a luck swing of at least one point" if kind == "luck" else
-                           "no decision passed the filter (balanced position and the engine's option rated at least "
-                           "five points higher)")
+            # notes carry no numbers or number words: the model copies them into free text (pilot item 3)
+            out["note"] = ("no turn had a measurable luck swing" if kind == "luck" else
+                           "no decision passed the filter: in balanced positions the engine never rated another "
+                           "option clearly higher")
         return out
 
     def get_turn(self, turn):

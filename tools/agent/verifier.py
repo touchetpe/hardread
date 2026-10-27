@@ -16,20 +16,24 @@ An answer passes only if every rule holds (plus the structural rule 0):
      the answer cites), not just in the public log;
   6. verdict words and their negations appear only through a {verdict} slot bound to get_verdict;
   7. a probability below one half (prob fields; win chances below 50%) is never stated with certainty words;
-     its sentence carries a hedge ("chance", "likely", "might", "only", ...).
+     its sentence carries a hedge ("chance", "likely", "might", "only", ...);
+  8. never-say wording (research/28 §B, added after Ag-App's integration): no "cost" framing, no coach/trainer/
+     analyzer/sports framing, no summed-disagreement language ("in total", "altogether", "added up"...), no
+     "deterministic", "fine-tuned", "verified", "SOTA"/"strongest". Rule 2 also requires choices_pts to be described
+     as both players' choices ("choices, yours and your opponent's").
 """
 import re
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from lexicon import (CERTAIN_RE, DIGIT_RE, HEDGE_RE, LEXICON_VERSION, NUMBER_WORD_RE, NUMERIC_KINDS,  # noqa: E402
-                     ONE_COUNT_RE, PHRASE_RE, PLACEHOLDER_RE, TURN_ADJ_RE, UNIT_AFTER_PLACEHOLDER_RE, VERDICT_RE,
+from lexicon import (BOTH_PLAYERS_RE, CERTAIN_RE, DIGIT_RE, HEDGE_RE, LEXICON_VERSION,  # noqa: E402
+                     NEVER_SAY_RE, NUMBER_WORD_RE, NUMERIC_KINDS, ONE_COUNT_RE, PHRASE_RE, PLACEHOLDER_RE, TURN_ADJ_RE, UNIT_AFTER_PLACEHOLDER_RE, VERDICT_RE,
                      WEAK_CERTAIN_RE, YOUR_CHOICES_RE, nearest_slot, polarity_spans)
 from names import find_entities, to_id  # noqa: E402
 from tools import field_kind, pts_subkind  # noqa: E402
 
-VERIFIER_VERSION = "agent-verifier-v2 (" + LEXICON_VERSION + ")"
+VERIFIER_VERSION = "agent-verifier-v3 (" + LEXICON_VERSION + ")"
 MAX_SENTENCES = 4
 MAX_CHARS = 300
 
@@ -151,6 +155,9 @@ def verify(payload, session):
             if kind == "pts" and sub == "choices" and YOUR_CHOICES_RE.search(neutral):
                 _fail(fails, 2, i, "choices_pts is both players' choices together; never call it 'your choices'",
                       name)
+            elif kind == "pts" and sub == "choices" and not BOTH_PLAYERS_RE.search(neutral):
+                _fail(fails, 2, i, "choices_pts counts both players; say \"choices, yours and your opponent's\"",
+                      name)
 
         # ---- rule 3: no digits / number words, except digits inside cited species/move names
         free = _free_text(text)
@@ -194,6 +201,13 @@ def verify(payload, session):
             kind, sub, value, rid, tool, field = res[name]
             if kind == "verdict" and tool != "get_verdict":
                 _fail(fails, 6, i, f"{{{name}}} is a verdict not bound to get_verdict", name)
+
+        # ---- rule 8: never-say wording (research/28 §B)
+        for what, rx in NEVER_SAY_RE:
+            m = rx.search(free)
+            if m:
+                _fail(fails, 8, i, f"'{m.group(0)}' is not allowed ({what}); describe the engine's preference "
+                                   f"('the engine preferred X by {{g}}') and give luck and choices separately")
 
         # ---- rule 7: probabilities < 0.5 only with hedges
         low = [name for name in res if (res[name][0] == "prob" and res[name][2] is not None and res[name][2] < 0.5)

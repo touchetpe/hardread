@@ -25,7 +25,7 @@ import templates  # noqa: E402
 from tools import DATA_TOOLS, SUBMIT_SCHEMA, ToolSession, all_tool_schemas  # noqa: E402
 from verifier import VERIFIER_VERSION, failure_text, verify  # noqa: E402
 
-PROMPT_VERSION = "explain-prompt-v1"
+PROMPT_VERSION = "explain-prompt-v2"
 MAX_TOOL_CALLS = 4
 MAX_REQUESTS = 8
 
@@ -37,7 +37,7 @@ How to answer:
 - Say what each number is: "luck" for luck_pts and swing_pts, "win chance" for fields ending in _wp_pct, "chance" for realised_prob and prob, "preferred" for gap_pts, and "choices, yours and your opponent's" for choices_pts (it counts both players). Write turns as "turn {t}". Units are added when the slot is filled.
 - Positive luck_pts helped you; negative went against you. Use "helped you", "toward you" or "against you" only to match the sign. gap_pts says how much higher the engine rated its own option.
 - For a chance below one half, hedge: "had only a {p} chance".
-- Never call a decision a mistake, misplay, error or correct: the tools show the engine's preference, not a verdict.
+- Never call a decision a mistake, misplay, error or correct: the tools show the engine's preference, not a verdict. Describe a disagreement as "the engine preferred {best} by {g}". Never use the words "cost", "total" or "coach", and never add disagreements together.
 - Name a Pokémon or move only through a slot, or if it appears in a tool output you cite."""
 
 REPAIR_PROMPT = ("The verifier rejected this explanation:\n{failures}\n"

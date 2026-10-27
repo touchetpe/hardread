@@ -16,9 +16,11 @@ The claim: every number shown is copied from a cited engine result. The model ne
 | `parse_note.py` | Note → belief chips: single-turn `submit_belief` (species enum = the 12 in the game), dex normalisation, **grounding** (a value is kept only if the note names it, directly or by alias), keyword baseline, belief schema for `verdict.py`, and the data-only read check from `decisions[].opponent_policy_top`. |
 | `names.py` | Display names and the species/move lexicon from `tools/sft/dex.json`. |
 | `smoke_toolloop.py` | S1.6/E10 smoke. |
-| `eval_a1.py` | A1 runner (pilot and record). |
-| `test_verifier.py` | 41 unit tests: verifier (adversarial), renderer, tools, templates. |
-| `test_parse_note.py` | 13 unit tests: grounding, aliases, own/unknown species, no numbers, chips → belief, read check. |
+| `eval_a1.py` | A1 runner (pilot and record): rates with Wilson CIs, latency, failures by rule, audit population. |
+| `evallock.py` | `EVAL_LOCK` window: recorded runs own the shared :18131 server; the app checks the file and uses templates or queues meanwhile (Coord decision). |
+| `eval_a0.py` | A0 runner (no engine: replay text only, free text) + candidate numeric claims for the rubric step. |
+| `test_verifier.py` | 44 unit tests: verifier (adversarial), renderer, tools, templates. |
+| `test_parse_note.py` | 19 unit tests: grounding, attribution (own moves never credited to the opponent), aliases, own/unknown species, no numbers, chips → belief, read check. |
 | `../../EVAL_PROTOCOL_AGENT.md` | E11 protocol (committed before any eval record). |
 
 ## Run
@@ -54,6 +56,8 @@ System `python3` (3.9) is enough: nothing imports Foul Play.
 6. Verdict words (misplay, misread, defensible, within noise, mistake, error, wrong, correct, optimal…) and so their negations never appear in free text; a `verdict` field must come from `get_verdict`.
 7. With a probability below one half (or a win chance below 50%) in the sentence: no certainty words ("certain", "always", "definitely"…), and "was/had/were/will/would" only alongside a hedge ("chance", "likely", "only", "might"…).
 
+8. Never-say wording (research/28 §B): no "cost" framing, no coach/trainer/analyzer/sports framing, no summed-disagreement language ("in total", "altogether", "added up"), no "deterministic", "fine-tuned", "verified", "SOTA"/"strongest". And `choices_pts` must be described as both players' choices (rule 2).
+
 ## Known limits
 - `get_luck_events` reports the turn's realised-outcome probability and swing, not per-event probabilities (`review.py` does not store them).
 - No opponent set estimate in the tools (`review.py` JSON does not carry it); the read check uses only the engine's top-3 opponent policy, so an unlisted action is reported as "below the third option's probability".
@@ -63,3 +67,6 @@ System `python3` (3.9) is enough: nothing imports Foul Play.
 ## Changelog
 - v1 (2026-10-27 ≈05:00 UTC): tools, renderer, verifier (agent-verifier-v1, agent-lex-v1), explain loop (explain-prompt-v1), templates, parser (parse-note-v1), smoke, A1 runner.
 - v2 (2026-10-27 ≈05:20 UTC, after the S1.6 smoke, before any eval record): **renderer sign fix** (a polarity phrase drops the sign only of the slot it refers to, by the same nearest-slot association as rule 4; smoke run 1 had shown `choices_pts` −61 as "61 points"); no unit doubling ("{x} luck points"); rule 3 treats "percent" right after a placeholder as a unit; rule 2 luck triggers are luck words and chance-event words (crit, miss, flinch…), not the neutral verb "swung" (smoke run 4's correct "choices swung {c} against you" had failed). agent-verifier-v2, agent-lex-v2, agent-render-v2. The 5 smoke payloads re-verify 5/5 under v2.
+- parse-note-v2 (2026-10-27, after the S2.4 smoke): the `submit_belief` schema states that for an expected switch `species` is the Pokémon expected to come **in** (in the smoke Glimmer put the one leaving in 2 of the 2 switch notes; the read check reads it as the incoming one).
+- v3 (2026-10-27 ≈06:10 UTC, after Ag-App's integration, before any record): **verifier rule 8** (never-say list; Ag-App's showcase 4 had passed "choices cost 9 points") and rule 2 requires "both players" wording for `choices_pts`; "cost" removed from the polarity lexicon (agent-verifier-v3, agent-lex-v3); prompt explain-prompt-v2 states the wording rules; tool notes carry no number words (pilot item 3 had copied "five" from a note). **Parser attribution** (parse-note-v3; Ag-App: "…so Crunch was safe" became "Ceruledge has Crunch"): a move or item is kept only if its own clause refers to that opponent with a cue word and it is not the player's own ("I used", "my", or a move on the player's side of the review unless the note binds it tightly, "it had X"); applies to the keyword baseline and to Glimmer's chips. Pilot under v1/v2: raw 3/5, after repair 5/5; re-verified under v3: raw 2/5 (superseded by the v3 pilot).
+

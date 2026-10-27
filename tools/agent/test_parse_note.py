@@ -73,6 +73,47 @@ class TestGrounding(unittest.TestCase):
         self.assertEqual(b, {"sets": {"Dragapult": {"moves_has": ["dracometeor"]}}, "confidence": "sure"})
 
 
+class TestAttribution(unittest.TestCase):
+    """Ag-App regression (2026-10-27): the player's own move was credited to the opponent."""
+    OPP2 = ["Ceruledge", "Dragapult", "Clefable", "Rillaboom", "Manaphy", "Iron Valiant"]
+    OWN2 = ["Kingambit", "Great Tusk", "Gholdengo", "Dragonite", "Ogerpon-Wellspring", "Zamazenta"]
+
+    def test_keyword_own_move_after_so(self):
+        r = P.keyword_parse("I thought Ceruledge had no Fire move so Crunch was safe", self.OWN2, self.OPP2)
+        self.assertFalse(any("crunch" in (x.get("moves_has", []) + x.get("moves_not", [])) for x in r["sets"]))
+
+    def test_glimmer_own_move_dropped(self):
+        note = "I thought Ceruledge had no Fire move so Crunch was safe"
+        c, d = P.to_chips({"sets": [{"species": "Ceruledge", "moves_has": ["Crunch"]}]}, note, self.OWN2, self.OPP2,
+                          "glimmer")
+        self.assertFalse([x for x in c if x["field"] == "moves_has"])
+        self.assertTrue(d and d[0]["reason"].startswith("not attributed to Ceruledge"))
+
+    def test_i_used_and_my(self):
+        for note in ["I used Knock Off because Dragapult was Choice Specs", "my Knock Off was fine, Dragapult was Specs"]:
+            c, d = P.to_chips({"sets": [{"species": "Dragapult", "moves_has": ["Knock Off"], "item": "Choice Specs"}]},
+                              note, self.OWN2, self.OPP2, "glimmer")
+            self.assertEqual([x["field"] for x in c], ["item"], note)
+
+    def test_move_on_players_side_needs_the_name(self):
+        note = "Dragapult was Specs, and Knock Off was the play"
+        c, _ = P.to_chips({"sets": [{"species": "Dragapult", "moves_has": ["Knock Off"]}]}, note, self.OWN2,
+                          self.OPP2, "glimmer", own_moves={"knockoff"})
+        self.assertFalse([x for x in c if x["field"] == "moves_has"])
+
+    def test_pronoun_attribution_kept(self):
+        note = "maybe Clefable was Leftovers, I didn't think it had Moonblast"
+        c, _ = P.to_chips({"sets": [{"species": "Clefable", "item": "Leftovers", "moves_not": ["Moonblast"]}]},
+                          note, self.OWN2, self.OPP2, "glimmer")
+        self.assertEqual(sorted(x["field"] for x in c), ["item", "moves_not"])
+
+    def test_pronoun_refers_to_other_species(self):
+        note = "Dragapult was Specs and Clefable switched in, it had Moonblast"
+        c, d = P.to_chips({"sets": [{"species": "Dragapult", "moves_has": ["Moonblast"]}]}, note, self.OWN2,
+                          self.OPP2, "glimmer")
+        self.assertFalse([x for x in c if x["field"] == "moves_has"])
+
+
 class TestKeywordAndReadCheck(unittest.TestCase):
     def test_keyword_negation(self):
         r = P.keyword_parse("Dragapult was Choice Specs for sure, no way it had Will-O-Wisp", OWN, OPP)

@@ -21,6 +21,8 @@
 
 **Hardware.** The owner's Mac (local llama-server on port 18131) or, only if the owner approves OD-9, the Modal deployment with the same GGUF, llama.cpp commit and flags. No external API is called (no Meta, Modal or Baseten API without OD-6/OD-9/OD-14). Latency is reported with the host and whether other jobs shared the machine.
 
+**Exclusive server window (added 2026-10-27 ≈05:50 UTC, before any record; Coord decision).** The local llama-server is shared with the app (Ag-App). Every recorded run (A1, A0, parser eval) holds `scratch_ds/agent/EVAL_LOCK` (one line: `<UTC start> <expected end> Ag-LLM <what>`) for its whole duration; the app does not call the server while the file exists. The runners create and delete it themselves (`tools/agent/evallock.py`) and record the line in the output. Pilot latencies measured without the lock are labelled "shared server, upper bound".
+
 ## 2. Arms
 
 | Arm | System | Runs by default |
