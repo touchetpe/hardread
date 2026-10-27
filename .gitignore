@@ -13,3 +13,6 @@ data/samples/
 data/owner/
 # private Azure settings (HR_AZ_*), sourced by azure/*.sh; never commit
 handoff/env.sh
+
+# Private operations repository
+handoff/
