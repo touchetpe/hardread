@@ -140,6 +140,16 @@ def test_moves_has_replaces_an_unrevealed_move():
         assert "encore" in names and revealed <= set(names) and len(names) == max(n_before, len(names)) <= 4
 
 
+def test_moves_has_keeps_every_stated_move():
+    d, _ = _dec("lab-n3-c000_g0002", 11)
+    base, ws = _worlds(d, seed=3)
+    want = ["shadowball", "nastyplot", "recover", "focusblast"]
+    for b, _ in ws:
+        VD.merge_world(b, {"sets": {"Gholdengo": {"moves_has": want}}}, base, d.battle.mode)
+        g = VD.find_pkmn(b.opponent, "gholdengo")
+        assert sorted(m.name for m in g.moves) == sorted(want), [m.name for m in g.moves]
+
+
 def test_moves_not_removes_and_refills():
     d, _ = _dec("lab-n3-c000_g0002", 11)
     base, ws = _worlds(d, seed=9)
@@ -219,7 +229,8 @@ def test_merge_is_noop_for_empty_belief_and_relocks():
 def main():
     pure = [test_rule_table]
     fp = [test_partial_belief_keeps_sampled_fields, test_revealed_move_never_removed_and_contradiction,
-          test_moves_has_replaces_an_unrevealed_move, test_moves_not_removes_and_refills,
+          test_moves_has_replaces_an_unrevealed_move, test_moves_has_keeps_every_stated_move,
+          test_moves_not_removes_and_refills,
           test_item_contradiction_and_turn, test_tera_edge_cases, test_knocked_off_or_consumed_item_not_set,
           test_revealed_later_reference, test_merge_is_noop_for_empty_belief_and_relocks]
     have_fp = _fp() and (GAMES / "lab-n3-c000_g0002.public.json").exists()

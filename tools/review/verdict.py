@@ -223,12 +223,14 @@ def merge_world(world, belief, base_battle, mode):
         revealed = set(k["moves"])
         use = _usage(p, mode)
         excluded = {nz(m) for m in f.get("moves_not") or []}
+        stated = {nz(m) for m in f.get("moves_has") or []}
         for m in f.get("moves_has") or []:
             m = nz(m)
             if p.get_move(m) is not None:
                 continue
             if len(p.moves) >= 4:
-                cand = [mv for mv in p.moves if mv.name not in revealed]
+                # never drop a revealed move or another stated move
+                cand = [mv for mv in p.moves if mv.name not in revealed and mv.name not in stated]
                 if not cand:
                     changes.append({"species": sp, "moves_has": m, "skipped": "4 revealed moves"})
                     continue
