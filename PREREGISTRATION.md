@@ -130,3 +130,10 @@ No G2 game (dev B, `hr_val`), no pre-registered A/A game and no sealed game exis
 3. **Candidates.** The G2 candidates are fixed by the rule logged in RESULTS.md at 2026-10-27 04:37:22 UTC (commit `9fc5771`), before the screen readout: `value`, plus `value` + `double-half` only if double-half qualifies. Double-half ended at 48.09 and did not qualify, so the only candidate is `value`. Belief levers are not candidates: their model is pre-trained on human replays without a stated data licence.
 
 Nothing else changes: H1, n, the configuration, the teams, the primary metric, the test, the A3 §5 layout and rerun rule, and the confirmatory order.
+
+
+### A3b (2026-10-27, owner-approved before any sealed game): freeze timing only
+**Approval.** The owner approved OD-25 in chat: “Approve conditional Wednesday Oct 28 freeze.” Approval was recorded on 2026-10-27 at 16:42:02 UTC (17:42 Paris), before any sealed game, sealed-content read, or sealed job. Both A/A harness checks have passed under A3. This amendment is prospective for sealed data; it does not redesign any completed experiment.
+
+1. **Timing.** If the reviewed **pre-freeze S2.10 kit** is accepted by **Wed 2026-10-28 10:00 Paris**, the freeze of §1 and §8 moves from Thu 2026-10-29 12:00 Paris to **Wed 2026-10-28 12:00 Paris**. The kit check follows C11's reviewed sequence: the actual sealed tarball SHA remains pending until the permitted post-A4 build; no sealed team bytes are read to satisfy the pre-freeze condition. If the kit condition is unmet, A3a remains in force: Thu 2026-10-29 12:00 Paris if both A/As have passed by then, otherwise Sun 2026-11-01 12:00 Paris.
+2. **No other change.** H1, candidate, configuration, teams, sample size, pairing, primary metric, statistical test, no-interim-look rule, A/A pass rules, A3 §5 layout and rerun rule, confirmatory order, and all sealed-access and submission gates remain unchanged.
