@@ -832,3 +832,25 @@ Main dev loss (`pol + 0.5*vsearch`) was bfef 1.840206051959429, lr 1.82894520373
 V1 descriptive reference: main roster test 54.5% / KL .411 / Brier .176; separate-pool 55.3% / .415 / .171; control roster top-1 53.3%. V1 used 2,699 label games, about 37,600 roster-test decisions and a 440-game separate pool; v2 uses larger cohorts shown above. The gap is descriptive, not paired or a significance claim. The selected v2 main exceeds its same-run control by only about 0.19 top-1 points; no significant main-control advantage is established. These percentages measure offline engine-choice agreement, not battle wins.
 
 Fresh Sol accepted comparability, selection chronology, checkpoint bytes and complete reporting. Filtered report SHA-256 `c55132620a29e90cddb1eab7bd45e3c28db781e08dcf8cf915d1dc318f473760`; checkpoint-lock SHA `5d7de931026c26147eb4da705ee4c5213bd5ef5293591432cd1796572dfee01c`. Raw artifacts and reviews remain private under `scratch_ds/codex/training-roadmap/r2-input-audit/`. No offline CI/p-value was computed from these aggregate reports. The selected-model 200-game arena, legality and latency measurement remain pending; the old 32/40 heuristic arena is a small earlier pilot, not a v2 result. No new arena or T3 job was submitted by this readout.
+
+## 2026-10-27 20:53 UTC — C8 Draft-B calibration: overall FAIL; current calibrator retained
+
+Prospective v4 source and merge/CI rules committed as `bfb8d47b754470a2be54fbe94188e5b9995e0a4d` at 20:35:48 UTC, before preparation at 20:40:57 and fitting at 20:41:58. Independent Sol accepted provenance and the negative readout. Execution record SHA-256 `65057ab71b7aacda90bcbd892937530ec28cd2524600de1cd0b5c71d281a1f29`; private review `scratch_ds/codex/c8/sol-real-readout-review.private.md`. No Azure job was used for this local readout.
+
+S1.22 cohorts have both-side success 198/200, 195/200, 200/200, 200/200, **182/182**, and 513/513 in ascending broad bands followed by top50. The strict 190-game high-band quota is unmet; all 182 eligible games qualify only for the previously registered ≥100 fallback. There are 1,495 cohort incidences but 1,474 unique games, with 21 overlapping games. Unique pooled both-side success is 1,467/1,474 = 99.53%, Wilson 95% [99.023%, 99.770%]. Retain all errors and wider high-band uncertainty.
+
+A2 excludes **412 whole games** when either roster matches: 39 hr_val, 380 reserved, seven overlapping. Remaining: 1,062 games / 2,124 sides, including eight error sides. Fit/test halves are disjoint by registered game-hash parity: 491 fit games / 978 successful sides and 570 test games / 1,138 successful sides; one remaining game has no successful side. No test game contributes to fitting. Pooled test has 31,865 unique decision rows; cohort membership overlaps without duplicating pooled rows.
+
+| Test scope | Games | Successful sides | Decision rows | ECE | Brier | Registered ECE verdict |
+|---|---:|---:|---:|---:|---:|---|
+| Pooled unique | 570 | 1,138 | 31,865 | 0.0200087 | 0.1912 | PASS ≤0.04 |
+| <1300 | 95 | 190 | 5,164 | 0.0629091 | 0.2163 | FAIL >0.06 |
+| 1300–1499 | 97 | 192 | 4,653 | 0.0238984 | 0.1896 | PASS |
+| 1500–1699 | 73 | 146 | 4,294 | 0.0468981 | 0.1790 | PASS |
+| 1700–1899 | 76 | 152 | 4,132 | 0.0215000 | 0.1995 | PASS |
+| 1900+ | 66 | 132 | 3,922 | 0.0729196 | 0.1709 | FAIL >0.06 |
+| Top50 | 168 | 336 | 9,942 | 0.0323707 | 0.1916 | PASS |
+
+Candidate coefficients a=0.6244, b=-0.0084. Gate decisions use unrounded values. The prospective 1,000-replicate game bootstrap (seed 7) gives non-gating pooled ECE 95% CI [0.00983, 0.04322] and Brier [0.18102, 0.20247]; no p-value is part of this threshold gate. Preparation exited 0; calibration exited 1 because two bands failed. An initial incomplete preparation argv exited 2 without output and is preserved in the execution record.
+
+E6 separately passes **11/11 gated rows** on the full unfiltered merge (2,940 usable sides, eight error rows skipped), with top-level PASS. Its separate ungated run520 reference has one diagnostic failure. Bridge PASS does not override the failed calibration gate. **S2.2 FAIL: no candidate write, force, app switch or stronger population-calibration claim.** Keep `absolute_human` and the registered top-ladder wording. No threshold change or reroll is authorized by this result.
