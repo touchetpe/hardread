@@ -24,6 +24,7 @@ import argparse
 import hashlib
 import json
 import math
+import random
 import sys
 import time
 from collections import defaultdict
@@ -64,23 +65,48 @@ def fit_abs(xs, ys, iters=50):
     return a, b
 
 
-def metrics(p, y, bins=10):
+def metrics_raw(p, y, bins=10):
+    if len(p) != len(y):
+        raise ValueError('probability and outcome counts differ')
     n = len(y)
     if not n:
-        return {"n": 0}
-    brier = sum((a - b) ** 2 for a, b in zip(p, y)) / n
-    ll = -sum(b * math.log(min(1 - 1e-6, max(1e-6, a))) + (1 - b) * math.log(min(1 - 1e-6, max(1e-6, 1 - a)))
-              for a, b in zip(p, y)) / n
-    tab = defaultdict(lambda: [0, 0.0, 0.0])
-    for a, b in zip(p, y):
-        k = min(bins - 1, int(a * bins))
-        tab[k][0] += 1
-        tab[k][1] += a
-        tab[k][2] += b
-    ece = sum(abs(t[1] - t[2]) for t in tab.values()) / n
-    return {"n": n, "brier": round(brier, 4), "log_loss": round(ll, 4), "ece": round(ece, 4),
-            "reliability": [(f"{k / bins:.1f}", t[0], round(t[1] / t[0], 3), round(t[2] / t[0], 3))
-                            for k, t in sorted(tab.items())]}
+        return {'n': 0, 'ece': None, 'brier': None, 'log_loss': None, 'reliability': []}
+    if any(not isinstance(x, (float, int)) or not math.isfinite(x) or x < 0 or x > 1 for x in p):
+        raise ValueError('invalid predicted probability')
+    if any(type(x) is not int or x not in (0, 1) for x in y):
+        raise ValueError('invalid binary outcome')
+    brier = sum((a-b)**2 for a,b in zip(p,y))/n
+    ll = -sum(b*math.log(min(1-1e-6,max(1e-6,a))) + (1-b)*math.log(min(1-1e-6,max(1e-6,1-a)))
+              for a,b in zip(p,y))/n
+    tab = defaultdict(lambda:[0,0.0,0.0])
+    for a,b in zip(p,y):
+        k=min(bins-1,int(a*bins)); tab[k][0]+=1; tab[k][1]+=a; tab[k][2]+=b
+    return {'n':n, 'brier':brier, 'log_loss':ll, 'ece':sum(abs(t[1]-t[2]) for t in tab.values())/n,
+            'reliability':[(f'{k/bins:.1f}',t[0],round(t[1]/t[0],3),round(t[2]/t[0],3))
+                           for k,t in sorted(tab.items())]}
+
+
+def metrics(p, y, bins=10):
+    out=metrics_raw(p,y,bins)
+    return {k:(round(v,4) if k in ('brier','log_loss','ece') and v is not None else v) for k,v in out.items()}
+
+
+def bootstrap_games(game_rows, cal, *, seed=7, replicates=1000):
+    """Non-gating percentile intervals; resample original games, keeping both sides together."""
+    games=sorted(game_rows)
+    if not games: return {'games':0,'replicates':replicates,'seed':seed,'ece_ci95':None,'brier_ci95':None}
+    rng=random.Random(seed); eces=[]; briers=[]
+    for _ in range(replicates):
+        selected=[rng.choice(games) for _ in games]
+        rows=[row for uid in selected for row in game_rows[uid]]
+        m=metrics_raw([cal(x) for x,_ in rows],[y for _,y in rows])
+        if m['n']:
+            eces.append(m['ece']); briers.append(m['brier'])
+    def interval(values):
+        if len(values)!=replicates: return None
+        values.sort(); return [values[int(.025*(replicates-1))], values[int(.975*(replicates-1))]]
+    return {'games':len(games),'replicates':replicates,'seed':seed,'ece_ci95':interval(eces),
+            'brier_ci95':interval(briers),'non_gating':True}
 
 
 def band_of(r):
@@ -119,78 +145,109 @@ def quantiles(xs, qs):
     return [round(s[min(len(s) - 1, int(q * (len(s) - 1) + 0.5))], 4) for q in qs] if s else []
 
 
+COHORTS = ('lt1300','1300-1499','1500-1699','1700-1899','1900plus','top50')
+
+
+def load_membership(rows, entries):
+    records={}
+    for row in rows:
+        key=(row.get('uid'),row.get('side'))
+        if not isinstance(key[0],str) or not key[0] or key[1] not in ('p1','p2') or key in records:
+            raise ValueError('clean input identity is missing or duplicated')
+        if 'error' not in row and (type(row.get('outcome')) is not int or row['outcome'] not in (0,1)):
+            raise ValueError('invalid outcome in clean record')
+        records[key]=row
+    memberships={}
+    for entry in entries:
+        key=(entry.get('uid'),entry.get('side')); labels=entry.get('cohorts')
+        if (key in memberships or not isinstance(labels,list) or not labels or len(labels)!=len(set(labels))
+                or any(label not in COHORTS for label in labels)):
+            raise ValueError('membership labels are missing, duplicated or unknown')
+        memberships[key]=tuple(sorted(labels))
+    if set(records)!=set(memberships): raise ValueError('membership/input keys differ')
+    for uid in {k[0] for k in records}:
+        if (uid,'p1') not in records or (uid,'p2') not in records or memberships[(uid,'p1')]!=memberships[(uid,'p2')]:
+            raise ValueError('missing side or inconsistent game membership')
+        a,b=records[(uid,'p1')],records[(uid,'p2')]
+        if 'error' not in a and 'error' not in b and a['outcome']+b['outcome']!=1:
+            raise ValueError('inconsistent game outcomes')
+    return records,memberships
+
+
+def analyze_clean(rows, entries, *, name='absolute_human_b', references=None):
+    records,memberships=load_membership(rows,entries)
+    successful=[r for r in records.values() if 'error' not in r]
+    fit=[v for r in successful if half(r['uid'])==0 for v in dec_rows(r)]
+    if not fit: raise ValueError('no fit rows')
+    ca,cb=fit_abs([x for x,_ in fit],[y for _,y in fit]); cal=B.Cal(ca,cb,name)
+    references=references if references is not None else {k:B.load_cal(k) for k in ('absolute_human','absolute')}
+    pools={'all':successful,**{c:[r for r in successful if c in memberships[(r['uid'],r['side'])]] for c in COHORTS}}
+    reports={}; raw_ece={}; luck={}
+    for group,recs in pools.items():
+        fit_recs=[r for r in recs if half(r['uid'])==0]; test_recs=[r for r in recs if half(r['uid'])==1]
+        test=[v for r in test_recs for v in dec_rows(r)]
+        raw=metrics_raw([cal(x) for x,_ in test],[y for _,y in test]); raw_ece[group]=raw['ece']
+        report={'new':metrics([cal(x) for x,_ in test],[y for _,y in test]),
+                'fit':{'games':len({r['uid'] for r in fit_recs}),'sides':len(fit_recs),
+                       'rows':sum(len(dec_rows(r)) for r in fit_recs)},
+                'test':{'games':len({r['uid'] for r in test_recs}),'sides':len(test_recs),'rows':len(test)},
+                'errors':sum('error' in r for key,r in records.items() if group=='all' or group in memberships[key])}
+        for key,ref in references.items():
+            m=metrics([ref(x) for x,_ in test],[y for _,y in test]); m.pop('reliability',None); report[key]=m
+        games=defaultdict(list)
+        for r in test_recs:
+            values=dec_rows(r)
+            if values: games[r['uid']].extend(values)
+        report['uncertainty']=bootstrap_games(dict(games),cal)
+        reports[group]=report
+        ls=[]
+        for r in recs:
+            bridge=B.from_record(r,cal,with_split=False)
+            if bridge is not None: ls.append(bridge['L'])
+        luck[group]=ls
+    pooled_ok=raw_ece['all'] is not None and raw_ece['all']<=.04
+    band_ok=all(raw_ece[c] is not None and raw_ece[c]<=.06 for c in COHORTS)
+    report={'calibrator':{'a':round(ca,4),'b':round(cb,4)},'games':len({r['uid'] for r in successful}),
+            'game_sides':len(successful),'test_pooled':reports['all'],
+            'test_by_band':{c:reports[c] for c in COHORTS},
+            'acceptance':{'pooled_ece_unrounded':raw_ece['all'],'band_ece_unrounded':{c:raw_ece[c] for c in COHORTS},
+                          'pooled_ok':pooled_ok,'bands_ok':band_ok,
+                          'rule':'unrounded pooled ECE <= 0.04 and each of six cohort ECE <= 0.06'},
+            'pass':pooled_ok and band_ok}
+    qs=[i/100 for i in range(101)]
+    lref={'calibrator':name,'a':round(ca,4),'b':round(cb,4),
+          'unit':'total luck L per game-side (WP points / 100)',
+          'quantiles_0_to_100':{k:quantiles(v,qs) for k,v in luck.items()},
+          'n':{k:len(v) for k,v in luck.items()},
+          'usage':'percentile of a review bridge.L = share below it (interpolate the list)'}
+    return report,lref
+
+
 def main():
-    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("inputs", nargs="+")
-    ap.add_argument("--name", default="absolute_human_b")
-    ap.add_argument("--out-dir", default="scratch_ds/review/human_b")
-    ap.add_argument("--write-calibrator", action="store_true")
-    ap.add_argument("--force", action="store_true", help="write the calibrator even if the acceptance fails")
-    a = ap.parse_args()
-    recs, dup, err = load(a.inputs)
-    by_band = defaultdict(list)
-    for r in recs:
-        by_band[band_of(r)].append(r)
-    fit = [row for r in recs if half(r["uid"]) == 0 for row in dec_rows(r)]
-    ca, cb = fit_abs([x for x, _ in fit], [y for _, y in fit])
-    cal = B.Cal(ca, cb, a.name)
-    ref = {k: B.load_cal(k) for k in ("absolute_human", "absolute")}
-    test_rows = {band: [row for r in rs if half(r["uid"]) == 1 for row in dec_rows(r)] for band, rs in by_band.items()}
-    pooled = [row for rows in test_rows.values() for row in rows]
-
-    def rep(rows):
-        out = {"new": metrics([cal(x) for x, _ in rows], [y for _, y in rows])}
-        for k, c in ref.items():
-            m = metrics([c(x) for x, _ in rows], [y for _, y in rows])
-            m.pop("reliability", None)
-            out[k] = m
-        return out
-
-    report = {"tool": "tools/review/calib_b.py", "created_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-              "inputs": a.inputs, "name": a.name, "calibrator": {"a": round(ca, 4), "b": round(cb, 4)},
-              "game_sides": len(recs), "duplicates_dropped": dup, "error_sides": err,
-              "games": len({r["uid"] for r in recs}),
-              "fit": {"games": len({r["uid"] for r in recs if half(r["uid"]) == 0}), "rows": len(fit)},
-              "test_pooled": rep(pooled),
-              "test_by_band": {b: dict(rep(rows), games=len({r["uid"] for r in by_band[b] if half(r["uid"]) == 1}))
-                               for b, rows in sorted(test_rows.items())}}
-    pooled_ece = report["test_pooled"]["new"]["ece"]
-    band_ece = {b: v["new"].get("ece") for b, v in report["test_by_band"].items()}
-    report["acceptance"] = {"pooled_ece": pooled_ece, "pooled_ok": pooled_ece is not None and pooled_ece <= 0.04,
-                            "band_ece": band_ece,
-                            "bands_ok": all(e is not None and e <= 0.06 for e in band_ece.values()),
-                            "rule": "pooled test ECE <= 0.04 and every band <= 0.06"}
-    report["pass"] = report["acceptance"]["pooled_ok"] and report["acceptance"]["bands_ok"]
-    od = Path(a.out_dir)
-    od.mkdir(parents=True, exist_ok=True)
-    (od / "calib_by_band.json").write_text(json.dumps(report, indent=1) + "\n")
-    # luck reference for the card: total luck per game-side under the new calibrator
-    Ls = defaultdict(list)
-    for r in recs:
-        b = B.from_record(r, cal, with_split=False)
-        if b is not None:
-            Ls[band_of(r)].append(b["L"])
-            Ls["all"].append(b["L"])
-    qs = [i / 100 for i in range(101)]
-    lref = {"calibrator": a.name, "a": round(ca, 4), "b": round(cb, 4), "unit": "total luck L per game-side (WP points / 100)",
-            "quantiles_0_to_100": {k: quantiles(v, qs) for k, v in sorted(Ls.items())},
-            "n": {k: len(v) for k, v in sorted(Ls.items())},
-            "usage": "percentile of a review's bridge.L = share of reference sides with L below it (interpolate the list)"}
-    (od / "luck_reference_b.json").write_text(json.dumps(lref) + "\n")
-    if a.write_calibrator and (report["pass"] or a.force):
-        cp = HERE / "calibrator.json"
-        d = json.loads(cp.read_text())
-        d[a.name] = {"a": round(ca, 4), "b": round(cb, 4), "kind": "absolute: P(win) = sigmoid(a * 0.0125 * A + b)",
-                     "fit_on": f"Draft B (Smogon sets) human_eval runs {', '.join(Path(p).name for p in a.inputs)}: "
-                               f"{report['fit']['games']} games (sha256(uid) % 2 == 0); test on the other "
-                               f"{len({r['uid'] for r in recs if half(r['uid']) == 1})}: pooled ECE {pooled_ece}, "
-                               f"by band {band_ece}",
-                     "pass": report["pass"]}
-        cp.write_text(json.dumps(d, indent=1) + "\n")
-    print(json.dumps({k: report[k] for k in ("calibrator", "game_sides", "games", "duplicates_dropped", "acceptance",
-                                             "pass")}, indent=1))
-    sys.exit(0 if report["pass"] else 1)
+    import c8_prepare as P
+    ap=argparse.ArgumentParser(description=__doc__); ap.add_argument('input'); ap.add_argument('--input-sha256',required=True)
+    ap.add_argument('--membership',required=True); ap.add_argument('--membership-sha256',required=True)
+    ap.add_argument('--filter-report',required=True); ap.add_argument('--filter-report-sha256',required=True)
+    ap.add_argument('--name',default='absolute_human_b'); ap.add_argument('--out-dir',required=True)
+    a=ap.parse_args(); raw=P.read_checked(a.input,a.input_sha256); mr=P.read_checked(a.membership,a.membership_sha256)
+    fr=json.loads(P.read_checked(a.filter_report,a.filter_report_sha256))
+    if fr.get('clean_sha256')!=a.input_sha256 or fr.get('clean_membership_sha256')!=a.membership_sha256:
+        raise ValueError('filter report does not bind clean inputs')
+    report,lref=analyze_clean(P.jsonl(raw),json.loads(mr),name=a.name)
+    report.update({'input_sha256':a.input_sha256,'membership_sha256':a.membership_sha256,
+                   'filter_report_sha256':a.filter_report_sha256})
+    lref.update({'input_sha256':a.input_sha256,'membership_sha256':a.membership_sha256,
+                 'filter_report_sha256':a.filter_report_sha256})
+    od=Path(a.out_dir).resolve()
+    try: od.relative_to((P.ROOT/'scratch_ds/codex/c8').resolve())
+    except ValueError as exc: raise ValueError('output must remain under private C8 directory') from exc
+    od.mkdir(parents=True,mode=0o700,exist_ok=False)
+    for filename,content in (('calib_by_band.json',report),('luck_reference_b.json',lref)):
+        import os
+        fd=os.open(od/filename,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
+        with os.fdopen(fd,'wb') as f: f.write(P.jsonbytes(content)); f.flush(); os.fsync(f.fileno())
+    print(json.dumps({'pass':report['pass'],'input_sha256':a.input_sha256}))
+    sys.exit(0 if report['pass'] else 1)
 
 
-if __name__ == "__main__":
-    main()
+if __name__ == '__main__': main()
