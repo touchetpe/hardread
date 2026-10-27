@@ -246,9 +246,13 @@ class HardReadSFTPlugin(BasePlugin):
     def add_callbacks_post_trainer(self, cfg: Any, trainer: Any):
         from transformers import TrainerCallback
 
+        callbacks = []
+        deadline = float(os.environ.get("HRSFT_TRAIN_DEADLINE", "0") or 0)
         log_path = os.environ.get("HRSFT_STEPS_LOG")
+        if deadline:
+            callbacks.append(make_deadline_callback(TrainerCallback, deadline, log_path))
         if not log_path or int(os.environ.get("RANK", "0")) != 0:
-            return []
+            return callbacks
 
         class StepTimer(TrainerCallback):
             def __init__(self):
@@ -280,4 +284,40 @@ class HardReadSFTPlugin(BasePlugin):
                 with open(log_path, "a") as f:
                     f.write(json.dumps(rec) + "\n")
 
-        return [StepTimer()]
+        return callbacks + [StepTimer()]
+
+
+def deadline_reached(deadline: float, now: float | None = None) -> bool:
+    """Local check, all-reduced (MAX) across DDP ranks so every rank stops at the same step."""
+    stop = (time.time() if now is None else now) >= deadline
+    try:
+        import torch
+        import torch.distributed as dist
+
+        if dist.is_available() and dist.is_initialized() and dist.get_world_size() > 1:
+            dev = torch.device("cuda", torch.cuda.current_device()) if torch.cuda.is_available() else torch.device("cpu")
+            flag = torch.tensor([1 if stop else 0], device=dev)
+            dist.all_reduce(flag, op=dist.ReduceOp.MAX)
+            stop = bool(flag.item())
+    except ImportError:
+        pass
+    return stop
+
+
+def make_deadline_callback(base_cls, deadline: float, log_path: str | None):
+    class DeadlineStop(base_cls):
+        """Stop gracefully at the time budget: save a checkpoint, end training (axolotl then saves the adapter)."""
+
+        def on_step_end(self, args, state, control, **kw):
+            if deadline_reached(deadline):
+                control.should_save = True
+                control.should_training_stop = True
+                if log_path and int(os.environ.get("RANK", "0")) == 0:
+                    rec = {"step": state.global_step, "max_steps": state.max_steps, "unix": int(time.time()),
+                           "deadline_unix": int(deadline)}
+                    Path(log_path).with_name("deadline_stop.json").write_text(json.dumps(rec))
+                    print(f"[hrsft] time budget reached at step {state.global_step}/{state.max_steps}: "
+                          "saving and stopping", flush=True)
+            return control
+
+    return DeadlineStop()

@@ -5,6 +5,9 @@
 #             inside the code snapshot (smoke ~2 MB; 50k examples ~40 MB).
 #   NODES=N (env, default 1): multi-node DDP over N single-H100 nodes (see README; not yet run).
 #   DRY_RUN=1: stage the attempt dir and job.yml, do not submit.
+#   CKPT_URI=azureml://.../checkpoints/checkpoint-N/ with CKPT_ARG=--adapter (use with --eval-only) or
+#   CKPT_ARG=--resume-from: mounts that checkpoint read-only as inputs.ckpt and passes it to run_sft.py.
+#   run_sft.py always receives --job-timeout <timeout_s> so its training budget fits inside the job.
 set -euo pipefail
 NAME="$1"; DATA="$2"; TIMEOUT="$3"; DESC="$4"; shift 4
 NODES="${NODES:-1}"
@@ -23,6 +26,12 @@ cp "$HR/tools/sft"/{serialize.py,glimmer_chat.py,build_sft.py,dex.json} "$A/code
 cp "$DATA"/{train.jsonl.gz,val.jsonl.gz,eval.jsonl.gz,manifest.json} "$A/code/data/"
 (cd "$HR" && git rev-parse HEAD > "$A/code/HARDREAD_COMMIT" 2>/dev/null || true)
 (cd "$A/code" && find . -type f | sort | xargs shasum -a 256 > "$A/code-manifest.sha256")
+CKPT_CMD=""; CKPT_INPUT=""
+if [ -n "${CKPT_URI:-}" ]; then
+  [[ "${CKPT_ARG:-}" == "--adapter" || "${CKPT_ARG:-}" == "--resume-from" ]] || { echo "CKPT_ARG must be --adapter or --resume-from"; exit 2; }
+  CKPT_CMD="$CKPT_ARG \${{inputs.ckpt}}"
+  CKPT_INPUT=$'  ckpt:\n    type: uri_folder\n    path: '"$CKPT_URI"$'\n    mode: ro_mount'
+fi
 if [ "$NODES" -gt 1 ]; then
   # AML launches one process per node and sets RANK/WORLD_SIZE/MASTER_ADDR/MASTER_PORT;
   # HF Trainer/Accelerate initialise DDP from those env vars (axolotl --launcher python).
@@ -37,7 +46,7 @@ display_name: $NAME
 experiment_name: hardread-sft
 description: "$DESC"
 code: "$A/code"
-command: python azure/sft/run_sft.py --snapshot \${{inputs.model_snapshot}} --data data --out \${{outputs.artifacts}} $*
+command: python azure/sft/run_sft.py --snapshot \${{inputs.model_snapshot}} --data data --out \${{outputs.artifacts}} --job-timeout $TIMEOUT $CKPT_CMD $*
 compute: azureml:${HR_AZ_CLUSTER}
 environment: azureml:$ENV_ID
 environment_variables:
@@ -49,6 +58,7 @@ inputs:
     type: uri_folder
     path: $SNAP
     mode: ro_mount
+$CKPT_INPUT
 outputs:
   artifacts:
     type: uri_folder

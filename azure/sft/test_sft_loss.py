@@ -221,5 +221,25 @@ class ChoiceLossTest(unittest.TestCase):
         self.assertLess(float(soft_ce(good)), float(soft_ce(bad)))
 
 
+class DeadlineStopTest(unittest.TestCase):
+    def test_deadline_reached_local(self):
+        self.assertFalse(P.deadline_reached(100.0, now=50.0))
+        self.assertTrue(P.deadline_reached(100.0, now=100.0))
+
+    def test_callback_sets_save_and_stop(self):
+        from transformers import TrainerCallback, TrainerControl
+        import tempfile, time as _t
+        with tempfile.TemporaryDirectory() as d:
+            log = str(Path(d) / "steps.jsonl")
+            cb = P.make_deadline_callback(TrainerCallback, _t.time() + 3600, log)
+            st = SimpleNamespace(global_step=7, max_steps=10)
+            c = cb.on_step_end(None, st, TrainerControl())
+            self.assertFalse(c.should_training_stop or c.should_save)
+            cb = P.make_deadline_callback(TrainerCallback, _t.time() - 1, log)
+            c = cb.on_step_end(None, st, TrainerControl())
+            self.assertTrue(c.should_training_stop and c.should_save)
+            self.assertEqual(json.loads((Path(d) / "deadline_stop.json").read_text())["step"], 7)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -107,6 +107,16 @@ NODES=3 MAX_TIMEOUT=21600 bash azure/sft/submit_sft.sh hrsft-<date>-v0ddp-<hex> 
 ```
 - **Fallback:** if weighted-loss training fails before its first step, `run_sft.py` retries once with `--loss plain` (smoke-proven) and records `loss_fallback` in `summary.json`.
 
+## Time budget, DDP shutdown, resume, eval-only
+- **Time budget:** `run_sft.py` derives the training budget from `--job-timeout`, which `submit_sft.sh` passes automatically.
+  - Budget = job timeout − time already used − `--post-budget` (default 2,400 s; eval, convert and serve measured 1,421 s at n=400) − 600 s margin.
+  - Training stops gracefully 15 min before that budget: it saves a checkpoint, and axolotl saves the adapter. The stop is all-reduced, so every DDP rank stops at the same step.
+  - `--train-timeout` overrides the budget and is the hard backstop.
+- **DDP shutdown:** ranks other than 0 train, then wait for `<out>/rank0.done` and exit 0. Rank 0 always writes that file, even on failure.
+- **Resume:** pass `CKPT_URI=azureml://…/checkpoints/checkpoint-N/ CKPT_ARG=--resume-from` to submit_sft.sh. It restores the adapter, optimizer, scheduler, RNG state and data position. Use the same data, world size and hyperparameters.
+- **Eval-only:** pass `CKPT_URI=… CKPT_ARG=--adapter` plus `--eval-only` for teacher eval, LoRA→GGUF and llama.cpp serving, without training.
+- **v1 data:** `bash tools/sft/build_v1.sh` fetches all six farm nodes, extracts, and builds 120k action + 12k reads rows (val 2%).
+
 ## Serving
 Base Q4_K_M GGUF + `--lora adapter-bf16.gguf` (about 0.4 GB). The flags are those of `azure/sft/run_sft.py`, with the request using `tool_choice: required`. The alternative is to merge the adapter into the BF16 base, convert, and quantize to Q4_K_M.
 - **Merge advantages:** no runtime LoRA matmuls, and a single file.

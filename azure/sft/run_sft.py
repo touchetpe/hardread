@@ -4,6 +4,17 @@
   python azure/sft/run_sft.py --snapshot ${{inputs.model_snapshot}} --data data --out ${{outputs.artifacts}} \
       [--max-steps 160] [--micro-batch 4] [--grad-accum 4] [--lr 2e-4] [--save-steps 40] [--epochs 1] \
       [--eval-n 200] [--gen-n 24] [--serve-n 200] [--base-n 30] [--skip-serve]
+      [--job-timeout S] [--post-budget S] [--train-timeout S] [--resume-from CKPT] [--eval-only --adapter DIR]
+
+Time budget: the training subprocess gets --train-timeout, by default derived from the AML job timeout
+(--job-timeout, passed by submit_sft.sh) minus the time already used, the eval/convert/serve budget
+(--post-budget, default 2400 s; measured 1,421 s for eval-n/serve-n 400) and a 600 s margin. Training
+stops GRACEFULLY 15 min before that (sft_plugin DeadlineStop: checkpoint + final adapter save; the stop is
+all-reduced so every DDP rank stops at the same step); the subprocess timeout is only a backstop.
+DDP: ranks != 0 train only, then wait for rank 0's done marker (<out>/rank0.done) and exit 0, so the job
+is not torn down while rank 0 evaluates and serves.
+--resume-from CKPT: resume an interrupted run (adapter, optimizer, scheduler, RNG, data position) with the
+same data, world size and hyperparameters. --eval-only --adapter DIR: no training; eval + GGUF + serve.
 
 Stages (each timed, logged under --out, failures recorded and later optional stages still attempted):
   0 preflight: GPU, disk, pinned tokenizer/template hashes in the snapshot == the data manifest's
@@ -176,6 +187,17 @@ def _train(args, env):
             cfg[key] = val
     if not args.max_steps:
         cfg.pop("max_steps", None)
+    if args.resume_from:
+        ck = Path(args.resume_from)
+        missing = [f for f in ("trainer_state.json", "optimizer.pt", "scheduler.pt", "adapter_model.safetensors")
+                   if not (ck / f).exists()]
+        if missing:
+            raise FileNotFoundError(f"resume checkpoint {ck} lacks {missing}")
+        n_rng = len(list(ck.glob("rng_state*.pth")))
+        world = int(os.environ.get("WORLD_SIZE", "1"))
+        if n_rng and n_rng != world:
+            log(f"WARNING: checkpoint has {n_rng} rng states but WORLD_SIZE={world}; data skipping assumes the same world")
+        cfg["resume_from_checkpoint"] = str(ck)
     if int(os.environ.get("WORLD_SIZE", "1")) > 1:
         # Only LoRA params train and all are used every step; HF would default to True for a PEFT model.
         cfg["ddp_find_unused_parameters"] = False
@@ -187,6 +209,9 @@ def _train(args, env):
     resolved.write_text(yaml.safe_dump(cfg, sort_keys=False))
     sh(["axolotl", "train", resolved, "--launcher", "python"], f"train{SUFFIX}.log", env=env, cwd=CODE,
        timeout=args.train_timeout)
+    if (OUT / f"deadline_stop{SUFFIX}.json").exists():
+        res_stop = json.loads((OUT / f"deadline_stop{SUFFIX}.json").read_text())
+        log(f"training stopped at the time budget: {res_stop}")
     steps = [json.loads(l) for l in open(OUT / "steps.jsonl")] if (OUT / "steps.jsonl").exists() else []
     st = [s for s in steps if s.get("kind") == "step"]
     res = {"steps": len(st)}
@@ -321,7 +346,14 @@ def main():
     ap.add_argument("--lora-alpha", type=int, default=None)
     ap.add_argument("--warmup-steps", type=int, default=None)
     ap.add_argument("--save-steps", type=int, default=None)
-    ap.add_argument("--train-timeout", type=int, default=3 * 3600)
+    ap.add_argument("--train-timeout", type=int, default=None,
+                    help="hard timeout of the training subprocess (default: derived from --job-timeout)")
+    ap.add_argument("--job-timeout", type=int, default=10800, help="the AML job's limits.timeout (submit_sft.sh passes it)")
+    ap.add_argument("--post-budget", type=int, default=None,
+                    help="seconds reserved after training for eval/convert/serve (default 2400, 300 if both skipped)")
+    ap.add_argument("--resume-from", default=None, help="checkpoint dir to resume training from")
+    ap.add_argument("--eval-only", action="store_true", help="no training: evaluate/convert/serve --adapter")
+    ap.add_argument("--adapter", default=None, help="adapter (checkpoint) dir for --eval-only")
     ap.add_argument("--eval-n", type=int, default=200)
     ap.add_argument("--gen-n", type=int, default=24)
     ap.add_argument("--serve-n", type=int, default=200)
@@ -352,14 +384,40 @@ def main():
     if int(os.environ.get("WORLD_SIZE", "1")) > 1:
         # NC40ads_H100_v5 nodes have no InfiniBand: NCCL over TCP sockets. LoRA grads are ~0.4 GB/step.
         env.update(NCCL_IB_DISABLE="1", NCCL_DEBUG="WARN", TORCH_NCCL_ASYNC_ERROR_HANDLING="1")
+    if RANK == 0 and (OUT / "rank0.done").exists():
+        (OUT / "rank0.done").unlink()  # stale marker from an earlier run in the same output dir
     if preflight(args) is None:
         sys.exit(2)
+    # Time budget (identical on every rank, so the all-reduced graceful stop agrees).
+    post = args.post_budget if args.post_budget is not None else (300 if args.skip_serve and args.skip_teacher else 2400)
+    if args.train_timeout is None:
+        args.train_timeout = int(args.job_timeout - (time.time() - STATE["started_unix"]) - post - 600)
+    graceful = time.time() + args.train_timeout - 900
+    env["HRSFT_TRAIN_DEADLINE"] = str(int(graceful))
+    STATE["time_budget"] = {"job_timeout": args.job_timeout, "post_budget": post, "train_timeout": args.train_timeout,
+                            "graceful_stop_unix": int(graceful)}
+    log(f"time budget: {STATE['time_budget']}")
+    if args.train_timeout < 1800 and not args.eval_only:
+        log("WARNING: less than 30 min of training budget")
     pre: dict = {}
     if RANK != 0:  # multi-node DDP: non-zero ranks only train; rank 0 saves, evaluates and serves
         args.skip_serve = args.skip_teacher = True
     if not args.skip_serve:
         threading.Thread(target=prefetch, args=(work, shm, pre), daemon=True).start()
-    train(args, env)
+    if args.eval_only:
+        if not args.adapter or not (Path(args.adapter) / "adapter_model.safetensors").exists():
+            raise SystemExit("--eval-only needs --adapter <dir with adapter_model.safetensors>")
+        STATE["mode"] = "eval-only"
+        run_post(args, env, Path(args.adapter), pre, shm)
+        if all(STATE["stages"].get(k, {}).get("status") != "ok" for k in ("eval_teacher", "serve_eval")):
+            sys.exit(4)
+        return
+    try:
+        train(args, env)
+    except BaseException:
+        if RANK != 0:
+            wait_for_rank0()
+        raise
     mb = args.micro_batch or 4
     if STATE["stages"]["train"]["status"] != "ok" and n_steps_logged() == 0 and args.loss == "weighted" \
             and not args.no_mb_fallback:
@@ -379,13 +437,24 @@ def main():
     if RANK != 0:
         STATE["finished_unix"] = int(time.time())
         save_state()
-        sys.exit(0 if train_ok() else 4)
+        wait_for_rank0()
+        sys.exit(0)  # the job's outcome is rank 0's; a non-zero exit here would tear rank 0 down mid-eval
     try:
-        adapter = find_adapter()
-    except FileNotFoundError as e:
-        STATE["fatal"] = str(e)
-        save_state()
-        sys.exit(3)
+        try:
+            adapter = find_adapter()
+        except FileNotFoundError as e:
+            STATE["fatal"] = str(e)
+            save_state()
+            sys.exit(3)
+        run_post(args, env, adapter, pre, shm)
+        # Success = an adapter was produced and evaluated; summary.json keeps every stage's status.
+        if not train_ok() and STATE["stages"].get("eval_teacher", {}).get("status") != "ok":
+            sys.exit(4)
+    finally:
+        (OUT / "rank0.done").write_text(str(int(time.time())))
+
+
+def run_post(args, env, adapter: Path, pre: dict, shm: Path):
     STATE["adapter_dir"] = str(adapter)
     if not args.skip_teacher:
         eval_teacher(args, env, adapter)
@@ -397,8 +466,18 @@ def main():
     STATE["prefetch"] = {k: v for k, v in pre.items() if k != "done"}
     save_state()
     log("DONE " + json.dumps({k: v.get("status") for k, v in STATE["stages"].items()}))
-    if not train_ok():
-        sys.exit(4)
+
+
+def wait_for_rank0(poll: int = 30):
+    """Non-zero DDP ranks: stay alive until rank 0 has finished eval/serve (or the job deadline)."""
+    deadline = STATE["started_unix"] + int(STATE["args"].get("job_timeout") or 10800) - 120
+    log("waiting for rank 0 to finish")
+    while time.time() < deadline:
+        if (OUT / "rank0.done").exists():
+            log("rank 0 done; exiting 0")
+            return
+        time.sleep(poll)
+    log("job deadline reached while waiting for rank 0")
 
 
 if __name__ == "__main__":
