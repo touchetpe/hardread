@@ -421,3 +421,10 @@ Jobs were submitted by the SFT agent from its uncommitted `azure/sft/*` fixes (t
 - Adapter GGUFs: `pokemon-rl-research/hardread/<job>/adapter-bf16.gguf`.
 - **Resume:** `hrsft-20261027-v0ddpres-fd53` (3 nodes; v0-ddp from checkpoint-1400 with the same 55,556 rows and loss; job timeout 14,400 s) started 02:13 UTC. Train budget to 05:23 UTC; the epoch should end ≈04:05–04:15 UTC, then eval.
 - The G-24h retry (one run before 21:00 UTC) should use the best of these adapters.
+
+## 2026-10-27 ≈05:10 UTC: broad human replay crawl (`tools/human/crawl_broad.py`)
+- **Coverage:** 17,779 public gen9ou replays (Jul 1 – Oct 26). 15,612 new: 7,806 from ladder users 51–500 and 7,806 from the global search. Plus the 2,167 top-50 replays.
+- **Parsed:** 17,676 games, 9,426 distinct players (pseudonymised; same salt as the top-50 set).
+- **Games per band** (`rating_band`): <1300 3,738; 1300–1499 3,775; 1500–1699 6,074; 1700–1899 3,766; 1900+ 183; unrated 140.
+- **Stopped early:** the replay host went down at 04:01 UTC (Cloudflare 522 for over an hour). The crawl is checkpointed; resume with `crawl_broad.py run --interval 2`.
+- **Outputs:** `scratch_ds/human_broad/` (tables plus `summary_by_band.*`), `data/replays/gen9ou-broad/raw/` (manifest with per-shard SHA-256).
