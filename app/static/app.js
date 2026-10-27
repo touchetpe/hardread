@@ -857,6 +857,7 @@
     var note = h("textarea", { id: uid, rows: 3, class: "note", placeholder: "e.g. I thought Kingambit had Black Glasses and would Sucker Punch, so I switched" });
     var chipList = h("ul", { class: "chip-list", "aria-label": "Your read, as details" });
     var msg = h("p", { class: "hint", "aria-live": "polite" });
+    var droppedBox = h("div", { class: "dropped-box" });
     var readBtn = h("button", { type: "button", class: "btn btn-ghost btn-sm" }, "Read my note");
     var checkBtn = h("button", { type: "button", class: "btn btn-primary btn-sm" }, "Check this decision");
     function drawChips() {
@@ -879,9 +880,18 @@
         if (!r.ok) { msg.textContent = r.error || "Could not read the note."; return; }
         chips = chips.concat(r.chips || []);
         drawChips();
-        var dropped = (r.dropped || []).length;
+        var dropped = r.dropped || [];
         msg.textContent = (r.chips || []).length + " detail(s) found by the " + (r.parser.indexOf("glimmer") === 0 ? "Muse Glimmer note reader" : "keyword reader") +
-          (dropped ? "; " + dropped + " left out because the note does not name them" : "") + ". Edit them before checking.";
+          (dropped.length ? "; " + dropped.length + " left out (see why below)" : "") + ". Edit them before checking.";
+        clear(droppedBox);
+        if (dropped.length) {
+          droppedBox.appendChild(h("details", { class: "dropped" }, h("summary", null, "Left out of your read (" + dropped.length + ")"),
+            h("ul", null, dropped.map(function (x) {
+              var val = typeof x.value === "string" ? x.value : (x.value && (x.value.move || x.value.kind)) || "";
+              var label = (FIELD_LABEL[x.field] || x.field) + (val ? ": " + val : "");
+              return h("li", { title: x.reason || "" }, h("b", null, label), " — " + (x.reason || "not used"));
+            }))));
+        }
       });
     });
     // add a detail by hand
@@ -942,7 +952,7 @@
     drawChips();
     append(panel, [h("label", { class: "field-label", for: uid }, "Your read at the time, in your own words"), note,
       h("div", { class: "form-row" }, readBtn, h("span", { class: "hint", style: "margin:0" }, "Their items, abilities, Tera, moves, or what you expected them to do.")),
-      chipList, add, h("div", { class: "form-row" }, checkBtn), msg,
+      chipList, droppedBox, add, h("div", { class: "form-row" }, checkBtn), msg,
       h("p", { class: "footnote" }, "We check your read against the engine. Spreads and EVs are not used, and we don't yet replay the turn under the move you expected.")]);
   }
 

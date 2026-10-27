@@ -550,6 +550,10 @@ def create_app(concurrency=1, processes=4):
             PN = _agent("parse_note")
         except Exception:  # noqa: BLE001
             return err(503, "The note reader is not available in this build; add the details by hand below.")
+        try:   # your own revealed moves are never credited to the opponent (parse-note-v3)
+            own_moves = PN.own_moves_from_review(parts[0])
+        except Exception:  # noqa: BLE001
+            own_moves = None
         def read_note():
             explaining = any(j["kind"] == "explain" and j["state"] == "running" for j in list(jobs.jobs.values()))
             if not explaining and glimmer_up() and LLM_GATE.acquire(blocking=False):
@@ -557,12 +561,13 @@ def create_app(concurrency=1, processes=4):
                     from llm import GlimmerClient
                     if not eval_locked():
                         return PN.parse(note, own, opp, parser="glimmer",
-                                        client=GlimmerClient(GLIMMER_URL, max_tokens=1024, timeout=25))
+                                        client=GlimmerClient(GLIMMER_URL, max_tokens=1024, timeout=25),
+                                        own_moves=own_moves)
                 except Exception:  # noqa: BLE001
                     pass
                 finally:
                     LLM_GATE.release()
-            return PN.parse(note, own, opp, parser="keyword")
+            return PN.parse(note, own, opp, parser="keyword", own_moves=own_moves)
         res = await run_in_threadpool(read_note)   # never block the event loop on the model
         return {"ok": True, "chips": res["chips"], "dropped": res["dropped"], "parser": res["parser"]}
 

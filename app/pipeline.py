@@ -654,6 +654,13 @@ def read_check(review, turn, k, belief):
     from tools/agent/parse_note.read_check when available. Every number is copied from the review."""
     if not belief or not belief.get("expects_action") or review is None:
         return None
+    dec = next((x for x in review.get("decisions") or [] if x.get("turn") == turn and x.get("k", 0) == k), None)
+    pol = (dec or {}).get("opponent_policy_top") or []
+    if pol and all(str(a) == "No Move" for a, _ in pol):   # a replacement after a faint: they had nothing to choose
+        return {"turn": turn, "k": k, "expected": belief.get("expects_action"), "engine_top": [], "played": None,
+                "sentence": "At this decision you were sending in a replacement and your opponent had no move to "
+                            "choose, so there is no read of their move to check here.",
+                "scope": "We check your read of their move against the engine; we don't yet replay the turn under it."}
     try:
         sys.path.insert(0, str(HARDREAD / "tools" / "agent"))
         import parse_note as PN
