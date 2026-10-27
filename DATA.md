@@ -1,0 +1,30 @@
+# Data: what is in these repositories, what is not, and why
+
+HardRead publishes code, results and **hashes**. It does not publish datasets that we have no right to redistribute, that contain player identities, or that must stay sealed until the pre-registered test has run. Licences of the sources are listed in `THIRD_PARTY.md`.
+
+## Included
+
+| File | What it contains | Why it is safe to publish |
+|---|---|---|
+| `DATA_SNAPSHOT.json` | SHA-256 and sizes of the Foul Play data caches every engine run used (Smogon Gen 9 OU usage statistics for 2026-09 and Foul Play's set files), plus the Foul Play commit | Hashes only, no data. Anyone can re-fetch the same files and check the hashes. |
+| `data/pools-v1.json` | How the development team pools were split (rule, seed, counts), the SHA-256 of each pool and of the pool tarball, and the species lists of the 596 held-out (`hr_val`) rosters | No team sets (moves, items, spreads). The roster list lets anyone check that held-out rosters were never used for training. |
+| `data/sealed-v1.json` | The rule that drew the 1,000 sealed teams, the file names, and the SHA-256 of their content | Names and a hash only. The teams themselves stay sealed (see below). Anyone can check the published hash after the sealed test. |
+| `tools/review/calibrator.json` | Fitted calibration parameters (a few numbers per calibrator) and the size of the data they were fitted on | Aggregate parameters, no game data |
+| `tools/sft/dex.json` | Species, types, abilities and base stats, generated from Pokémon Showdown's data by `tools/sft/mkdex.js` | Derived from MIT-licensed Showdown data files. Game data, no art. |
+| `RESULTS.md`, `PREREGISTRATION.md` | Aggregate results (win rates with confidence intervals, counts, calibration errors) and the frozen evaluation design | Aggregates only, no player names, no replay ids |
+
+## Excluded, and why
+
+| Data | Where it lives | Why it is not published | How to reproduce |
+|---|---|---|---|
+| **Metamon team sets** (`jakegrigsby/metamon-teams` v5, Gen 9 OU): the 29,628 development teams in the pool tarball, and the 2,000 + 11 team files the fork used for local tests | Local disk and the cloud job snapshots | The dataset has no licence recorded, so we do not redistribute it. The fork's history was rewritten **only over our own commits** to remove these team files; upstream Foul Play history is untouched. | Download the dataset from its source. `tools/make_pools.py` rebuilds the pools from the roster split; the result can be checked against the SHA-256 in `data/pools-v1.json`. |
+| **Metamon raw replays** (`jakegrigsby/metamon-raw-replays`), and everything derived from them row by row: the game index, the belief training sets, the human action tables, and the belief models trained on them | Local disk | The dataset card states no licence; its parsed companion dataset is CC BY-NC 4.0. Internal research only. Models trained on this data are **not** used by the product's verdict or by the frozen engine of the sealed test. | Download from the source; the processing scripts are in `tools/metamon/`. |
+| **Crawled Pokémon Showdown replays** (raw pages, about 20,000 public Gen 9 OU replays, Jul–Oct 2026) and their parsed outputs | Local disk only | The raw pages contain real usernames; re-hosting replays needs a check of Showdown's terms. Parsed outputs are pseudonymised with a private salt, but replay ids and upload times would still link back to players. | The crawler and parser are in `tools/human/`. They read public JSON endpoints at no more than one request per second. |
+| **Self-play data** (games, battle logs and per-decision search records from the cloud farm) | Cloud storage and local disk | Large (millions of decisions). The games are played with Metamon teams, whose licence is unclear (see above). A release would come after the event, once the team licence is clarified. | The farm scripts are in `azure/` and `tools/run_match.py`; seeds are recorded in `RESULTS.md`. |
+| **The sealed teams** (`hr_sealed`, 1,000 teams) | Local disk only | Pre-registered evaluation integrity: no one, including us, looks at, trains on or tunes on them before the frozen engine runs the sealed test. | After the test: the names and hash in `data/sealed-v1.json` identify them in the public team dataset. |
+| **Model weights:** Muse Glimmer base weights; our LoRA adapters, the 25M student and the belief models | Meta's release; cloud storage and local disk | The Glimmer base weights come from Meta's release and are not re-hosted by us. The adapters and the student are not published yet (a later decision). The belief models are trained on unlicensed data (see above). | Glimmer: Meta's official release. Training scripts: `tools/sft/`, `azure/sft/`, `tools/student/`, `tools/belief/`. |
+| **The owner's own games and notes** | Local disk only | Personal data, used only with the owner's consent | — |
+| **Internal operations** (planning notes, job runbooks, cloud configuration, credentials) | A private repository | Not part of the submission. Cloud account identifiers are read from environment variables (`HR_AZ_*`) and never committed. | Set your own `HR_AZ_*` variables (see `README.md`). |
+
+## User data in the app
+The review app processes replays that users paste. Its privacy page describes what is kept, for how long, and who is responsible.
