@@ -691,3 +691,31 @@ Diagnosis at Coord's request (Ag-Play's report). Method: overlap by file name, b
 - **Scope:** all 20 exact original jobs `hraa2-20261027-j00-7073` through `j19-7073`, one `c000` each; **400/400 decided records**, complete decided A/B treat-side coverage and bot logs. Every first chunk has 20 records, no missing decided log, treatment/vanilla marker_lines=0, and treatment/vanilla fallback_warnings=0. Generic positive-marker valid=false is expected for neutral fp. This completes the first-chunk **technical** check; no A/A 2 win rate, CI or p was computed.
 - **CHECK/REVIEW:** helper source remains accepted commit 773a5da. Root checked all 20 archives together for duplicate internal identities and individually for caller gates with h2h.analyse patched to raise; zero estimator calls. All archive bytes/SHA-256s match saved metadata. Fresh Sol ACCEPT: `scratch_ds/codex/c1/sol-review-first-chunks-all20.md`. Evidence: `scratch_ds/codex/c1/first-chunks/orchestrator-all20-check.json` and `20261027T134258Z-remaining/`.
 - **Limits:** actual Azure start fields remain null, so all start-to-blob timing verdicts remain UNKNOWN; creation-to-blob bounds are informational. Whole C1 remains partial due to timing and its recorded non-secret-identifier output-handling DoD exception. Complete-family A/A 2 analysis remains behind C5 exact terminal/chunk/seed/pairing gates.
+
+## 2026-10-27 14:24:39 UTC — Belief screens final (C2 / S1.18)
+
+**Record only, not finalists (research/28 §0.3 P3).** No candidate or threshold change; `value` remains the sole freeze candidate. All three exact jobs Completed after their registered deadline-capped run (`2026-10-27T14:00:00Z`); these are not fixed 200-chunk experiments. Runtime: 10 pairings/chunk with side swap, max 200 chunks, seed base 810000 plus chunk index. All uploaded chunks are contiguous, fetched and independently checked: 131 archives, 2,620 records, 1,310 pairings; every chunk has 20 distinct game indexes 0–19 and the expected seed/side-swap. All 131 SHA-256 values reconcile between Luna and root. Exact job shows supersede the initial incomplete list query; actual Azure start/end times are unavailable (null), not inferred. Complete-family gate: **14:14:49 UTC**, before the first analysis.
+
+| Family / exact job | Chunks | Primary game records / pairings | Pre-registered treatment win rate, 95% CI | Nominal two-sided p | Marker validity |
+|---|---:|---:|---|---:|---|
+| `lev-belrs` / `hrlev-20261027-belrs-9231` | 47 | 940 / 470 | 50.11% [47.28, 52.93] | 0.9411 | valid: true |
+| `lev-belrs05` / `hrlev-20261027-belrs05-9231` | 42 | 840 / 420 | 47.14% [44.31, 49.97] | 0.0477 | valid: true |
+| `lev-belrsfp` / `hrlev-20261027-belrsfp-9231` | 42 | 840 / 420 | 50.48% [47.47, 53.49] | 0.7565 | valid: true |
+
+Failure attribution: 8 timeout records, all labelled `A crashed` and attributed to vanilla crashes (3 / 3 / 2 by the table order). The pre-registered estimator includes those as treatment wins; there are **zero unknown exclusions**, no rerun chunks and no chunk-number gaps. Direct E2 marker counters and the safe `first_chunk_check.py` yes-mode agree for all three: valid true, no vanilla marker lines and zero fallback warnings on either role. These exploratory nominal p-values do not establish a confirmatory benefit or change finalist selection.
+
+For transparency, the non-primary default estimator excluding the 8 undecided records is:
+
+| Family | Games / pairings | Win rate, 95% CI | Two-sided p |
+|---|---:|---|---:|
+| `lev-belrs` | 937 / 470 | 49.79% [46.94, 52.63] | 0.8835 |
+| `lev-belrs05` | 837 / 420 | 46.90% [44.06, 49.75] | 0.0330 |
+| `lev-belrsfp` | 838 / 420 | 50.24% [47.21, 53.27] | 0.8775 |
+
+No additional sensitivity field was emitted or invented; zero unknown games require no unknown-game bounds. Execution deviation: the first per-family legacy `--check-treat-markers` calls also ran completed-family analyses. Every family was already complete at that time, so no interim look occurred. All raw outputs/timestamps/hashes are preserved, and root verified those reports exactly match the subsequent grouped output. The marker-only step was repeated using the approved safe helper; no analysis code or rule was changed.
+
+Registered grouped invocation (with runtime-derived explicit 20-record validation):
+```sh
+python3 tools/analysis/attribute_failures.py --mode treat --group-by-prefix --expected-chunk-games 20 scratch_ds/lev/lev-belrs-c*.tar.gz scratch_ds/lev/lev-belrs05-c*.tar.gz scratch_ds/lev/lev-belrsfp-c*.tar.gz --out scratch_ds/lev/belief_failures.json --json scratch_ds/lev/belief_result.json
+```
+Executed 14:19:46–14:19:50 UTC, exit 0. Invocation checkout **fb4ef434f7c22349650d238138fe6b1e64d5f123**; attribution source last changed in **0ec609684d58da56275d41923726e4c06945be47**. Source/config hashes, exact argv hash, terminal/blob inventory, gate chronology, first-call deviation/reconciliation and root checks: `scratch_ds/codex/c2/screens/20261027T140100Z/`. Raw grouped outputs: `scratch_ds/lev/belief_result.json`, `belief_failures.json`. Human secondary remains separately recorded above (f261cf0); no rerun of that benchmark. C2 mechanical technical CHECK ACCEPT; current-source full no-fetch signal remains to be checked.
