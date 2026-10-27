@@ -329,3 +329,25 @@ Concurrency was conservative, so C1t1 and C2 may gain ≈20–40% when tuned (no
 - **v0b** (3-node DDP) will hit the same cap at ≈00:55 UTC.
 - **Official G-24h arena:** `hrarena-20261027-g24h-v0safe-07d3`, v0-safe adapter vs abyssal, 200 games, seed 2000 (same teams as the rehearsal).
 - **For comparison, the 25M student** (same public input): 54.5% top-1 held out, 80% vs abyssal.
+
+## 2026-10-27 ≈00:50 UTC: provisional and final numbers (analysis: `tools/analysis/voi.py`, `tools/analysis/h2h.py`)
+- **Value of information (≥ 500 games per level, so the gate status is "final"; the jobs still run to 600):**
+  - oracle p = 1: **70.96 ± 3.61**;
+  - p = 0.5: **63.46 ± 3.84**;
+  - p = 0.25: 53.46 ± 4.05 (519 / 519 / 518 games).
+  - **Gate PASS:** p = 1 ≥ 58%, and the p = 0.5 lower bound (59.6) > 50%.
+  - Knowing the opponent's sets is worth about +21 points at C1t1. Partial knowledge is roughly linear in p above 0.25.
+- **Lever screens** (dev set A, C1t1, treatment win rate, pairing-clustered 95% CI):
+
+| Lever | Win rate | Games |
+|---|---|---|
+| argmax | 49.56 ± 3.45 | 679 |
+| value | 51.91 ± 3.35 | 679 |
+| double-half | 49.5 ± 6.31 | 199 |
+| student-blend λ 0.15 | 48.75 ± 9.6 | 80 |
+| student-blend λ 0.3 | 46.67 ± 11.45 | 60 |
+| student-blend λ 0.5 | 61.67 ± 10.17 | 60 |
+
+  - Belief-lever screens (`hrlev-20261027-bel*`) started or are queued.
+  - So far no lever is clearly above +2 points; the student-blend and belief screens are too young to read.
+- **Early A/A at C1t1** (`hraa-20261026-c1t1-n{1,2,3}-d106`): seat A **51.19 ± 4.36** over 418 games (2 timeouts). Consistent with no seat bias so far; it runs to 08:00 UTC.
