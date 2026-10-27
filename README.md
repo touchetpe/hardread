@@ -84,6 +84,7 @@ Foul Play doubles the number of worlds while the opponent has revealed fewer tha
 
 ## Azure ML jobs (cluster `${HR_AZ_CLUSTER}`, ≥4 nodes always on, 40 vCPU + 1× H100 NVL each)
 Workspace `${HR_AZ_WS}`. Other lanes run jobs there too; never touch their jobs.
+The scripts in `azure/` read the workspace settings from environment variables: `HR_AZ_SUBSCRIPTION`, `HR_AZ_RG`, `HR_AZ_WS`, `HR_AZ_CLUSTER`, `HR_AZ_STORAGE_ACCOUNT`, `HR_AZ_CONTAINER`. Export them, or put them in `handoff/env.sh` (private, never committed), which the scripts source when it exists.
 
 **Environment:** reuses `pokemon-h100-axolotl-cuda13-training:20261026-9f7aa9a5704c` (Python 3.12, CUDA 13).
 

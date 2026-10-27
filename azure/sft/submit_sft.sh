@@ -15,7 +15,10 @@ NODES="${NODES:-1}"
 MAX_TIMEOUT="${MAX_TIMEOUT:-10800}"  # raise explicitly (e.g. MAX_TIMEOUT=21600) for v0 runs
 (( TIMEOUT <= MAX_TIMEOUT )) || { echo "timeout must be <= $MAX_TIMEOUT s (set MAX_TIMEOUT to raise)"; exit 2; }
 HERE="$(cd "$(dirname "$0")" && pwd)"; AZ="$(dirname "$HERE")"; HR="$(dirname "$AZ")"
-RG=rg-${HR_AZ_WS}; WS=${HR_AZ_WS}
+HR_ROOT="$HR"; [ -f "$HR_ROOT/handoff/env.sh" ] && . "$HR_ROOT/handoff/env.sh"
+HR_AZ_MSG="Azure settings missing: source handoff/env.sh or export the HR_AZ_* variables (README, Azure ML jobs)"
+: "${HR_AZ_SUBSCRIPTION:?$HR_AZ_MSG}" "${HR_AZ_RG:?$HR_AZ_MSG}" "${HR_AZ_WS:?$HR_AZ_MSG}" "${HR_AZ_CLUSTER:?$HR_AZ_MSG}"
+RG="${HR_AZ_RG}"; WS="${HR_AZ_WS}"
 ENV_ID=/subscriptions/${HR_AZ_SUBSCRIPTION}/resourceGroups/$RG/providers/Microsoft.MachineLearningServices/workspaces/$WS/environments/pokemon-h100-axolotl-cuda13-training/versions/20261026-9f7aa9a5704c
 SNAP=azureml://datastores/workspaceblobstore/paths/pokemon-rl-research/h100/model-snapshots/acquire-20261026-01/
 A="$AZ/attempts/$NAME"

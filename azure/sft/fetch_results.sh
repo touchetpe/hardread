@@ -3,8 +3,11 @@
 # Usage: bash azure/sft/fetch_results.sh <job_name> [dest_dir]   (default dest: azure/attempts/<job>/results)
 # Checkpoints and adapter GGUF stay on the blob store; list them with: bash azure/fetch.sh list <job_name>
 set -euo pipefail
-ACC=${HR_AZ_STORAGE_ACCOUNT}
-CON=${HR_AZ_CONTAINER}
+HR_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"; [ -f "$HR_ROOT/handoff/env.sh" ] && . "$HR_ROOT/handoff/env.sh"
+HR_AZ_MSG="Azure settings missing: source handoff/env.sh or export the HR_AZ_* variables (README, Azure ML jobs)"
+: "${HR_AZ_STORAGE_ACCOUNT:?$HR_AZ_MSG}" "${HR_AZ_CONTAINER:?$HR_AZ_MSG}"
+ACC="${HR_AZ_STORAGE_ACCOUNT}"
+CON="${HR_AZ_CONTAINER}"
 JOB="$1"; HERE="$(cd "$(dirname "$0")" && pwd)"
 DEST="${2:-$HERE/../attempts/$JOB/results}"; mkdir -p "$DEST"
 az storage blob list --account-name $ACC -c $CON --auth-mode key --prefix "pokemon-rl-research/hardread/$JOB/" \
