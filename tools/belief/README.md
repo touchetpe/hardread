@@ -15,6 +15,8 @@ spread) be inferred from public battle evidence, and how does a learned belief c
 | `predict.py` | predictions from a saved checkpoint (e.g. v0 on a new test set) |
 | `benchmark.py` | S-A metrics, streaming, with a paired bootstrap over games → JSON + markdown |
 | `run_v1.sh` | the v1 pipeline behind the Oct 27 results; `run_all.sh` is the v0 pipeline (Oct 26) |
+| `export_npz.py` | checkpoint → `.npz` for the belief lever (numpy inference in `foul-play/fp/hardread_belief.py`), with a torch-vs-numpy parity check |
+| `lever_offline.py` | offline check of the lever on belief examples: pool vs resampled worlds vs the belief, as mean p(true) |
 
 ## Benchmark spec (S-A v1)
 
@@ -181,6 +183,98 @@ Dev loss on the farm dev split shows the same ordering. Farm-only scores 6.32 / 
    - The likely reason is a **domain gap between the two "truths"**: hr_val sets are metamon's *predicted* hl_05_26 teams (hidden details filled in from statistics), while human labels are real revealed sets from 2026 play.
    - Distinct human teams therefore don't buy what the farm learning curve suggested, at least not on this test. A truly-held-out set with real hidden sets would settle it.
 3. **The reveal-propensity correction is necessary** for using human labels at all: without it, hr_val item NLL rises by +0.07.
+
+## Belief lever (Foul Play's world sampling guided by belief v1)
+
+Code: `foul-play/fp/hardread_belief.py` plus a 13-line hook in `fp/search/standard_battles.py: prepare_battles`. Tests: `foul-play/tests/test_hardread_belief.py`.
+
+**Off by default.** Without `HARDREAD_LEVER_BELIEF`, the hook only calls `hardread_belief.enabled()` (False), so Foul Play is upstream:
+- numpy isn't imported;
+- the random stream is the same (unit test `test_off_matches_upstream_random_stream`);
+- 745 tests pass: 737 upstream + 8 new.
+
+**Lever A, `HARDREAD_LEVER_BELIEF=resample` (importance resampling).**
+- **Pool.** For each opponent Pokémon that Foul Play samples (the active one and the alive reserves), draw a pool of up to M = 16 sets with Foul Play's own `sample_pokemon`, on deep copies, with its damage-pruned datasets and legality checks.
+  - The first draws are the one-per-world that vanilla makes anyway.
+  - Extra draws go round-robin within a time budget (`HARDREAD_BELIEF_BUDGET_MS`, default 60).
+  - While one Pokémon's pool is drawn, its dataset filters are computed once (`_same_pokemon_cache`; the draws are identical, see the unit test).
+- **Score.** Each set gets p_belief(set) = p(item) p(ability) p(tera) p(spread class) Π_{hidden moves} p/(1−p), using only the attributes still hidden.
+- **Resample.** Each world draws its set from the pool with weight (p_belief / q̂)^λ, where q̂ is the smoothed frequency of that exact set in the pool. This keeps every set Foul Play-legal and moves the mass toward the belief.
+- **Failures.** Any failure falls back to Foul Play's own sampling, for the decision or for that Pokémon, and is counted and logged.
+
+**Lever B, `HARDREAD_LEVER_BELIEF=direct`.**
+- Item, ability, tera and spread class are drawn from the belief's marginals. Moves are drawn ∝ P(move) among the moves in the pool.
+- Each set is checked with Foul Play's `PokemonSet.set_makes_sense` and `PredictedPokemonSet.set_makes_logical_sense`. A pool set is used when 8 tries fail.
+
+**Foul Play's own draws as model input:** `HARDREAD_BELIEF_FP_INPUT=1` with the worlds checkpoint. The pool histogram is fed as the worlds input, like the S-A variant "fp_belief as the worlds input".
+
+**Environment variables:**
+
+| Variable | Meaning |
+|---|---|
+| `HARDREAD_BELIEF_CKPT` | the `.npz` |
+| `HARDREAD_BELIEF_WORLDS_CKPT` | used instead when `FP_INPUT=1` |
+| `HARDREAD_BELIEF_M` | pool size (16) |
+| `HARDREAD_BELIEF_LAMBDA` | tempering λ (1.0) |
+| `HARDREAD_BELIEF_BUDGET_MS` | time budget for extra draws (60) |
+| `HARDREAD_BELIEF_LOG` | JSONL per decision: timings, pool sizes, effective sample sizes, counters |
+
+**Model export.** `tools/belief/export_npz.py` turns a `train.py` checkpoint into numpy weights, vocabularies, the legal-ability matrix and the config. Lever inference is a numpy port of `model.py`.
+- **Parity with torch:** at most 1.6e-5 difference in log-probabilities on 2,000 hr_val rows, for both exports.
+- **Checkpoints exported** (trained on hr_train farm plus filtered human rows; no hr_val or sealed roster):
+  - `scratch_ds/belief/export/belief_v1.npz`: human pre-train → farm fine-tune, view-only. SHA-256 `b66252ba…`.
+  - `scratch_ds/belief/export/belief_v1_worlds.npz`: the same recipe with worlds. SHA-256 `1080a8af…`.
+- **numpy.** Locally, the Foul Play venv borrows numpy from the user site-packages for Python 3.13. Azure nodes install it.
+- **Shipping to Azure:**
+  - `azure/submit.sh` copies `BELIEF_NPZ` / `BELIEF_WORLDS_NPZ` into the job (`code/belief/belief.npz`, `belief_worlds.npz`);
+  - `azure/setup_node.sh` exports `HARDREAD_BELIEF_CKPT` / `HARDREAD_BELIEF_WORLDS_CKPT`;
+  - `run_match.py --treat` then only needs the lever variables.
+
+**Local smoke** (F1, `gen9/hr_hl_dev` pool, lever on the alternating seat): 30 games over 8 runs, **0 failures, 0 decision- or Pokémon-level fallbacks.**
+
+| Run | Lever | Games | Failures | Decisions logged |
+|---|---|---|---|---|
+| 1–5 | resample (successive speed fixes) | 20 | 0 | 779 |
+| direct | direct | 4 + 2 | 0 | 112 + 125 |
+| fp-input | resample + FP input | 4 | 0 | 129 |
+
+In direct mode, 4–8% of the belief-drawn sets fail Foul Play's checks 8 times and use a pool set instead.
+
+**Cost per decision** (final code, run 5, 203 decisions, Mac under other load). "Added" = extra draws + inference + weights. The draws vanilla makes anyway are excluded.
+
+| | median | mean | p90 | p99 | max |
+|---|---|---|---|---|---|
+| added (ms) | 21.6 | 23.5 | 37.3 | 52.4 | 83.3 |
+| inference (ms) | 2.7 | 2.8 | 3.5 | 4.5 | 4.9 |
+
+That is about 1.1% of a 2 s search at the median and 2.6% at p99. 99% of Pokémon get the full pool of 16, and the median effective sample size is 4.3.
+
+Earlier runs, before the budget rule and the cache, had a p99 of 230–2,300 ms. Foul Play's Smogon moveset loop sometimes spins for 50–300 ms on a single draw (Iron Treads, Kyurem with one move revealed). The budget rule only draws a Pokémon again while twice its slowest draw so far fits in the remaining budget.
+
+Measured with 2 other jobs running on the Mac:
+- direct mode adds 73 ms at the median (it builds sets in Python);
+- FP input adds 40 ms at the median.
+
+**Offline effect** (`tools/belief/lever_offline.py`; hr_val examples, 40 game-sides, 4,662 hidden-item rows; pools from the offline sampler, so without damage pruning). Values are the mean probability of the true value in a world:
+
+| | item | tera | spread class | hidden moves | ESS |
+|---|---|---|---|---|---|
+| Foul Play pool (vanilla-like) | 0.418 | 0.250 | 0.464 | 0.502 | 16 |
+| lever λ = 1 | **0.534** | **0.339** | **0.622** | **0.578** | 5.0 |
+| lever λ = 0.5 | 0.514 | 0.316 | 0.595 | 0.562 | 7.6 |
+| lever λ = 1, FP input | 0.535 | 0.342 | 0.614 | 0.575 | 5.2 |
+| belief marginal alone | 0.491 | 0.318 | 0.570 | 0.543 | — |
+
+The resampled worlds put more mass on the truth than the belief's own marginals. The product over attributes favours sets that are consistent on all of them, within Foul Play's support. The price is diversity: the effective sample size is about 5 of 16, and λ = 0.5 keeps more of it.
+
+**Screens** (`tools/run_match.py --treat ... --treat-seat alternate`; submit with `BELIEF_NPZ=<repo>/scratch_ds/belief/export/belief_v1.npz BELIEF_WORLDS_NPZ=<repo>/scratch_ds/belief/export/belief_v1_worlds.npz bash azure/submit.sh ...`):
+
+| Arm | `--treat` |
+|---|---|
+| A | `HARDREAD_LEVER_BELIEF=resample` |
+| A, λ = 0.5 | `HARDREAD_LEVER_BELIEF=resample,HARDREAD_BELIEF_LAMBDA=0.5` |
+| A with Foul Play's draws as input | `HARDREAD_LEVER_BELIEF=resample,HARDREAD_BELIEF_FP_INPUT=1` |
+| B | `HARDREAD_LEVER_BELIEF=direct` |
 
 ## How to run
 
