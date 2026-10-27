@@ -454,7 +454,7 @@ def job_case(job):
 
 
 def summarize(results, m=M_BAD, m_ok=M_OK, label="VT1"):
-    ok = [r for r in results if "error" not in r]
+    ok = [r for r in results if r.get("error") is None]
     counts = {}
     for r in ok:
         v = decide(r["delta_U"], r["delta_R"], m, m_ok)

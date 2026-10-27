@@ -761,3 +761,10 @@ The registered initial batch completed all **184 decisions from 136 game-sides**
 - Root independently rederived the rule/counts/interval from all 184 rows; fresh Sol **ACCEPTED the valid FAIL**. No decisive product or demo claim is supported. The next step is only the registered .08 rescore of this saved run, followed by the same-case 60k search if that also fails; neither fallback has run at this record.
 
 Evidence: `scratch_ds/codex/c7/vt1-batch-plan/20261027T161652Z/real-run-pinned-20261027T164636735110Z/` (structural gate, registered readout and root check), plus `scratch_ds/codex/c7/sol-initial-gate-review.md`. Sidecar SHA-256 `18032daa6f220079c2ea381701a4380a416ef3f5cbf8708a01166d84fb2c3d35`; raw summary SHA-256 `9cda33857649155c45e072f34bdbebfa11ed999c8c69b575b98a24e348c48d3e`. No fallback/by-margin readout was used for this record.
+
+
+## 2026-10-27 17:19 UTC — VT1 .08 rescore serialization defect (invalid execution, no gate result)
+
+The registered `rescore --margin 0.08` command exited 0 but returned `n=0, errors=184`. This is **invalid**, not a quantitative PASS or FAIL: the original 184-row sidecar has zero errors. The compact batch projection stores `error:null` on successful cases, while `summarize` rejected every record containing the key. All original source/input/result hashes were unchanged; no search was repeated and no case dropped. Invalid output SHA-256: `375ce94241486287213baae5708ff6aed40a7853e48bc66f491a583f739b50da` (preserved).
+
+The minimal reviewed fix accepts absent or null `error` and continues to reject every non-null value, including empty strings. Two pure regression tests pass, including 184 synthetic cases round-tripped through the real rescore function; full VT3 remains 11/11. Root independently checked both suites and fresh Sol accepted the one-line analysis fix before a corrected real readout. Rules, thresholds, cases, margins and MCTS are unchanged. Evidence: `scratch_ds/codex/c7/rescore-repair/` and the original run's `rescore-m008-20261027T170643795885Z/`. The valid .08 readout and any 60k fallback remain pending at this commit.
