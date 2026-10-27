@@ -555,7 +555,7 @@ def main():
     ap.add_argument("--data", nargs="+", required=True, help="decision files or globs (.jsonl.gz)")
     ap.add_argument("--out", required=True)
     ap.add_argument("--fracs", default="1", help="comma-separated train fractions (learning curve)")
-    ap.add_argument("--size", default="base", choices=["base", "small", "tiny"])
+    ap.add_argument("--size", default="base", choices=["base", "small", "tiny", "large"])
     ap.add_argument("--epochs", type=int, default=12)
     ap.add_argument("--min-steps", type=int, default=1500, help="small fractions train at least this many steps")
     ap.add_argument("--patience", type=int, default=2)

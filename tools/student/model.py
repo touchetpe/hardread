@@ -167,5 +167,6 @@ class StudentNet(nn.Module):
 def build(vocab_sizes, size="base", dropout=0.1, events=True, opp_head=True):
     presets = {"base": dict(d=512, layers=7, heads=8, ffn=2048),     # ~24.6M
                "small": dict(d=256, layers=4, heads=4, ffn=1024),    # ~4M
-               "tiny": dict(d=128, layers=2, heads=4, ffn=512)}
+               "tiny": dict(d=128, layers=2, heads=4, ffn=512),
+               "large": dict(d=768, layers=12, heads=12, ffn=3072)}  # T3: ~85.1M block params
     return StudentNet(vocab_sizes, dropout=dropout, events=events, opp_head=opp_head, **presets[size])
