@@ -524,3 +524,10 @@ These rules are fixed now. The dev-A screens end at 08:00 UTC (argmax, value, do
 - **Comparison on the same pairings:** v0-safe ckpt-700 21.0%; smoke adapter 14.6%; base Glimmer with reasoning 31% (31% illegal); the 25M student alone 80% (40 games, v0).
 - **G1** (≥ 60% over 400 games) is **not attempted**. The pre-registered rule runs G1 only if this retry reaches ≥ 45%, and 44.0% is below that.
 - **Fine-tune sentence for the video (research/28 §4.7):** "our full-epoch fine-tune raised Glimmer's win rate against a heuristic bot from 21% to 44%, with no illegal moves, but it does not play as strongly as the small student network or the search engine".
+
+## 2026-10-27 ≈09:15 UTC: F1 first-chunk acceptance (research/28 S1.11) — PASS
+- All 15 `hrlev-20261027-f1value-*-c9d0` jobs are Running; each has its first chunk in blob (all c000 fetched to `scratch_ds/lev/`).
+- First chunks: **299 / 300 games decided (99.7%)**. The undecided game is a vanilla crash: a poke-engine Rust panic surfacing as `PicklingError` (`lev-f1value-n10-c000` g0006).
+- `attribute_failures.py --check-treat-markers` on the 15 first chunks: **valid: true**. Treatment 299/299 bot logs have lever markers (12,408 lines); vanilla 0 marker lines; 0 fallback warnings on either side.
+- No win rate is reported before completion (information run; it is read at the end, ≥ 1,500 games).
+- The `azure/fetch.sh` refactored at `5e37173` (identifiers from `handoff/env.sh`) listed and downloaded these chunks without error.
