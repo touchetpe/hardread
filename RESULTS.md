@@ -514,3 +514,13 @@ These rules are fixed now. The dev-A screens end at 08:00 UTC (argmax, value, do
   - Belief and student-blend levers are excluded.
   - Under track REG (A3a not approved), G2 on dev set B tests `value` alone on D4.
 - **F1 submitted (E5, track REG):** `hrlev-20261027-f1value-n1…n15-c9d0`, submitted 08:22–08:24 UTC. 15 jobs × 5 chunks × 10 side-swapped pairings = 1,500 games. Seed bases 830000 + 1000·j, j = 1–15 (chunks 831000–845004; research/28's "846004" is a typo for the formula's 845004). `--treat HARDREAD_LEVER_SELECT=value --treat-seat alternate`, `hr_train`, C1t1, timeout 1,800 s per game. Fork `c04b38e` (adds the belief lever, off by default) and HardRead `5f9a02f`. At submission, hr* Running + Queued = 18 ≤ 25; the cluster had 10 idle nodes of 13.
+
+## 2026-10-27 ≈08:30 UTC: G-24h retry, the one allowed (`hrarena-20261027-g24h-v0ddpres-9599`; S1.4): **PASS**
+- **Setup:** Glimmer v0-ddp full-epoch adapter (teacher top-1 0.470) through llama.cpp LoRA (Q4_K_M base) vs PokéChamp abyssal; 100 side-swapped pairings, seed 2000 (the same pairings as the failed first run); 4 games in parallel.
+- **Result:** 199/200 completed (1 failure, counted as a loss).
+  - **Win rate 88/199 = 44.2%, 95% CI [37.5, 51.2]; 44.0% with failures as losses.**
+  - Illegal 0 / 6,494 decisions. Latency p50 / p95 3.13 / 3.52 s.
+- **Gate g24h** (games ≥ 200, win ≥ 35%, illegal ≤ 2%, p95 ≤ 5 s): **pass = true**.
+- **Comparison on the same pairings:** v0-safe ckpt-700 21.0%; smoke adapter 14.6%; base Glimmer with reasoning 31% (31% illegal); the 25M student alone 80% (40 games, v0).
+- **G1** (≥ 60% over 400 games) is **not attempted**. The pre-registered rule runs G1 only if this retry reaches ≥ 45%, and 44.0% is below that.
+- **Fine-tune sentence for the video (research/28 §4.7):** "our full-epoch fine-tune raised Glimmer's win rate against a heuristic bot from 21% to 44%, with no illegal moves, but it does not play as strongly as the small student network or the search engine".
