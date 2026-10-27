@@ -110,3 +110,23 @@ Every reported run lists:
 6. **Numbering.** The freeze record (frozen configuration, checkpoint SHA-256, both commits, sealed pool hash) will be amendment **A4**.
 
 Nothing else changes: H1, n, the configuration, the teams, the primary metric, the test and the confirmatory order stay as in §1–§3.
+
+### A3a (2026-10-27 ≈10:00 UTC, before any G2 game, any pre-registered A/A game and any sealed game): timing; A/A 2 for configurations without neutral levers
+**Approval.** The owner approved this amendment, both parts (a) timing and (b) the "full" option, in chat on 2026-10-27 at ≈10:55 Paris (recorded in `handoff/DECISIONS.md`, OD-2).
+
+**Data status when this was written.** Dev-A data only (`hr_train` teams):
+- the lever screens (selection/worlds/student-blend screens ended 08:00 UTC Oct 27; the three belief-lever screens are running until 14:00 UTC);
+- the exploratory C1t1 A/A;
+- the F1 replication of `value` on fresh dev-A seeds (submitted 08:22 UTC, running).
+
+No G2 game (dev B, `hr_val`), no pre-registered A/A game and no sealed game exists.
+
+1. **Timing.** G2 (A1) and both A/As (§2 as amended by A3) may run from Oct 27. The freeze of §1 and §8 moves to **Thu Oct 29, 12:00 Paris if both A/As have passed by then** under A3 item 1; otherwise it stays at Sun Nov 1, 12:00 Paris. **Reason:** the result must exist before the hackathon video is cut, and no lever development is planned after Oct 27.
+2. **A/A 2 without neutral levers.**
+   - **Setup.** If the frozen-candidate configuration contains no lever with a neutral setting (e.g. `HARDREAD_LEVER_SELECT=value`, `HARDREAD_LEVER_WORLDS=double-half`), the treatment side receives `--treat HARDREAD_LEVER_SELECT=fp`: the upstream default, a no-op that exercises the treatment-only environment path.
+   - **Validity check:** zero lever-marker lines on both sides, zero fallback warnings, and a recorded `treat_side` for every decided game.
+   - **Pass rule:** A3 item 1's rule is unchanged.
+   - **Reason:** with no lever set, no marker line is ever logged, so A3 item 3's marker check cannot be met.
+3. **Candidates.** The G2 candidates are fixed by the rule logged in RESULTS.md at 2026-10-27 04:37:22 UTC (commit `9fc5771`), before the screen readout: `value`, plus `value` + `double-half` only if double-half qualifies. Double-half ended at 48.09 and did not qualify, so the only candidate is `value`. Belief levers are not candidates: their model is pre-trained on human replays without a stated data licence.
+
+Nothing else changes: H1, n, the configuration, the teams, the primary metric, the test, the A3 §5 layout and rerun rule, and the confirmatory order.
