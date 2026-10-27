@@ -12,6 +12,8 @@ Per game-side (one process each; Foul Play's datasets are process-global):
   3. Luck v2 records per turn (luck.py, hidden-action mixture, damage-conditioned worlds).
 
   python tools/review/human_eval.py run --n 600 --workers 12 --out scratch_ds/review/human/run.jsonl
+  python tools/review/human_eval.py run --games scratch_ds/human_broad/games.jsonl.gz --band 1500-1699 --n 200 \
+      --seed 11 --draft smogon --out scratch_ds/review/human_b/run_b_1500-1699.jsonl     (Draft-B recalibration, E9)
   python tools/review/human_eval.py farm scratch_ds/review/lab.jsonl.gz --n 10 --out .../farm_noise.jsonl
   python tools/review/human_eval.py analyze scratch_ds/review/human/run.jsonl [--farm-noise ...]
 """
@@ -161,17 +163,26 @@ def _full_sets():
     return _FULL
 
 
-def human_jobs(n, seed, worlds, iterations, luck_worlds, luck_iterations, min_turns=3, draft="default"):
+def human_jobs(n, seed, worlds, iterations, luck_worlds, luck_iterations, min_turns=3, draft="default",
+               games_path=None, band=None, band_key="rating_band"):
+    """games_path: a parse_replays.py games.jsonl.gz (default: the top-50 set scratch_ds/human/); its sets.jsonl.gz
+    and species_profiles.json are read from the same directory (profiles fall back to scratch_ds/human/).
+    band: keep only games whose `band_key` field equals it (broad crawl: lt1300, 1300-1499, 1500-1699, 1700-1899,
+    1900plus). Selection = shuffle(seed) of the eligible games, first n (same as before when both are unset)."""
     import reconstruct_check as C
-    games = [g for g in C.load_jsonl(HUMAN / "games.jsonl.gz") if g["turns"] >= min_turns and g.get("winner")]
+    gp = Path(games_path) if games_path else HUMAN / "games.jsonl.gz"
+    gdir = gp.parent
+    games = [g for g in C.load_jsonl(gp) if g["turns"] >= min_turns and g.get("winner")
+             and (band is None or g.get(band_key) == band)]
     random.Random(seed).shuffle(games)
     games = games[:n]
     ids = {g["uid"] for g in games}
     sets = defaultdict(list)
-    for r in C.load_jsonl(HUMAN / "sets.jsonl.gz"):
+    for r in C.load_jsonl(gdir / "sets.jsonl.gz"):
         if r["uid"] in ids:
             sets[(r["uid"], r["player"])].append(r)
-    profiles = json.loads((HUMAN / "species_profiles.json").read_text())
+    prof = gdir / "species_profiles.json"
+    profiles = json.loads((prof if prof.exists() else HUMAN / "species_profiles.json").read_text())
     jobs = []
     for g in games:
         genders = {}
@@ -191,6 +202,7 @@ def human_jobs(n, seed, worlds, iterations, luck_worlds, luck_iterations, min_tu
             r = g.get("ratings") or {}
             jobs.append({"uid": g["uid"], "side": side, "log": g["log"], "team": team, "outcome": won,
                          "meta": {"end_reason": g.get("end_reason"), "turns": g["turns"],
+                                  "rating_band": g.get("rating_band"), "source": g.get("source"),
                                   "rating": (r.get("pre") or r.get("pre_game") or r).get(side) if isinstance(r, dict) else None,
                                   "ratings_raw": r, "top50": g.get("top50"),
                                   "chance_net": (g.get("chance_net") or {}).get(side)},
@@ -477,6 +489,10 @@ def main():
     r.add_argument("--luck-iterations", type=int, default=10000)
     r.add_argument("--out", required=True)
     r.add_argument("--draft", default="default", choices=["default", "smogon"])
+    r.add_argument("--games", default=None, help="games.jsonl.gz (default scratch_ds/human/games.jsonl.gz, the top-50 "
+                                                 "set); sets.jsonl.gz and species_profiles.json from the same dir")
+    r.add_argument("--band", default=None, help="keep games with this rating band (e.g. lt1300, 1300-1499, 1900plus)")
+    r.add_argument("--band-key", default="rating_band", help="game field holding the band (default rating_band)")
     f = sub.add_parser("farm")
     f.add_argument("decisions")
     f.add_argument("--n", type=int, default=10)
@@ -494,7 +510,8 @@ def main():
         import fpenv
         fpenv.configure()
         run_jobs(human_jobs(args.n, args.seed, args.worlds, args.iterations, args.luck_worlds, args.luck_iterations,
-                            draft=args.draft), args.workers, args.out)
+                            draft=args.draft, games_path=args.games, band=args.band, band_key=args.band_key),
+                 args.workers, args.out)
     elif args.cmd == "farm":
         import fpenv
         fpenv.configure()
