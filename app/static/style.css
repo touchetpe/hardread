@@ -127,6 +127,7 @@ h1[tabindex="-1"]:focus, main:focus { outline: none; }
 .icon-btn svg { width: 16px; height: 16px; }
 @media (max-width: 640px) {
   .brand small, .icon-btn .t-label { display: none; }
+  .site-nav a[data-nav="home"] { display: none; }
   .site-header .inner { gap: 8px; padding: 8px 12px; }
   .site-nav a, .icon-btn { padding: 7px 9px; font-size: 13px; }
   main { padding: 18px 14px 48px; }
@@ -223,7 +224,12 @@ a.showcase .meta { color: var(--ink-3); font-size: 13px; }
 a.showcase .go { margin-top: 10px; font-weight: 600; font-size: 14px; color: var(--pos-ink); }
 
 /* ---------- bridge ---------- */
-.bridge { display: grid; grid-template-columns: minmax(150px, 1.1fr) 2.4fr minmax(92px, auto); gap: 0 14px; align-items: center; }
+.bridge { display: block; }
+.bridge .b-row { display: grid; grid-template-columns: minmax(150px, 1.1fr) 2.4fr minmax(92px, auto); grid-template-areas: "label bar val"; gap: 0 14px; align-items: center; border-top: 1px solid var(--line); }
+.bridge .b-row:first-child, .bridge .b-axis-row { border-top: 0; }
+.bridge .b-label { grid-area: label; }
+.bridge .b-bar, .bridge .b-axis-box { grid-area: bar; }
+.bridge .b-val { grid-area: val; }
 .bridge .b-label { font-size: 14px; font-weight: 600; padding: 10px 0; }
 .bridge .b-label small { display: block; font-weight: 400; color: var(--ink-3); font-size: 12px; line-height: 1.35; }
 .bridge .b-bar { position: relative; height: 40px; }
@@ -233,7 +239,6 @@ a.showcase .go { margin-top: 10px; font-weight: 600; font-size: 14px; color: var
 .bridge .b-val .glyph { font-size: 13px; margin-right: 4px; }
 .bridge .b-axis-box svg { width: 100%; height: 14px; display: block; overflow: visible; }
 .bridge .b-axis-box text { fill: var(--ink-3); font-size: 10px; font-family: var(--font); }
-.bridge .row-sep { grid-column: 1 / -1; height: 1px; background: var(--line); }
 .bridge-eq { margin: 14px 0 0; font-size: 14px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
 .bridge-eq b { color: var(--ink); }
 .bridge-legend, .chart-legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12.5px; color: var(--ink-2); margin-top: 12px; }
@@ -242,8 +247,9 @@ a.showcase .go { margin-top: 10px; font-weight: 600; font-size: 14px; color: var
 .footnote { font-size: 12.5px; color: var(--ink-3); margin: 10px 0 0; }
 .summary-text { margin: 16px 0 0; padding: 14px 16px; border-radius: 10px; background: var(--surface-2); font-size: 14.5px; color: var(--ink-2); }
 @media (max-width: 560px) {
-  .bridge { grid-template-columns: 1fr auto; }
-  .bridge .b-bar { grid-column: 1 / -1; order: 3; margin-bottom: 6px; }
+  .bridge .b-row { grid-template-columns: 1fr auto; grid-template-areas: "label val" "bar bar"; padding-bottom: 6px; }
+  .bridge .b-axis-row { grid-template-areas: "bar bar"; }
+  .bridge .b-axis-row .b-label, .bridge .b-axis-row .b-val { display: none; }
 }
 .notice { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; border-radius: 10px; background: var(--warn-bg); color: var(--warn-ink); font-size: 14px; margin-top: 14px; }
 .notice::before { content: "ⓘ"; font-weight: 700; }
@@ -401,3 +407,9 @@ figure.runs { margin: 6px 0 8px; }
 .rp-label { fill: var(--ink-2); font-size: 12px; font-family: var(--font); }
 .rp-axis { fill: var(--ink-3); font-size: 10.5px; font-family: var(--font); }
 .notice-inline { color: var(--warn-ink); background: var(--warn-bg); padding: 6px 10px; border-radius: 8px; }
+
+dl.prov { display: grid; grid-template-columns: 170px 1fr; gap: 6px 14px; font-size: 14px; margin: 8px 0 0; }
+dl.prov dt { color: var(--ink-3); }
+dl.prov dd { margin: 0; color: var(--ink); overflow-wrap: anywhere; }
+dl.prov dd.mono { font-family: var(--mono); font-size: 12.5px; }
+@media (max-width: 560px) { dl.prov { grid-template-columns: 1fr; } }

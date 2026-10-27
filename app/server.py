@@ -16,6 +16,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import secrets
 import shutil
 import subprocess
@@ -30,6 +31,7 @@ from pathlib import Path
 from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
+from starlette.concurrency import run_in_threadpool
 
 APP = Path(__file__).resolve().parent
 HARDREAD = APP.parent
@@ -42,7 +44,11 @@ CACHE = STATE / "cache"
 JOBS = STATE / "jobs"
 SHOWCASES = APP / "data" / "showcases"
 FP_PY = Path(os.environ.get("HARDREAD_FP_PYTHON", HARDREAD.parent / "environments" / "foulplay" / "bin" / "python"))
-GLIMMER_URL = os.environ.get("HARDREAD_GLIMMER_URL", "http://127.0.0.1:18131/v1/chat/completions")
+# the shared local Glimmer server (owned by lanes Ag-LLM / Coord; this app never starts or stops it)
+LLM_URL = os.environ.get("HARDREAD_LLM_URL", "http://127.0.0.1:18131").rstrip("/")
+GLIMMER_URL = LLM_URL + "/v1/chat/completions"
+EVAL_LOCK = HARDREAD / "scratch_ds" / "agent" / "EVAL_LOCK"   # present = a recorded evaluation is running: no calls
+LLM_GATE = threading.Lock()   # at most one model call in flight from this app (the server runs --parallel 1)
 EXPLAIN_MODE = os.environ.get("HARDREAD_EXPLAIN_MODE", "auto")   # auto | loop | prefetch | template | off
 VERDICTS_ON = os.environ.get("HARDREAD_DISABLE_VERDICT", "") != "1"
 
@@ -52,7 +58,7 @@ RATES = {"review": int(os.environ.get("HARDREAD_RATE_REVIEWS", "5")),
 QUEUE_CAP = int(os.environ.get("HARDREAD_QUEUE_CAP", "50"))
 TTL_PUBLIC = 14 * 24 * 3600
 TTL_PRIVATE = 24 * 3600
-TIMEOUTS = {"review": int(os.environ.get("HARDREAD_JOB_TIMEOUT", "600")), "verdict": 300, "explain": 600}
+TIMEOUTS = {"review": int(os.environ.get("HARDREAD_JOB_TIMEOUT", "600")), "verdict": 300, "explain": 1800}
 QUESTIONS = {   # the three fixed questions (EVAL_PROTOCOL_AGENT.md Q1-Q3); free-form "Ask" is out of scope
     "q1": "Was this game decided by luck or by my choices?",
     "q2": "What was the biggest piece of luck in this game, and how much did it matter?",
@@ -75,11 +81,16 @@ def _write_json(p, obj):
     os.replace(tmp, p)
 
 
+def eval_locked():
+    return EVAL_LOCK.exists()
+
+
 def glimmer_up():
-    """True if the local llama-server answers its health endpoint (quick check, no generation)."""
+    """True if the local llama-server answers its health endpoint and no recorded evaluation holds it."""
+    if eval_locked():
+        return False
     try:
-        base = GLIMMER_URL.split("/v1/")[0]
-        with urllib.request.urlopen(base + "/health", timeout=1.5) as r:
+        with urllib.request.urlopen(LLM_URL + "/health", timeout=1.5) as r:
             return r.status == 200
     except Exception:  # noqa: BLE001
         return False
@@ -146,6 +157,9 @@ class Jobs:
                 lane = [x for x in self.queue if (self.jobs[x]["kind"] == "explain") == (j["kind"] == "explain")]
                 out["position"] = lane.index(jid) + 1 if jid in lane else 1
                 out["message"] = "Waiting for a free engine slot"
+                if j["kind"] == "explain" and eval_locked():
+                    out["pending"] = True
+                    out["message"] = "Explanation pending: the local model is busy with an evaluation run"
                 out["progress"] = 0.0
             elif j["state"] == "running":
                 st = _jsonfile(j["dir"] / "status.json", {}) or {}
@@ -172,9 +186,12 @@ class Jobs:
             running = [j for j in self.jobs.values() if j["state"] == "running"]
             eng = sum(1 for j in running if j["kind"] != "explain")
             exp = len(running) - eng
+            llm_free = not eval_locked() and not LLM_GATE.locked()
             for jid in list(self.queue):
                 j = self.jobs[jid]
-                if (j["kind"] == "explain" and exp >= 1) or (j["kind"] != "explain" and eng >= self.concurrency):
+                if j["kind"] == "explain" and (exp >= 1 or not llm_free):
+                    continue
+                if j["kind"] != "explain" and eng >= self.concurrency:
                     continue
                 self.queue.remove(jid)
                 with open(j["dir"] / "stderr.txt", "w") as errf:
@@ -424,6 +441,7 @@ def create_app(concurrency=1, processes=4):
                 "engine_python": FP_PY.exists(), "bridge": "tools/review/bridge.py" if bridge_adapter._B else "stub",
                 "disagreement_rule": "tools/review/select_offered.py" if P._SO else "app",
                 "verdicts": VERDICTS_ON, "explain_mode": EXPLAIN_MODE, "glimmer": glimmer_up(),
+                "llm_url": LLM_URL, "eval_lock": eval_locked(),
                 "showcases": len((_jsonfile(SHOWCASES / "index.json", {}) or {}).get("showcases", []))}
 
     @app.get("/api/showcases")
@@ -437,7 +455,7 @@ def create_app(concurrency=1, processes=4):
         if body is None:
             return err(400, "Send JSON.")
         try:
-            rep = resolve_input(body.get("input", ""))
+            rep = await run_in_threadpool(resolve_input, body.get("input", ""))
             game = P.inspect_game(rep)
             export = P.parse_export(body.get("team") or "")
         except P.InputError as e:
@@ -455,7 +473,7 @@ def create_app(concurrency=1, processes=4):
             return err(400, "Send JSON.")
         side = body.get("side")
         try:
-            rep = resolve_input(body.get("input", ""))
+            rep = await run_in_threadpool(resolve_input, body.get("input", ""))
             game = P.inspect_game(rep)
             lines, ctx, job_input = P.prepare(rep, side, body.get("team"), game)
         except P.InputError as e:
@@ -525,17 +543,20 @@ def create_app(concurrency=1, processes=4):
             PN = _agent("parse_note")
         except Exception:  # noqa: BLE001
             return err(503, "The note reader is not available in this build; add the details by hand below.")
-        res = None
-        if glimmer_up():
-            try:
-                from llm import GlimmerClient
-                # short timeout: the local model may be busy; the keyword reader answers at once
-                res = PN.parse(note, own, opp, parser="glimmer", client=GlimmerClient(GLIMMER_URL, max_tokens=1024,
-                                                                                     timeout=25))
-            except Exception:  # noqa: BLE001
-                res = None
-        if res is None:
-            res = PN.parse(note, own, opp, parser="keyword")
+        def read_note():
+            explaining = any(j["kind"] == "explain" and j["state"] == "running" for j in list(jobs.jobs.values()))
+            if not explaining and glimmer_up() and LLM_GATE.acquire(blocking=False):
+                try:   # one call in flight; short timeout; the keyword reader answers at once otherwise
+                    from llm import GlimmerClient
+                    if not eval_locked():
+                        return PN.parse(note, own, opp, parser="glimmer",
+                                        client=GlimmerClient(GLIMMER_URL, max_tokens=1024, timeout=25))
+                except Exception:  # noqa: BLE001
+                    pass
+                finally:
+                    LLM_GATE.release()
+            return PN.parse(note, own, opp, parser="keyword")
+        res = await run_in_threadpool(read_note)   # never block the event loop on the model
         return {"ok": True, "chips": res["chips"], "dropped": res["dropped"], "parser": res["parser"]}
 
     @app.get("/api/options/{rid}")
@@ -599,6 +620,16 @@ def create_app(concurrency=1, processes=4):
             return err(503, "The queue is full right now. Try again in a few minutes.")
         return {"ok": True, "job_id": jid}
 
+    @app.get("/api/review/{rid}/verdict/{turn}/{k}")
+    def verdict_receipt(rid: str, turn: int, k: int):
+        """The raw verdict.py output behind a check (receipts)."""
+        if load_parts(rid) is None:
+            return err(404, "This review does not exist or has expired.")
+        v = verdicts_of(rid).get(f"{turn}:{k}")
+        if v is None:
+            return err(404, "No check for this decision yet.")
+        return Response(json.dumps(v, indent=1), media_type="application/json")
+
     # ---- explanation (tools/agent/explain.py, async)
     @app.post("/api/explain")
     async def explain(request: Request):
@@ -619,14 +650,19 @@ def create_app(concurrency=1, processes=4):
         if qid in have:
             return {"ok": True, "cached": True}
         key = f"explain:{rid}:{qid}"
-        template = _template_explanation(parts[0], QUESTIONS[qid], verdicts_of(rid))
+        template = await run_in_threadpool(_template_explanation, parts[0], QUESTIONS[qid], verdicts_of(rid))
         jid = jobs.existing(key)
         if jid:
             return {"ok": True, "job_id": jid, "template": template}
         ok, _ = jobs.allow(client_of(request), "explain")
         if not ok:
             return err(429, "Too many explanation requests this hour.")
-        mode = EXPLAIN_MODE if EXPLAIN_MODE != "auto" else ("loop" if glimmer_up() else "template")
+        if EXPLAIN_MODE != "auto":
+            mode = EXPLAIN_MODE
+        elif eval_locked():
+            mode = "loop"   # queued until the evaluation lock is gone; the template is shown meanwhile
+        else:
+            mode = "loop" if await run_in_threadpool(glimmer_up) else "template"
         if mode == "template" and template is not None:   # nothing to wait for
             cur = _jsonfile(store, {}) or {}
             cur[qid] = template
@@ -634,10 +670,14 @@ def create_app(concurrency=1, processes=4):
             return {"ok": True, "cached": True}
 
         def cmd(jd, mode=mode):
-            return [sys.executable, str(APP / "explain_worker.py"), str(jd), "--mode", mode, "--url", GLIMMER_URL]
+            return [sys.executable, str(APP / "explain_worker.py"), str(jd), "--mode", mode, "--url", GLIMMER_URL,
+                    "--lock", str(EVAL_LOCK)]
 
-        def done(j, store=store, qid=qid):
+        def done(j, store=store, qid=qid, review=parts[0], rid=rid):
             res = json.loads((j["dir"] / "explain.json").read_text())
+            if res.get("pending_eval_lock"):   # stopped by an evaluation lock: not cached, a later visit retries
+                return "pending"
+            res = wording_guard(res, review, QUESTIONS[qid], verdicts_of(rid))
             cur = _jsonfile(store, {}) or {}
             cur[qid] = res
             _write_json(store, cur)
@@ -648,6 +688,25 @@ def create_app(concurrency=1, processes=4):
         if jid is None:
             return err(503, "The queue is full right now.")
         return {"ok": True, "job_id": jid, "template": template}
+
+    # ---- provenance (the Open Weights evidence: which model, which build, which engine)
+    @app.get("/api/provenance")
+    def provenance():
+        prov = _jsonfile(APP / "data" / "provenance.json", {}) or {}
+
+        def git(*args, cwd=HARDREAD):
+            try:
+                return subprocess.run(["git", *args], cwd=str(cwd), capture_output=True, text=True,
+                                      timeout=5).stdout.strip() or None
+            except Exception:  # noqa: BLE001
+                return None
+        import bridge_adapter
+        return {"ok": True, **prov,
+                "live": {"hardread_commit": git("rev-parse", "--short", "HEAD"),
+                         "foulplay_commit": git("rev-parse", "--short", "HEAD", cwd=HARDREAD / "foul-play"),
+                         "explainer_reachable": glimmer_up(), "explain_mode": EXPLAIN_MODE,
+                         "bridge": "tools/review/bridge.py" if bridge_adapter._B else "stub",
+                         "disagreement_rule": "tools/review/select_offered.py" if P._SO else "app"}}
 
     # ---- share (opt-in, public replays only)
     @app.post("/api/share/{rid}")
@@ -697,6 +756,22 @@ def create_app(concurrency=1, processes=4):
         return FileResponse(str(APP / "static" / "index.html"))
 
     return app
+
+
+# product wording (research/28 B): never "cost" for choices, never mistake/misplay words outside a verdict card,
+# never coach/trainer/analyzer. A model sentence that uses them is not shown; the template is, labelled as such.
+NEVER_SAY = re.compile(r"\b(cost|costs|costed|costing|mistakes?|misplay(?:s|ed)?|blunder(?:s|ed)?|errors?|"
+                       r"coach(?:es|ing)?|trainer|analy[sz]er|throw(?:s|n)?)\b", re.I)
+
+
+def wording_guard(res, review, question, verdicts):
+    text = ((res.get("rendered") or {}).get("text")) or ""
+    if res.get("final") == "template" or not NEVER_SAY.search(text):
+        return res
+    tpl = _template_explanation(review, question, verdicts) or {}
+    out = dict(tpl, final="template", policy_rejected=True, requested_mode=res.get("requested_mode"),
+               rejected={"final": res.get("final"), "text": text, "matched": NEVER_SAY.findall(text)})
+    return out
 
 
 def _template_explanation(review, question, verdicts):

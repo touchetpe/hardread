@@ -1,0 +1,20 @@
+{
+ "explainer": {
+  "model": "Muse Glimmer-30B (base, Meta open weights)",
+  "license": "Apache-2.0 + usage policy (18+)",
+  "source": "Hugging Face meta-models/Muse-Glimmer-30B-GGUF (rev b44f1072\u2026, see handoff data ledger)",
+  "gguf": "Muse-Glimmer-30B-KQuant-17GB-Q4_K_M.gguf",
+  "gguf_bytes": 16756683904,
+  "gguf_sha256": "4cc57c0f51040a226e5a72cc47b7613f7772950e460a665f7083de89f183f60e",
+  "gguf_sha256_measured": "2026-10-27, shasum -a 256 on the local copy (matches the recorded prefix 4cc57c0f)",
+  "server": "llama.cpp llama-server f8def7f (Metal)",
+  "server_flags": "--ctx-size 32768 --parallel 1 --jinja --temp 0 --top-k 40 --top-p 1 --seed 42 --reasoning-format deepseek, reasoning low",
+  "role": "explains the review (pointer output: it writes words; every number is rendered from a cited tool field) and reads the player's note"
+ },
+ "engine": {
+  "name": "Foul Play (HardRead fork) on poke-engine 0.0.48",
+  "license": "GPL-3.0",
+  "role": "reconstructs each decision, searches sampled opponent sets (4 worlds x 1 s per decision), prices luck (luck v2)"
+ },
+ "calibration": "absolute-value calibrator fitted on top-ladder replays (tools/review/calibrator.json, key absolute_human)"
+}

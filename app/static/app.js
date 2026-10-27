@@ -430,8 +430,7 @@
     var maxAbs = 100;
     var grid = h("div", { class: "bridge", role: "list", "aria-label": "Bridge from start to result" });
     rows.forEach(function (r, i) {
-      if (i > 0) grid.appendChild(h("div", { class: "row-sep", "aria-hidden": "true" }));
-      var lbl = h("div", { class: "b-label", role: "listitem" }, r.label, h("small", null, r.sub));
+      var lbl = h("div", { class: "b-label" }, r.label, h("small", null, r.sub));
       var barBox = h("div", { class: "b-bar", "aria-hidden": "true" });
       barBox.appendChild(signedBar(r.val, maxAbs, r.kind));
       var valTxt = r.kind === "level" ? r.val + "%" : signed(r.val);
@@ -439,14 +438,14 @@
         r.kind === "signed" ? h("span", { class: "glyph", "aria-hidden": "true" }, glyph(r.val)) : null,
         valTxt, r.kind === "signed" ? h("span", { class: "unit" }, "pts") : null,
         h("span", { class: "sr-only" }, r.kind === "signed" ? " points, " + favour(r.val) : ""));
-      append(grid, [lbl, barBox, val]);
+      grid.appendChild(h("div", { class: "b-row", role: "listitem" }, lbl, barBox, val));
     });
     var ax = s("svg", { viewBox: "0 0 400 14", preserveAspectRatio: "none", "aria-hidden": "true" });
     [[-100, MINUS + "100"], [-50, MINUS + "50"], [0, "0"], [50, "+50"], [100, "+100"]].forEach(function (t) {
       ax.appendChild(s("text", { x: 200 + t[0] / 100 * 198, y: 11, "text-anchor": t[0] === -100 ? "start" : t[0] === 100 ? "end" : "middle", text: t[1] }));
     });
-    append(grid, [h("div", { "aria-hidden": "true" }), h("div", { class: "b-axis-box", "aria-hidden": "true" }, ax),
-      h("div", { class: "muted", style: "font-size:11px;text-align:right", "aria-hidden": "true" }, "points")]);
+    grid.appendChild(h("div", { class: "b-row b-axis-row", "aria-hidden": "true" }, h("div", { class: "b-label" }), h("div", { class: "b-axis-box" }, ax),
+      h("div", { class: "muted b-val", style: "font-size:11px;font-weight:500;text-align:right" }, "points")));
     var eq = h("p", { class: "bridge-eq" },
       h("b", null, b.s), " start ", b.l < 0 ? MINUS + " " : "+ ", h("b", null, Math.abs(b.l)), " luck ",
       b.c < 0 ? MINUS + " " : "+ ", h("b", null, Math.abs(b.c)), " choices = ", h("b", null, b.r), " (" + (b.result === "win" ? "win" : "loss") + ")");
@@ -751,8 +750,8 @@
       var cites = [];
       (r.sentences || []).forEach(function (snt) { (snt.citations || []).forEach(function (c) { cites.push(c); }); });
       body.appendChild(p);
-      body.appendChild(h("p", { class: "ex-mode" }, pending ? "Fixed template, shown while Muse Glimmer writes." : (MODE_TEXT[ex.final] || ""),
-        !pending && ex.final !== "template" && ex.latency_s ? " (" + Math.round(ex.latency_s) + " s)" : ""));
+      body.appendChild(h("p", { class: "ex-mode" }, pending ? "Fixed template, shown while Muse Glimmer writes." :
+        ex.policy_rejected ? "Fixed template: Muse Glimmer's draft used wording HardRead does not allow (for example “cost” for choices)." : (MODE_TEXT[ex.final] || "")));
       if (pending) body.appendChild(h("p", { class: "muted ex-wait ex-pending" }, h("span", { class: "spinner", "aria-hidden": "true" }), h("span", null, "Muse Glimmer is writing its own version…")));
       if (cites.length) {
         body.appendChild(h("details", { class: "ex-sources" }, h("summary", null, "Sources for each number (" + cites.length + ")"),
@@ -777,13 +776,20 @@
     function poll(jid, q, hasTemplate) {
       api("/api/job/" + jid).then(function (st) {
         if (current !== q || !document.body.contains(body)) return;
+        if (st.state === "done" && st.result === "pending") {
+          var wp = body.querySelector(".ex-pending");
+          if (wp) wp.lastChild.textContent = "Explanation pending: the local model was busy with an evaluation run. Reload later for Muse Glimmer's version.";
+          if (wp && wp.firstChild.classList) wp.firstChild.remove();
+          return;
+        }
         if (st.state === "done") { refresh(q); return; }
         if (st.state === "error") {
           if (!hasTemplate) { clear(body); body.appendChild(h("p", { class: "muted" }, "The explanation could not be written: " + (st.message || ""))); }
           else { var w0 = body.querySelector(".ex-pending"); if (w0) w0.textContent = "Muse Glimmer could not finish; the template above stands."; }
           return;
         }
-        var msg = st.state === "queued" ? "Muse Glimmer is queued…" : "Muse Glimmer is writing its own version (it runs on this machine)… " + Math.round(st.elapsed || 0) + " s";
+        var msg = (st.pending || st.stage === "pending") ? (st.message || "Explanation pending") + "; the template stands meanwhile." :
+          st.state === "queued" ? "Muse Glimmer is queued…" : "Muse Glimmer is writing its own version (it runs on this machine)… " + Math.round(st.elapsed || 0) + " s";
         var w = body.querySelector(".ex-pending");
         if (hasTemplate && w) w.lastChild.textContent = msg; else if (!hasTemplate) waiting(msg);
         setTimeout(function () { poll(jid, q, hasTemplate); }, 1500);
@@ -823,7 +829,7 @@
     var have = (v.verdicts || {})[key];
     var wrap = h("div", { class: "read-block" });
     if (STATIC) return have ? verdictCard(have) : null;
-    if (!v.features || !v.features.verdict) return have ? verdictCard(have) : null;
+    if (!v.features || !v.features.verdict) return have ? verdictCard(have, id) : null;
     var panel = h("div", { class: "read-panel", hidden: true });
     var btn = h("button", { type: "button", class: "btn btn-ghost btn-sm", "aria-expanded": "false" }, have ? "Check again with another read" : "What were you thinking?");
     btn.addEventListener("click", function () {
@@ -832,7 +838,7 @@
       if (open && !panel.firstChild) buildReadPanel(id, v, d, panel, wrap);
       if (open) { var t = panel.querySelector("textarea"); if (t) t.focus(); }
     });
-    if (have) wrap.appendChild(verdictCard(have));
+    if (have) wrap.appendChild(verdictCard(have, id));
     wrap.appendChild(h("div", { class: "form-row", style: "margin-top:10px" }, btn));
     wrap.appendChild(panel);
     return wrap;
@@ -851,7 +857,11 @@
       if (!chips.length) chipList.appendChild(h("li", { class: "muted small" }, "No details yet. With none, the check uses the engine's own guess at their sets."));
       chips.forEach(function (c, i) {
         chipList.appendChild(h("li", { class: "chip chip-edit" }, chipText(c),
-          h("button", { type: "button", class: "chip-x", "aria-label": "Remove " + chipText(c), onclick: function () { chips.splice(i, 1); drawChips(); } }, "×")));
+          h("button", { type: "button", class: "chip-x", "aria-label": "Remove " + chipText(c), onclick: function () {
+            chips.splice(i, 1); drawChips();
+            var xs = chipList.querySelectorAll(".chip-x");   // keep keyboard focus in the list
+            (xs[Math.min(i, xs.length - 1)] || readBtn).focus();
+          } }, "×")));
       });
     }
     readBtn.addEventListener("click", function () {
@@ -906,7 +916,7 @@
             var card = (nv.verdicts || {})[d.turn + ":" + d.k];
             if (!card) { msg.textContent = "The check finished but returned nothing."; return; }
             v.verdicts = nv.verdicts;
-            var old = wrap.querySelector(".verdict"); var fresh = verdictCard(card);
+            var old = wrap.querySelector(".verdict"); var fresh = verdictCard(card, id);
             if (old) old.replaceWith(fresh); else wrap.insertBefore(fresh, wrap.firstChild);
             msg.textContent = "Done."; fresh.querySelector("h3").focus();
           });
@@ -930,7 +940,7 @@
   }
 
   var VERDICT_GLYPH = { "Misplay": "▼", "Misread": "◐", "Defensible": "✓", "Within noise": "≈" };
-  function verdictCard(c) {
+  function verdictCard(c, reviewId) {
     var cls = { "Misplay": "v-misplay", "Misread": "v-misread", "Defensible": "v-ok", "Within noise": "v-noise" }[c.verdict] || "v-noise";
     var box = h("div", { class: "verdict " + cls },
       h("h3", { tabindex: "-1" }, h("span", { class: "v-badge" }, h("span", { "aria-hidden": "true" }, VERDICT_GLYPH[c.verdict] + " "), c.verdict)),
@@ -940,7 +950,8 @@
       (c.contradictions || []).map(function (t) { return h("p", { class: "small notice-inline" }, t + ". That detail was left out."); }),
       c.third_option ? h("p", { class: "small" }, c.third_option) : null,
       c.read_check ? h("p", { class: "small" }, c.read_check.sentence, h("br"), h("span", { class: "muted" }, c.read_check.scope)) : null,
-      h("p", { class: "footnote" }, (c.runs || 3) + " independent runs on the same sampled worlds · " + (c.worlds || 4) + " worlds × " + (c.iterations || 20000).toLocaleString("en") + " iterations each" + (c.seconds ? " · " + Math.round(c.seconds) + " s" : "") + "."));
+      h("p", { class: "footnote" }, (c.runs || 3) + " independent runs on the same sampled worlds · " + (c.worlds || 4) + " worlds × " + (c.iterations || 20000).toLocaleString("en") + " iterations each" + (c.seconds ? " · " + Math.round(c.seconds) + " s" : "") + ". ",
+        reviewId && !STATIC ? h("a", { href: "/api/review/" + encodeURIComponent(reviewId) + "/verdict/" + c.turn + "/" + c.k, target: "_blank", rel: "noopener" }, "Full output (JSON)") : null));
     return box;
   }
   function runsPlot(c) {
@@ -1023,11 +1034,34 @@
         h("li", null, "The pasted log is deleted when the review finishes, unless you added your team export: then the name-free log and the export stay with the review, for the same time, so you can check decisions. A note you write about a decision is read on this machine and not stored; the details you confirm are kept with that check."),
         h("li", null, "Sharing is opt-in: a share page and card exist only after you press Share, and they show numbers only (no names, chat or notes)."),
         h("li", null, "No accounts, no tracking, no cookies. Your theme and the 18+ confirmation are remembered in this browser only.")),
+      provenanceSection(),
+      h("h2", null, "Built during the hackathon"),
+      h("p", null, "HardRead was built for the Meta hackathon (October 26 to November 4, 2026). The repository's BUILT_DURING_HACKATHON.md lists what existed before the kickoff and what was built after it, commit by commit."),
       h("h2", null, "Fair play"),
       h("p", null, "HardRead only reviews finished games. Links to live battle rooms are refused."),
       h("h2", null, "Not affiliated"),
       h("p", null, "HardRead is a fan-made research project. It is not affiliated with, endorsed or sponsored by Nintendo, The Pokémon Company, Game Freak or Pokémon Showdown. Pokémon and character names are trademarks of their owners and are used only to refer to the game. No official art, sprites, logos or music are used."),
       h("p", null, h("a", { href: "#/" }, "← Review a game")))], "About");
+  }
+
+  function provenanceSection() {
+    var box = h("div", null, h("p", { class: "muted" }, STATIC ? "Not included in this static copy." : "Loading…"));
+    if (!STATIC) api("/api/provenance").then(function (p) {
+      clear(box);
+      if (!p.ok) { box.appendChild(h("p", { class: "muted" }, "Not available.")); return; }
+      var ex = p.explainer || {}, en = p.engine || {}, lv = p.live || {};
+      var rows = [
+        ["Explainer model", (ex.model || "–") + (ex.license ? " (" + ex.license + ")" : "")],
+        ["Weights file", (ex.gguf || "–") + (ex.gguf_bytes ? " · " + (ex.gguf_bytes / 1e9).toFixed(1) + " GB" : "")],
+        ["Weights SHA-256", ex.gguf_sha256 || "–"],
+        ["Served with", (ex.server || "–") + (ex.server_flags ? " · " + ex.server_flags : "")],
+        ["Reachable now", lv.explainer_reachable ? "yes" : "no (templates are used)"],
+        ["Search engine", (en.name || "–") + (en.license ? " (" + en.license + ")" : "") + (lv.foulplay_commit ? " · commit " + lv.foulplay_commit : "")],
+        ["This app", lv.hardread_commit ? "commit " + lv.hardread_commit : "–"]];
+      box.appendChild(h("dl", { class: "prov" }, rows.map(function (r) { return [h("dt", null, r[0]), h("dd", { class: r[0].indexOf("SHA") >= 0 ? "mono" : null }, r[1])]; })));
+    });
+    return h("section", { "aria-labelledby": "prov-title" }, h("h2", { id: "prov-title" }, "Provenance"),
+      h("p", null, "Muse Glimmer runs here as open weights on this machine; nothing is sent to a hosted model."), box);
   }
 
   // ------------------------------------------------------------------ shared SVG defs (hatch for "against you")

@@ -21,6 +21,9 @@ def main():
     ap.add_argument("jobdir")
     ap.add_argument("--mode", default="template", choices=["loop", "prefetch", "template"])
     ap.add_argument("--url", default="http://127.0.0.1:18131/v1/chat/completions")
+    ap.add_argument("--lock", default=str(HARDREAD / "scratch_ds" / "agent" / "EVAL_LOCK"),
+                    help="while this file exists a recorded evaluation owns the model: no calls")
+    ap.add_argument("--max-lock-wait", type=int, default=1500)
     a = ap.parse_args()
     d = Path(a.jobdir)
     import explain
@@ -28,9 +31,26 @@ def main():
     question = (d / "question.txt").read_text().strip()
     verdicts = json.loads((d / "verdicts.json").read_text()) if (d / "verdicts.json").exists() else None
     client = None
+    state = {"locked_out": False}
     if a.mode != "template":
-        from llm import GlimmerClient
+        from llm import GlimmerClient, LLMError
         client = GlimmerClient(a.url, max_tokens=2048, temperature=0.0, reasoning="low", timeout=300)
+        lock = Path(a.lock)
+        raw_chat = client.chat
+
+        def chat(*args, **kw):
+            """Check the evaluation lock before every request; wait for it to clear (the job stays pending)."""
+            t_wait = time.time()
+            while lock.exists():
+                (d / "status.json").write_text(json.dumps({"stage": "pending", "message":
+                                                           "Explanation pending: the local model is busy with an evaluation run"}))
+                if time.time() - t_wait > a.max_lock_wait:
+                    state["locked_out"] = True
+                    raise LLMError("evaluation lock")
+                time.sleep(10)
+            (d / "status.json").write_text(json.dumps({"stage": "writing", "message": "Muse Glimmer is writing"}))
+            return raw_chat(*args, **kw)
+        client.chat = chat
     t0 = time.time()
     res = explain.run(review, question, client=client, mode=a.mode, verdicts=verdicts or None)
     out = {"question": question, "requested_mode": a.mode, "final": res.get("final"),
@@ -39,7 +59,7 @@ def main():
            "data_tool_calls": res.get("data_tool_calls"), "llm_requests": res.get("llm_requests"),
            "errors": res.get("errors"), "trace": res.get("trace"),
            "prompt_version": res.get("prompt_version"), "verifier_version": res.get("verifier_version"),
-           "created": time.time()}
+           "created": time.time(), "pending_eval_lock": state["locked_out"]}
     (d / "explain.json").write_text(json.dumps(out))
     return 0 if out["rendered"] else 1
 
