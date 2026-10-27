@@ -806,3 +806,29 @@ Initial P6 ten-job farm wave failed at setup: code snapshot omitted required fou
 The audited286k-row XL job met Running and preflight timing, but rank2 hit output-mount EIO while saving the tokenizer before optimizer step1; its wrapper retried plain loss while nine peers remained weighted. Root preserved logs and cancelled the exact job; terminal Canceled verified19:13UTC. No accuracy read or adapter accepted. Separate e1/e2 audit confirms allsixranks/job weighted, microbatch4, no failed ranks/fallbacks, steps648/649 at19:14UTC. One owner-authorized six-node fallback is being staged from reviewed repaird9d3a10; no outcome claimed.
 
 The setup-only farm probe finished setup but endedFailed: its leader exit0 was followed by an immediate owned-descendant TERM/guard125, consistent with log-pipe drainage. Six simulated guard tests pass; three Linux behavior tests pending. No new farm chunks count.
+
+
+## 2026-10-27 20:38 UTC — Student v2 R2: dev-selected LR model and complete offline report
+
+The fixed candidates are `hrstu-20261027-v2-bfef`, `hrstu-20261027-v2lr-5019`, and `hrstu-20261027-v2ep-5019`; all completed. Selection rule was committed in `d9d3a10` before any result read. Independent input CHECK found byte-identical per-job inputs/extraction/count metadata, the same 264 lab archives and encoder/split code, and 48,117 dev decisions. Three identical missing lab logs were counted, not silently repaired. All 264 lab bytes were cross-checked against remote content MD5 and a local SHA manifest; the 39 non-dev val/vol MD5 gaps did not decide selection.
+
+Main dev loss (`pol + 0.5*vsearch`) was bfef 1.840206051959429, lr 1.828945203736395, ep 1.8415082566234005. The global-minimum tie tolerance is 1e-4 with fixed bfef/lr/ep priority; no tie occurred. **Selected: lr, `main_lr0.0008`, LR 0.0008, logged minimum epoch 5** (not a claim about the saved checkpoint epoch). Dev lock preceded held-out inspection. Selected `main/best.pt`: 102,461,844 bytes, SHA-256 `4ddf39ca4edb0e8fe4e218875b07b5e6838812e4cf4cc3eed8aafdac0a4adea6`; before/after remote identity matched. Immutable checkpoint lock was written 20:15:10 UTC, before the held-out report at 20:16:39.
+
+| Candidate | Arm | Split | Decisions | Games | Engine-choice top-1 | KL | Inference-value Brier |
+|---|---|---|---:|---:|---:|---:|---:|
+| bfef | main | lab_test | 93,417 | 1,157 | 57.3482% | 0.377454 | 0.174009 |
+| bfef | main | val_crosspool | 124,611 | 1,579 | 57.7606% | 0.376739 | 0.170820 |
+| bfef | control | lab_test | 93,417 | 1,157 | 57.8931% | 0.372555 | 0.175726 |
+| bfef | control | val_crosspool | 124,611 | 1,579 | 58.2589% | 0.373390 | 0.171806 |
+| lr | main | lab_test | 93,417 | 1,157 | 58.1243% | 0.367678 | 0.173620 |
+| lr | main | val_crosspool | 124,611 | 1,579 | 58.4748% | 0.365429 | 0.170606 |
+| lr | control | lab_test | 93,417 | 1,157 | 57.9359% | 0.370101 | 0.175106 |
+| lr | control | val_crosspool | 124,611 | 1,579 | 58.2846% | 0.368904 | 0.169687 |
+| ep | main | lab_test | 93,417 | 1,157 | 57.1352% | 0.380008 | 0.175090 |
+| ep | main | val_crosspool | 124,611 | 1,579 | 57.4524% | 0.378561 | 0.168527 |
+| ep | control | lab_test | 93,417 | 1,157 | 57.7272% | 0.373968 | 0.178267 |
+| ep | control | val_crosspool | 124,611 | 1,579 | 57.9676% | 0.376029 | 0.174411 |
+
+V1 descriptive reference: main roster test 54.5% / KL .411 / Brier .176; separate-pool 55.3% / .415 / .171; control roster top-1 53.3%. V1 used 2,699 label games, about 37,600 roster-test decisions and a 440-game separate pool; v2 uses larger cohorts shown above. The gap is descriptive, not paired or a significance claim. The selected v2 main exceeds its same-run control by only about 0.19 top-1 points; no significant main-control advantage is established. These percentages measure offline engine-choice agreement, not battle wins.
+
+Fresh Sol accepted comparability, selection chronology, checkpoint bytes and complete reporting. Filtered report SHA-256 `c55132620a29e90cddb1eab7bd45e3c28db781e08dcf8cf915d1dc318f473760`; checkpoint-lock SHA `5d7de931026c26147eb4da705ee4c5213bd5ef5293591432cd1796572dfee01c`. Raw artifacts and reviews remain private under `scratch_ds/codex/training-roadmap/r2-input-audit/`. No offline CI/p-value was computed from these aggregate reports. The selected-model 200-game arena, legality and latency measurement remain pending; the old 32/40 heuristic arena is a small earlier pilot, not a v2 result. No new arena or T3 job was submitted by this readout.
