@@ -439,3 +439,14 @@ Jobs were submitted by the SFT agent from its uncommitted `azure/sft/*` fixes (t
 - **Served (llama.cpp + LoRA, Q4_K_M base):** 400/400 legal (raw path 0 malformed); agreement 0.4775; p50 / p95 1.41 / 1.49 s.
 - **Adapter:** `azureml://datastores/workspaceblobstore/paths/pokemon-rl-research/hardread/hrsft-20261027-v0ddpres-fd53/adapter-bf16.gguf`, sha256 `4c0989e9191ebd75d37b6526d2e2eb2e63cfbdde995ad15c055a9a4fb6af5435`.
 - **Use:** the adapter for the single G-24h retry (research/28 E1).
+
+## 2026-10-27 ≈04:50 UTC: finalist and G2 rules (written BEFORE the 08:00 UTC lever-screen readout; research/28 S1.8 and §0.3 P3)
+These rules are fixed now. The dev-A screens end at 08:00 UTC (argmax, value, double-half, student-blend) and 14:00 UTC (belief).
+1. **F1 (finalist replication on dev A, fresh seeds 831000–846004):** `value` (HARDREAD_LEVER_SELECT=value). Information, not a gate.
+2. **F2 (combo):** `value` + `double-half` **only if** double-half's final dev-A estimate is ≥ 51.0 with ≥ 400 games at its 08:00 UTC end; otherwise no combo.
+3. **Excluded from finalists and G2:**
+   - belief levers (their model is pre-trained on Metamon human replays with no stated data licence);
+   - student-blend (a select lever, exclusive with `value`).
+4. **G2 order on dev set B (`hr_val`):** the combo first only if its dev-A estimate ≥ F1's; otherwise `value` first. At most 2 candidates on dev B.
+5. **G2 rules:** ≥ 1,000 games; markers valid; pre-registered win rate ≥ 52.0 → PASS. A G2 FAIL is not a blocker: the better candidate is frozen anyway, and the sealed run always runs.
+6. **Timing:** G2 runs on D1 only if amendment A3a (draft: `handoff/drafts/A3a.md`, owner decision OD-2) is approved. Otherwise G2 runs on D4 as registered.
