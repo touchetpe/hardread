@@ -31,7 +31,7 @@ $PY tools/human/reconstruct_check.py --n 50 --workers 4     # about 2 min; --no-
 
 ## Raw data (outside the repo)
 
-`<PROJECT_ROOT>/data/replays/gen9ou-top/raw/`
+`../data/replays/gen9ou-top/raw/`
 
 - `replays-0000.jsonl.gz` ... `replays-0004.jsonl.gz`: gzipped JSONL, one replay JSON per line, 500 per shard (each shard is a series of gzip members; `gzip -dc` and Python's `gzip` read it as one stream).
 - `manifest.json`: snapshot time, top-50 list with Elo/GXE, query parameters, counts, SHA-256 per shard, date range, rating distribution, per-user listing counts.
@@ -131,7 +131,7 @@ Same rules as above (public JSON endpoints only, 1.1 s between requests, descrip
 $PY tools/human/crawl_broad.py run --max-hours 8 [--interval 1.1]   # resumable; kill it any time (SIGTERM) and re-run
 $PY tools/human/crawl_broad.py status                               # band counts, sources, disk
 $PY tools/human/crawl_broad.py manifest
-$PY tools/human/parse_replays.py --broad <PROJECT_ROOT>/data/replays/gen9ou-broad/raw --out scratch_ds/human_broad
+$PY tools/human/parse_replays.py --broad ../data/replays/gen9ou-broad/raw --out scratch_ds/human_broad
 ```
 
 **What it fetches.**
@@ -141,7 +141,7 @@ $PY tools/human/parse_replays.py --broad <PROJECT_ROOT>/data/replays/gen9ou-broa
 
 Checkpoints: `index.jsonl` (id, source, rating, band; written with each 20-replay flush), `global_pages.jsonl` (one line per listed page), `search_top500/<user>.json`, `status.json` (every 5 min), `manifest.json` (every 30 min and at exit), `missing_ids.txt`, `run.lock`.
 
-**Raw data:** `<PROJECT_ROOT>/data/replays/gen9ou-broad/raw/` (32 shards of 500, 43 MB with listings). **Processed:** `hardread/scratch_ds/human_broad/` (58 MB; same tables as `human/`, parsed from the broad shards plus the top-50 shards, which are tagged `source = top50`). The top-50 outputs in `scratch_ds/human/` are unchanged (re-running the default parse reproduces them byte for byte). Pseudonyms use the same salt as `scratch_ds/human/PRIVATE/`, so a player has the same pseudonym in both datasets; `PRIVATE/player_map.json` stays local.
+**Raw data:** `../data/replays/gen9ou-broad/raw/` (32 shards of 500, 43 MB with listings). **Processed:** `hardread/scratch_ds/human_broad/` (58 MB; same tables as `human/`, parsed from the broad shards plus the top-50 shards, which are tagged `source = top50`). The top-50 outputs in `scratch_ds/human/` are unchanged (re-running the default parse reproduces them byte for byte). Pseudonyms use the same salt as `scratch_ds/human/PRIVATE/`, so a player has the same pseudonym in both datasets; `PRIVATE/player_map.json` stays local.
 
 **Extra columns** (games, actions and sets rows): `source` (`top50`, `top500`, `global`), `rating_band` (from the replay `rating` field: the lower player's post-game rating; bands `lt1300`, `1300-1499`, `1500-1699`, `1700-1899`, `1900plus`, `unrated`), `rating_band_pre` (same bands from the lower player's pre-game rating), and in games `top500` (`p1`, `p2`: player is among the 500 ladder entries of the snapshot). Free text: a second pass replaces any other player's username that turns up inside a nickname.
 

@@ -17,7 +17,13 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-from targets import capped, excluded_rosters, iter_jsonl, norm_roster, open_text  # noqa: E402
+from targets import capped, excluded_rosters, iter_jsonl, open_text  # noqa: E402
+from roster_hash import roster_digest  # noqa: E402
+
+
+def is_excluded_example(example, excluded_digests):
+    """Hash an incoming roster before checking the hr_val/reserved exclusion union."""
+    return roster_digest(example["roster"]) in excluded_digests
 
 
 def main():
@@ -27,9 +33,9 @@ def main():
     ap.add_argument("--max-per-mon", type=int, default=3)
     ap.add_argument("--seed", type=int, default=0)
     a = ap.parse_args()
+    excl = excluded_rosters()
     out_dir = Path(a.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-    excl = excluded_rosters()
     st = Counter()
     games = defaultdict(set)
     rosters = defaultdict(set)
@@ -40,7 +46,7 @@ def main():
         for path in a.inputs:
             for e in iter_jsonl([path]):
                 st["rows_in"] += 1
-                if norm_roster(e["roster"]) in excl:
+                if is_excluded_example(e, excl):
                     st["rows_excluded_roster"] += 1
                     excl_games.add(e["game"])
                     continue

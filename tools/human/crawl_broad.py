@@ -36,7 +36,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from crawl_replays import Abort, UA, dir_size  # noqa: E402
 
-BASE = Path("<PROJECT_ROOT>/data/replays")
+PROJECT = Path(__file__).resolve().parents[2].parent
+BASE = PROJECT / "data/replays"
 TOP_RAW = BASE / "gen9ou-top" / "raw"
 RAW = BASE / "gen9ou-broad" / "raw"
 FORMAT = "gen9ou"

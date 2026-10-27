@@ -19,11 +19,11 @@ from pathlib import Path
 
 HARDREAD = Path(__file__).resolve().parents[1]
 PROJECT = HARDREAD.parent
-# Paths default to the Mac layout; Azure jobs override them with HARDREAD_* variables.
+# Paths default to the checkout or PATH; Azure jobs override them with HARDREAD_* variables.
 FOULPLAY_DIR = Path(os.environ.get("HARDREAD_FOULPLAY_DIR", HARDREAD / "foul-play"))
 FOULPLAY_PY = Path(os.environ.get("HARDREAD_FOULPLAY_PY", PROJECT / "environments" / "foulplay" / "bin" / "python"))
 RUNTIME = Path(os.environ.get("HARDREAD_RUNTIME", HARDREAD / "showdown" / "runtime"))
-NODE = os.environ.get("HARDREAD_NODE", "/Users/REDACTED/.nvm/versions/node/v24.13.0/bin/node")
+NODE = os.environ.get("HARDREAD_NODE", "node")
 RUNS_DIR = Path(os.environ.get("HARDREAD_RUNS_DIR", HARDREAD / "runs"))
 PORT = 18010  # default; overridden by --port
 

@@ -27,7 +27,7 @@ The claim: every number shown is copied from a cited engine result. The model ne
 ## Run
 ```bash
 # server (local, Metal); record the PID, stop only that PID
-M=<PROJECT_ROOT>
+M="${HARDREAD_PROJECT_ROOT:-$(cd "$(git rev-parse --show-toplevel)/.." && pwd)}"
 $M/build/llama.cpp/bin/llama-server --model $M/models/muse-glimmer-gguf/Muse-Glimmer-30B-KQuant-17GB-Q4_K_M.gguf \
   --alias muse-glimmer --host 127.0.0.1 --port 18131 --gpu-layers 99 --temp 0 --top-k 40 --top-p 1 --seed 42 \
   --ctx-size 32768 --parallel 1 --jinja --reasoning-format deepseek --chat-template-kwargs '{"reasoning_strength":"low"}' \

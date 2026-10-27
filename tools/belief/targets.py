@@ -5,7 +5,7 @@ Input: decision records from tools/dataset/extract.py (log version 2).
 Output: JSONL(.gz), one example per (decision, opponent Pokemon) with
   uid, duid (decision uid), game, run_id, side, turn, k, team_preview, cfg,
   roster   opponent roster key: sorted Showdown display species joined by '|'
-           (same format as data/pools-v1.json val_rosters),
+           canonical keys contain six species; the strict digest manifest stores only their SHA-256 digests,
   split    train / dev / test, assigned by a hash of the roster (held out by roster),
   species  the view's species id (what the bot sees, e.g. ogerponwellspringtera),
   view     the bot's public view of this Pokemon (decision log v2 fields, untouched),
@@ -44,10 +44,18 @@ import argparse
 import gzip
 import hashlib
 import json
-import re
 import sys
 from collections import Counter, defaultdict
 from pathlib import Path
+
+try:  # Package import (tests) and direct-script import (human_prep / CLI).
+    from .roster_hash import (
+        EXPECTED_VAL_ROSTERS, canonical_roster_key, load_val_roster_digests, roster_digest, toid,
+    )
+except ImportError:  # pragma: no cover - exercised by direct-script import tests.
+    from roster_hash import (
+        EXPECTED_VAL_ROSTERS, canonical_roster_key, load_val_roster_digests, roster_digest, toid,
+    )
 
 HARDREAD = Path(__file__).resolve().parents[2]
 FP_DATA = HARDREAD / "foul-play" / "fp" / "data"
@@ -56,12 +64,6 @@ POOLS = HARDREAD / "data" / "pools-v1.json"
 STATS = ("hp", "atk", "def", "spa", "spd", "spe")
 NEUTRAL_NATURES = {"hardy", "docile", "serious", "bashful", "quirky"}
 TURN_BUCKETS = ((0, 0, "0 (preview)"), (1, 5, "1-5"), (6, 10, "6-10"), (11, 20, "11-20"), (21, 10 ** 6, "21+"))
-
-
-def toid(s):
-    if s is None:
-        return None
-    return re.sub(r"[^a-z0-9]", "", str(s).lower())
 
 
 def canon_nature(n):
@@ -180,27 +182,73 @@ def spread_speed_ok(name, nature, evs, speed_range, scarf_possible, level=100):
 
 
 def norm_roster(roster):
-    """Order- and format-free roster key: sorted Showdown ids of the 6 species ('Great Tusk|Kingambit|...')."""
-    return "|".join(sorted(toid(x) for x in roster.split("|")))
+    """Order- and format-free six-species key shared with the versioned hash manifest."""
+    return canonical_roster_key(roster)
 
 
-def excluded_rosters():
-    """Rosters that must never be trained on: the hr_val rosters (data/pools-v1.json) and the reserved/sealed
-    rosters of the v1 split (their species lists are read only to build this exclusion set; nothing else of those
-    teams is read). Returned as norm_roster keys, e.g. to drop human games played with these rosters."""
-    keys = set()
-    if POOLS.exists():
-        keys |= {norm_roster(r) for r in json.loads(POOLS.read_text()).get("val_rosters", [])}
-    split = HARDREAD.parent / "data/teams/splits/hl_05_26-gen9ou-split-v1.json"
-    validated = HARDREAD.parent / "data/teams/validated/hl_05_26-gen9ou.jsonl"
-    if split.exists() and validated.exists():
-        reserved = set(json.loads(split.read_text())["reserved_files"])
-        with open(validated) as f:
-            for line in f:
-                r = json.loads(line)
-                if Path(r["file"]).name in reserved:
-                    keys.add("|".join(sorted(toid(x) for x in r["species"])))
-    return keys
+def hr_val_roster_digests(pool_path=None, expected_count=EXPECTED_VAL_ROSTERS):
+    """Load only the validated held-out digest set; malformed or absent manifests raise."""
+    return load_val_roster_digests(pool_path or POOLS, expected_count=expected_count)
+
+
+def reserved_roster_digests(split_path=None, validated_path=None):
+    """Hash reserved species-only metadata; never open reserved team files or silently omit them."""
+    split_path = Path(split_path or (HARDREAD.parent / "data/teams/splits/hl_05_26-gen9ou-split-v1.json"))
+    validated_path = Path(validated_path or (HARDREAD.parent / "data/teams/validated/hl_05_26-gen9ou.jsonl"))
+    if not split_path.is_file():
+        raise FileNotFoundError("required reserved split metadata is missing")
+    if not validated_path.is_file():
+        raise FileNotFoundError("required validated species metadata is missing")
+    try:
+        split = json.loads(split_path.read_text())
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise ValueError("required reserved split metadata is unreadable or malformed") from exc
+    if not isinstance(split, dict) or not isinstance(split.get("reserved_files"), list):
+        raise ValueError("reserved split metadata must contain a reserved_files list")
+    names = split["reserved_files"]
+    if any(not isinstance(name, str) or not name or Path(name).name != name for name in names):
+        raise ValueError("reserved_files must contain nonempty basenames")
+    if len(names) != len(set(names)):
+        raise ValueError("reserved_files must be unique")
+    reserved = set(names)
+    found = {}
+    try:
+        with validated_path.open() as f:
+            for line_number, line in enumerate(f, 1):
+                if not line.strip():
+                    continue
+                try:
+                    row = json.loads(line)
+                except json.JSONDecodeError as exc:
+                    raise ValueError("validated species metadata contains malformed JSON") from exc
+                if not isinstance(row, dict) or not isinstance(row.get("file"), str):
+                    raise ValueError("validated species metadata row is malformed")
+                name = Path(row["file"]).name
+                if name in reserved:
+                    if name in found:
+                        raise ValueError("validated species metadata duplicates a reserved filename")
+                    found[name] = roster_digest(row.get("species"))
+    except OSError as exc:
+        raise ValueError("required validated species metadata is unreadable") from exc
+    if set(found) != reserved:
+        raise ValueError("validated species metadata does not cover every reserved filename")
+    return set(found.values())
+
+
+def excluded_rosters(pool_path=None, split_path=None, validated_path=None,
+                     expected_count=EXPECTED_VAL_ROSTERS):
+    """Return hr_val and reserved roster digests; all required metadata must validate first."""
+    hr_val = hr_val_roster_digests(pool_path, expected_count=expected_count)
+    reserved = reserved_roster_digests(split_path, validated_path)
+    return hr_val | reserved
+
+
+def record_hr_val_diagnostic(stats, roster, hr_val_digests):
+    """Count hr_val membership only; reserved-only exclusions do not inflate this diagnostic."""
+    if roster_digest(roster) in hr_val_digests:
+        stats["examples_from_hr_val_rosters"] += 1
+        return True
+    return False
 
 
 def roster_key(team):
@@ -390,7 +438,7 @@ def main():
                     help="put every row in this split (e.g. 'test' for the hr_val farm, the pre-registered S-A test set)")
     ap.add_argument("--seed", type=int, default=0)
     args = ap.parse_args()
-    val_rosters = set(json.loads(POOLS.read_text()).get("val_rosters", [])) if POOLS.exists() else set()
+    val_roster_digests = hr_val_roster_digests()
     stats = Counter()
     states = Counter()
     hidden_counts = Counter()
@@ -413,8 +461,7 @@ def main():
             stats["examples"] += 1
             stats["examples_" + e["split"]] += 1
             rosters[e["split"]].add(e["roster"])
-            if e["roster"] in val_rosters:
-                stats["examples_from_hr_val_rosters"] += 1
+            record_hr_val_diagnostic(stats, e["roster"], val_roster_digests)
             states[e["item_state"]] += 1
             for k in ("item", "ability", "tera"):
                 hidden_counts[k] += e["hidden"][k]

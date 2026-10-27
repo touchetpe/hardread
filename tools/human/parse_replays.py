@@ -33,7 +33,8 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 HARDREAD = HERE.parent.parent
-DEFAULT_RAW = Path("<PROJECT_ROOT>/data/replays/gen9ou-top/raw")
+PROJECT = HARDREAD.parent
+DEFAULT_RAW = PROJECT / "data/replays/gen9ou-top/raw"
 DEFAULT_OUT = HARDREAD / "scratch_ds" / "human"
 
 HYPHEN_NAMES = {"hooh", "porygonz", "jangmoo", "hakamoo", "kommoo", "tinglu", "chienpao", "wochien", "chiyu"}

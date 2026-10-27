@@ -7,7 +7,7 @@ HardRead publishes code, results and **hashes**. It does not publish datasets th
 | File | What it contains | Why it is safe to publish |
 |---|---|---|
 | `DATA_SNAPSHOT.json` | SHA-256 and sizes of the Foul Play data caches every engine run used (Smogon Gen 9 OU usage statistics for 2026-09 and Foul Play's set files), plus the Foul Play commit | Hashes only, no data. Anyone can re-fetch the same files and check the hashes. |
-| `data/pools-v1.json` | How the development team pools were split (rule, seed, counts), the SHA-256 of each pool and of the pool tarball, and the species lists of the 596 held-out (`hr_val`) rosters | No team sets (moves, items, spreads). The roster list lets anyone check that held-out rosters were never used for training. |
+| `data/pools-v1.json` | How the development team pools were split (rule, seed, counts), the SHA-256 of each pool and of the pool tarball, and digests of the 596 held-out (`hr_val`) rosters | No team sets or raw roster species lists are published. The versioned digests support deterministic membership checks without disclosing roster contents. |
 | `data/sealed-v1.json` | The rule that drew the 1,000 sealed teams, the file names, and the SHA-256 of their content | Names and a hash only. The teams themselves stay sealed (see below). Anyone can check the published hash after the sealed test. |
 | `tools/review/calibrator.json` | Fitted calibration parameters (a few numbers per calibrator) and the size of the data they were fitted on | Aggregate parameters, no game data |
 | `tools/sft/dex.json` | Species, types, abilities and base stats, generated from Pokémon Showdown's data by `tools/sft/mkdex.js` | Derived from MIT-licensed Showdown data files. Game data, no art. |
