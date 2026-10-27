@@ -491,3 +491,26 @@ These rules are fixed now. The dev-A screens end at 08:00 UTC (argmax, value, do
 - **The KO is in the search:** poke-engine's damage for Crunch against the sampled Ceruledge (same worlds, `calculate_damage`) is **192–288** with the drafted Zamazenta (Atk stat 276) vs 230 HP left: a KO on part of the rolls only, so the search values Crunch below switching to Dragonite.
 - **The drafted team is the cause:** Draft B filled Zamazenta's unrevealed fields with the most common Smogon set that fits Close Combat + Crunch, the bulky Body Press set (**252 HP / 0 Atk / 88 Def / 168 Spe**, Jolly, Iron Defense, Body Press). The same decision with only the spread changed to 0 HP / 252 Atk / 4 Def / 252 Spe (Atk 339): Crunch does **234–354** (a KO on every roll) and the verdict becomes **Defensible**, Δ_U = **−0.016 / −0.011 / −0.014** (crunch is the engine's top option in all 3 runs). With the draft, the same diagnostic run (other worlds) gave Misplay, Δ_U +0.087 / +0.085 / +0.056.
 - **Conclusion:** no verdict bug; the verdict is only as good as the user's stats. This confirms the plan's rule that verdicts require the export (now enforced by the app). Note for the review in Draft mode: the "assumed option" filter (27 §4.3) covers unrevealed moves/items, not spreads; a drafted spread can move KO thresholds, so a Draft-mode disagreement involving a KO-range attack can be an artefact. Suggested copy in Draft mode: "your sets are assumed (Smogon's most common set)". Possible later fix (not planned): choose the draft spread consistent with the damage the user's own attacks dealt in the log.
+
+## 2026-10-27 ≈08:25 UTC: lever screens final (08:00 deadline), early C1t1 A/A final, finalist rule applied, F1 submitted (research/28 S1.10–S1.11)
+- **Harvest:** every 08:00-deadline `hr*` job is terminal (label farm ×6, hr_val ×2, argmax/value ×2 each, dbl-n1r, sb015/03/05, early A/A ×3; the last, `hrlab-…-n3`, ended ≈08:20). Every blob chunk of the screens and the A/A is local (blob = local: argmax 44 + 42, value 44 + 41, dbl-n1r 33 (+ dbl-n2 1, a valid seed-820000 chunk of the cancelled job), sb 22 each, A/A 28 + 32 + 32). Belief screens (`bel*`) run to 14:00 UTC (S1.18).
+- **Final lever table** (dev set A = `hr_train`, C1t1 both sides, treatment seat alternating, pre-registered failure rule via `tools/analysis/attribute_failures.py --mode treat --group-by-prefix`; `lev-dbl-n1-c*` excluded as duplicate seeds; JSON `scratch_ds/lev_final/screens_0800_final.json`, failure map `screens_0800_failures.json`; 0 infra reruns):
+
+| Lever (fork commit) | Win rate ± 95% CI [lo, hi] | p | Games / pairings | Undecided → label | Screen rule |
+|---|---|---|---|---|---|
+| **value** (`df65fd8`) | **54.18 ± 2.17 [52.01, 56.34]** | **0.0002** | 1,699 / 850 | 4 vanilla crashes, 1 treatment crash, 1 unknown (hang; bounds 54.12–54.18) | **CANDIDATE** |
+| argmax (`df65fd8`) | 50.17 ± 2.12 [48.06, 52.29] | 0.87 | 1,720 / 860 | 3 vanilla crashes | undecided |
+| double-half (`fb80f6f`) | 48.09 ± 3.32 [44.77, 51.41] | 0.26 | 680 / 340 | 1 vanilla crash | DROP |
+| student-blend λ 0.15 (`363684f`) | 53.18 ± 4.21 [48.97, 57.40] | 0.14 | 440 / 220 | 1 vanilla crash | candidate by the screen rule; **excluded** (pre-registered rule) |
+| student-blend λ 0.3 | 50.68 ± 4.30 [46.38, 54.99] | 0.76 | 440 / 220 | 1 vanilla crash | undecided; excluded |
+| student-blend λ 0.5 | 46.59 ± 4.33 [42.26, 50.92] | 0.12 | 440 / 220 | 1 vanilla crash | DROP; excluded |
+
+  - Crashes: vanilla = Foul Play's `keldeoresolute` team_dict bug (shared pairings, so it hits every lever at the same games) and one `ZeroDivisionError`; the one treatment crash is new: `AttributeError: 'NoneType' object has no attribute 'can_z'` (`lev-value-n2-c031` g0008). Counted as losses for the crashing side, as pre-registered.
+  - **Reading:** `value` ended at +4.2 points (p = 0.0002, 1,699 games) after being +3.0 at 1,139 games. About 9 levers were screened, so expect regression to the mean; F1 (fresh seeds) measures it.
+- **Early C1t1 A/A (exploratory, `hraa-20261026-c1t1-n{1,2,3}-d106`, `--mode seatA`, `scratch_ds/lev_final/early_aa_final.json`):** seat A **50.16 ± 2.05 [48.11, 52.22]**, p = 0.88, 1,838 games / 920 pairings. Labels: 4 seat-A crashes (Keldeo-Resolute) and 2 unknown hangs (bounds 50.05–50.16). **Passes the A3 rule** (|0.16| ≤ 2.2 and p ≥ 0.05). No seat bias seen.
+- **Finalist rules (fixed at ≈04:37 UTC, before this readout) applied:**
+  - F1 = `value`.
+  - **F2: none.** Double-half's final is 48.09 with 680 games, below the 51.0 threshold.
+  - Belief and student-blend levers are excluded.
+  - Under track REG (A3a not approved), G2 on dev set B tests `value` alone on D4.
+- **F1 submitted (E5, track REG):** `hrlev-20261027-f1value-n1…n15-c9d0`, submitted 08:22–08:24 UTC. 15 jobs × 5 chunks × 10 side-swapped pairings = 1,500 games. Seed bases 830000 + 1000·j, j = 1–15 (chunks 831000–845004; research/28's "846004" is a typo for the formula's 845004). `--treat HARDREAD_LEVER_SELECT=value --treat-seat alternate`, `hr_train`, C1t1, timeout 1,800 s per game. Fork `c04b38e` (adds the belief lever, off by default) and HardRead `5f9a02f`. At submission, hr* Running + Queued = 18 ≤ 25; the cluster had 10 idle nodes of 13.
