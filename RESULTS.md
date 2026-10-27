@@ -883,3 +883,40 @@ The ten fixed public replay cases now all completed **general draft review** aft
 Owned job `hrxpl-20261027-bf16hash-8f136d11dd` completed22:26:56–22:29:08UTC (132seconds), one node, reviewed ceiling0.5node-hours. Source9a2881cb5db26f2612845fd32366437aa46690b3; script SHAed7e7f03a78b3b9fbf759b8cb99725fd3a31d69dac72eeec4ffe9ffa6a3ed0e5. The4,522-byte manifest reports PASS_PREFLIGHT_ONLY and binds12mounted files/59,581,817,299bytes, including2weight files/59,553,435,272bytes and2tokenizer assets/28,209,833bytes. Mounted model-tree SHAd011cd8d3b69d4d1005a0a50d34857a4a55dc8a9d490e2ef895efa86df33eb86.
 
 The actual readonly mount checks pass; CUDA sees one NVIDIA H100 NVL(cap9.0). Runtime is Python3.12.15, Torch2.12.1+cu130/CUDA13.0 and Transformers5.16.1. No model initialization, forward call, inference, install or network action was performed. No target-mount lock test or committed client-template binding exists in this receipt. Accordingly this is NOT full N3d readiness, a50-item verifier result, tokens/s, semantic quality or A1 success; those measures are unmeasured and noCI/p-value applies. Private raw manifest SHA4f87d1489a78c35ec35b0521a2e703bdc6e65595d132696ab83d3225d2be6d5a, under scratch_ds/codex/n3d-bf16-preflight/owned-readout-20261027T2240Z. Separate driver recording remains disabled under the two-reject fallback.
+
+## 2026-10-27 22:54 UTC — T3 large student: three-seed held-out readout and trained Mac timing
+
+The three exact large-model jobs completed under the prospective rule recorded in the T3 card before the local held-out read. This is an offline decision-agreement/value readout, not a battle win-rate measurement. All main and control rows use the same cohorts: `lab_test` n=93,417 decisions / 1,157 games and `val_crosspool` n=124,611 / 1,579 games.
+
+| Seed | Arm | Lab top-1 | Lab KL | Lab value Brier | Cross-pool top-1 | Cross-pool KL | Cross-pool value Brier |
+|---:|---|---:|---:|---:|---:|---:|---:|
+| 11 | main | 58.505411% | 0.365708 | 0.174851 | 58.817440% | 0.365570 | 0.170457 |
+| 12 | main | 58.293458% | 0.366754 | 0.175457 | 58.583913% | 0.366434 | 0.171244 |
+| 13 | main | 58.447606% | 0.364555 | 0.175165 | 58.910530% | 0.363697 | 0.171328 |
+| 11 | control | 57.348234% | 0.375486 | 0.172614 | 57.889753% | 0.372460 | 0.165705 |
+| 12 | control | 57.818170% | 0.375443 | 0.176221 | 58.169824% | 0.374576 | 0.171046 |
+| 13 | control | 57.486325% | 0.374220 | 0.171365 | 57.597644% | 0.373845 | 0.168708 |
+
+The registered main roster top-1 arithmetic mean is **58.41549182696939%**, with sample standard deviation **0.1095649963661747 percentage points**. The threshold is **59.1243%**, so the roster gate **FAILS by 0.70880817303061 points**. The main cross-pool mean is **58.77062752619485%**, for a cross-pool minus roster mean gap of **+0.35513569922546 points**, within the registered 1-point limit: the cross-pool gap check **PASSES**. Per-seed gaps (cross-pool minus lab) are +0.312029, +0.290455, and +0.462924 points. The control rows are descriptive and do not select the main model. The earlier v2 values (58.1243% roster and 58.4748% cross-pool) are references from different recorded cohorts/label sources; no unpaired significance claim follows. Offline top-1 does not imply battle wins. Seed 11 remains fixed for downstream work; there is no test-based reselection.
+
+The accepted T3 report records matched source/input identity across all three jobs: guarded manifest SHA-256 `289c417e6d4ab9aab2f201fec9a7182bfe99789d94732615aca9f276c3f1924f`, encoder SHA-256 `f944e033f1a970227f8d1c2f9d82b1c579fdaa1cec3e154c431660e1e6e795d4`, 264 label / 12 volume / 79 evaluation-only archives, identical input/extraction/count and split files. The exact `results.json` identities were checked against the v1 lock: s11 `a19ed3bc70cb982dc4d61a3f738dbbb564cdf6301a4bceedebb6e3b82fae8ca3`, s12 `b342f3a56df3613ed6f5885793ffa7c0f51c69dc7f1e3c0ec1e391ce2dd8ec63`, s13 `7065ce9fb60e3fbc556ebd527d0993aae5c2747aeba14ce7ea187b30a5add593`. Lock SHA-256 `6ad4495481a72939af3429d40ec4bc7ba0fd97771eee848560c3e25a3fc81cd2`; held-out projection SHA-256 `c2395980727dd8d89d69355d0e25d68d3ad002ef0bf86e4f53656151e2cebe6a`; fresh independent Sol review SHA-256 `d1ec7876e9d9bc7684ff6cb4f4554a6edf4e8847a3e3e75663a70ba9ca016490`. Sol accepted the measurement/provenance within the written evidence limits, confirmed roster FAIL and cross-pool PASS, and did not accept full T3 completion.
+
+All seven registered T3 source files still match the v1 lock:
+
+| Registered source path | SHA-256 |
+|---|---|
+| `azure/student/run_student.py` | `45bc10575de0bc2fda0f4f704a21e2cb1cd998492e332567877e76ec9d9ec24b` |
+| `foul-play/fp/hardread_history.py` | `02e1cbf5115dc76f9d476d462e0288a239a8d21f5fd82617b8beae723352046f` |
+| `tools/dataset/extract.py` | `938cb32b6943a5364e47aafba37391fe05c6317602731a83b025455dc0fc8192` |
+| `tools/student/encode.py` | `dd2097b14c9a102dc2fc1576cd7fc8a4e010344a14a56df172a9d74110493c0c` |
+| `tools/student/infer.py` | `8f9de922ed4b267a2d0f2398b5fbefc1ca4797970eca7adab9aa60fb53e10764` |
+| `tools/student/model.py` | `f06950d5fa830481764a4413f573a090d8e966e58387cf6736ced026a2289ac4` |
+| `tools/student/train.py` | `b53b7ae33cb8484d3bca094eae353bd5efee00c32785d21d752053d350b8db1a` |
+
+The trained Mac timing used the locked seed-11 `main/best.npz` (SHA-256 `c5bf0cb7f99eca92457869ed56de5bedfd031ba9bc5d557b28b496c10a5f7031`, 364,547,668 bytes; pre/post hashes equal) on an Apple M4 Max. It used NumPy batch-one `Student.policy_value` end to end, including encoding, with all five thread-limit environment variables set to 1 before numerical imports. The frozen synthetic input SHA-256 was `14a0c8feab990fade94e6760321af4102929341ea9ca8e19e9ce83dd894b439f` (13 legal actions, 16 encoded events). After 20 warmups, each of three repeats made exactly 500 timed calls. Repeat p50/p95 were 21.266521/22.114121 ms, 21.266729/21.861465 ms, and 21.245105/21.833315 ms. The predeclared pooled p50 over 1,500 calls was **21.258375 ms**, above 15 ms: the trained latency gate **FAILS**. The report records background load; one-minute load average ranged about 3.4–4.0 during timing, so this is not described as an unloaded measurement. Timing runner SHA-256 `5a2c71db0c7878e4bcffa4a66acd76f179c6999855aa7f0e4e50f2bfcadcf134`; result SHA-256 `30926447426955c1c2cc14fe91ff1a0a91484511e793ae8301ab3b1287de3083`.
+
+The historical HardRead snapshot commit `55b65062d7ab6cab052a714a67590550e64f8187` maps to retained main commit `a4d967106ad0161922279c2b856cfd9c9aafebfd` in `handoff/scrub/commit-map-main.txt` (SHA-256 `5324be0edd3731433bacce5429fff1afb1eba3f69d83499e7c269fab68781b3b`). Fresh Sol additionally verified the seven historical blobs and their current byte hashes. A first HEAD-only timing preflight in the later local checkout (`7e429e0a11b79d2b566f49e33a49e5951cb9b62a`) rejected its difference from the historical lock commit and stopped before checkpoint load or inference. That failed preflight is preserved at `scratch_ds/codex/training-roadmap/t3-readout-private/stage2/timing-runner-preflight1.private.log` (SHA-256 `cfd5b0598c9d1aaae5f705c98f217a76bb0f9a4e72f81bd304e0a2331683f51d`). The subsequent fixed runner required and verified all seven registered source hashes before measuring.
+
+ONNX, ONNX Runtime, and ExecuTorch were absent in the existing runtime. No dependency was installed and no Android-format export was attempted; that gate remains **PENDING/UNTESTED**. The 200-game side-swapped arena remains **PENDING**. Full T3 acceptance is not complete; the registered roster and trained-latency gates have failed, while arena outcome is still unmeasured.
+
+Evidence: `scratch_ds/codex/training-roadmap/t3-readout-private/t3-dev-checkpoint-lock-v1-20261027T223852Z.json`; `scratch_ds/codex/training-roadmap/t3-readout-private/stage2/t3-heldout-readout-20261027T224339Z.private.json`; `scratch_ds/codex/training-roadmap/t3-readout-private/stage2/t3-trained-mac-timing-20261027T224703Z.private.json`; `scratch_ds/codex/training-roadmap/t3-readout-private/stage2/sol-t3-readout-review-v1.private.md`.
