@@ -744,3 +744,9 @@ StatusRUNNING, end/exit not yet available. Selected/analyzable n, false-decisive
 
 
 Correction at 2026-10-27 15:39:21 UTC: Luna retracted the provisional final-status newline-defect report: raw start records are standard-valid JSON, independently parsed by root; no farm/source/scientific output defect is established. The original records remain unchanged. Metadata observer22022 had already started and will exit naturally after writing a separate SHA-linked status on supervisor completion; it changes no scientific output. Use actual exit/raw metadata, never the earlier mistaken note, to assess Stage1.
+
+## 2026-10-27 16:07:18 UTC — VT1 offered population ACCEPTED (C7 / S1.21; not verdict accuracy)
+
+Fixed184analyzable/unique decisions on136game-sides, from300completeerror-free sides of150seed7label-farmgames. Exactregisteredabsolute_human/WP[.20,.80]/cost>=.05/top3rule:11,883decisions,8,824balanced,185precap,1dropped,184retained;rank1/2/3=136/37/11.0truthmismatch/unknown/missinglog/team/error;chosenlabeltruth andeveryselectedfieldindependentlyreconciled. Stage1exit0end15:43:40UTC;Stage2exit0at15:52. Source/input/forkhashesunchanged. NoC7Azurejob.
+
+Rootcheck154917Z/root-population-check.json andfreshSol sol-population-review.md ACCEPT S1.21. CandidateSHA256`dc8455b5d1fd96444acbcddab9a3c56489196b092369fe51ce8b586737df5c2f`. Stage1maincodeee2dfdd/forkc04b38e; selectionstartmain50930a8,exactreview/calibrator sourceSHA pinned. C9unrelatedsourceimplementation ongoing is not partofthispopulation. No false-decisive count/rate/CI/p orVT1PASS computed; selectioncountsnotanaccuracybenchmark.13casepilotexcluded.
