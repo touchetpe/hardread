@@ -585,8 +585,10 @@ def create_app(concurrency=1, processes=4):
         rid = str(body.get("review_id", ""))
         parts = load_parts(rid)
         d = cache_dir(rid)
-        if parts is None or d is None:
+        if parts is None:
             return err(404, "This review does not exist or has expired.")
+        if d is None:
+            return err(422, "Showcases use assumed sets; checking a decision needs your own game and team export.")
         review, ctx, _ = parts
         if ctx.get("mode") != "export" or not (d / "team.txt").exists():
             return err(422, "Checking a decision needs your team export: review the game again with it.")
