@@ -17,7 +17,10 @@ $PY tools/review/review.py REPLAY.json --team TEAM.txt --side p1 --out review.js
 | `value.py` | **Absolute state value** A(s) = eval(s) + logit(V_mcts(s))/0.0125: a Python port of poke-engine's `evaluate` (identical to the Rust CLI on 300 states, max diff 1e-4) plus the search correction. Needed because poke-engine's MCTS scores are *relative to each root's own eval*. |
 | `luck.py` | **Luck v2** (the validated hax meter):<br>• chance outcome classes from `generate_instructions`, valued on the absolute scale;<br>• sampled worlds conditioned on the damage the log shows;<br>• hidden actions as a move mixture.<br>Subcommands: `farm` (self-play runs; optional student evaluator) and `analyze` (the four checks with bootstrap CIs). |
 | `hax.py` | Luck v1 (superseded; failed the sanity check). Its branch-matching helpers are reused by `luck.py`. |
-| `review.py` | The CLI that combines the above into a JSON review. |
+| `review.py` | The CLI that combines the above into a JSON review (includes the `bridge` block). |
+| `bridge.py` | **The bridge** Start → Luck → Choices (both players) → Result (research/27 §4.2): S = start win probability, L = total luck, R = result, C = R − S − L; integer points s/l/c that always add up (half-up rounding = JS `Math.round`); forfeit/timeout tag; diagnostic split C = Σact + drift + end. Pure Python. `review.py` stores `bridge.from_review(review)` under `"bridge"`: the UI reads `bridge.s/l/c` and `bridge.labels` from there and never recomputes or sums disagreements. |
+| `validate_bridge.py` | Validation of the bridge on human-eval records (V1–V7; research/28 S1.5/E6). `--gate-file` names the gated input (Draft B / export path); exit 0 iff every acceptance row passes. Writes `scratch_ds/review/bridge_validation.json`. |
+| `test_bridge.py` | Identity on 50 random sides, integer rounding, UI JSON = `bridge.py`, end tags (`python3 tools/review/test_bridge.py`). |
 | `human_eval.py` | The review pipeline at scale on human replays (`run`), on farm games with the bot's own choices (`farm`, noise floor), and `analyze` (calibration, luck checks, decision cost vs rating). |
 | `fpenv.py` | Imports and configures Foul Play in-process. |
 

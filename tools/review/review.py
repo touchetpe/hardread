@@ -15,6 +15,8 @@ Output JSON:
              win-probability points, belief-averaged), decision cost, top alternative
   summary    total luck, total decision cost, biggest luck swing, turning point (biggest
              decision cost), the win-probability curve
+  bridge     Start -> Luck -> Choices (both players) -> Result, integer points that add up and
+             the forfeit/timeout tag (tools/review/bridge.py; validated by validate_bridge.py)
 
 Engine: Foul Play's own battle-update code, sampler and MCTS (poke-engine), offline.
 """
@@ -137,8 +139,11 @@ def review(log_lines, side, team_text, worlds=4, search_ms=1000, hax_worlds=4, h
             "decision_cost": big_dec["decision_cost"], "win_prob_before": big_dec["win_prob"]},
         "win_prob_curve": [[t["turn"], t["win_prob"]] for t in turns],
     }
+    from bridge import end_info, from_review
+    end_reason, end_turn = end_info(log_lines)
     meta = {
         "players": info["players"], "side": side, "opponent_side": info["opponent"], "own_hp": info["own_hp_mode"],
+        "end_reason": end_reason, "end_turn": end_turn,
         "engine": {"search": f"{worlds} worlds x {search_ms} ms (Foul Play sampler + poke-engine MCTS)",
                    "luck": f"luck v2 ({luck_estimator}): up to {hax_worlds} damage-consistent sampled worlds x every "
                            f"chance outcome class, absolute values (eval + {hax_iterations}-iteration MCTS correction)",
@@ -158,7 +163,9 @@ def review(log_lines, side, team_text, worlds=4, search_ms=1000, hax_worlds=4, h
             "When the replay hides your move (fainted first, full paralysis, sleep, flinch), the action is unknown; "
             "the cost is then given as a range over the possible moves."],
     }
-    return {"meta": meta, "summary": summary, "turns": turns, "decisions": decisions}
+    out = {"meta": meta, "summary": summary, "turns": turns, "decisions": decisions}
+    out["bridge"] = from_review(out)  # Start -> Luck -> Choices -> Result; the UI reads s/l/c from here (bridge.py)
+    return out
 
 
 def main():

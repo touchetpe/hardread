@@ -450,3 +450,24 @@ These rules are fixed now. The dev-A screens end at 08:00 UTC (argmax, value, do
 4. **G2 order on dev set B (`hr_val`):** the combo first only if its dev-A estimate ≥ F1's; otherwise `value` first. At most 2 candidates on dev B.
 5. **G2 rules:** ≥ 1,000 games; markers valid; pre-registered win rate ≥ 52.0 → PASS. A G2 FAIL is not a blocker: the better candidate is frozen anyway, and the sealed run always runs.
 6. **Timing:** G2 runs on D1 only if amendment A3a (draft: `handoff/drafts/A3a.md`, owner decision OD-2) is approved. Otherwise G2 runs on D4 as registered.
+
+## 2026-10-27 ≈04:45 UTC: bridge module and validation (research/28 S1.5, E6) — PASS
+- **Files:** `tools/review/bridge.py` (new; pure Python, one implementation for the product and its validation), `tools/review/validate_bridge.py` (moved from `tools/review/proposed/`, rewritten to the 27 §4.2 CLI: inputs, `--cal`, `--gate-file`, `--json`; exit 0 iff every acceptance row passes on the gate file), `tools/review/test_bridge.py` (new). `review.py` now adds `meta.end_reason`/`meta.end_turn` (from the log) and a `bridge` block (`bridge.from_review`) to its output; the UI reads `bridge.s/l/c` and `bridge.labels` from there.
+- **Definitions:** S = cal(root A at team preview); L = Σ luck v2 `branch_cond`; R = 1/0 (ties: no bridge); C = R − S − L. Displayed s = round(100S), l = round(100L), c = 100R − s − l, with half-up rounding (= JavaScript `Math.round`; Python's banker's rounding would show 50 instead of 51 for S = 0.505). Diagnostic split C = Σact + drift + end. Forfeit/timeout tag "Ended by forfeit on turn N (your win chance then: X%)".
+- **Test:** `python3 tools/review/test_bridge.py` 4/4 (identity to 1e-9 on 50 random sides of `paired_smogon` + `run520`, also cross-checked against `luck.turn_luck` under the Foul Play venv; integer sums on 40k synthetic cases; the `bridge` block of a fresh `review.py` output on farm game `lab-n4-c000_g0019` equals `bridge.from_review`; end tags).
+- **E6** (`--cal absolute_human --gate-file paired_smogon`, bootstrap 1,000 by game, seed 7) → `scratch_ds/review/bridge_validation.json` `"pass": true`, exit 0:
+
+| Row (gate: Draft B `paired_smogon`, 292 sides / 146 paired games) | Value | Rule | Draft A `run520` (1,028 / 512) | Draft A `paired_default` (291 / 145) |
+|---|---|---|---|---|
+| V1 max \|S + L + C − R\| | 0.0 | ≤ 1e-9 ✔ | 1.1e-16 | 1.1e-16 |
+| V1 integers add up; max \|c − round(100C)\| | yes; 1 | exact; ≤ 1 ✔ | yes; 1 | yes; 1 |
+| V2 share \|C\| > 1 | 0.68% | ≤ 2% ✔ | 1.17% | 1.72% |
+| V3 mean L winners − losers [95% CI] | 0.173 [0.121, 0.229] | low > 0 ✔ | [0.144, 0.205] | [0.094, 0.191] |
+| V3 P(L > 0 \| win) / P(L > 0 \| loss) | 0.733 / 0.336 | ≥ 0.65 / ≤ 0.50 ✔ | 0.825 / 0.454 | 0.795 / 0.407 |
+| V4 mean L (bias) [95% CI] | +0.0136 [−0.002, 0.034] | \|·\| ≤ 0.03 ✔ | **+0.080 ✘** | **+0.089 ✘** |
+| V5 corr(L_p1, L_p2) | −0.526 | ≤ −0.40 ✔ | −0.442 | **−0.172 ✘** |
+| V5 corr(C_p1, C_p2) | −0.888 | ≤ −0.80 ✔ | −0.864 | −0.820 |
+| V6 corr(Σact, C) | 0.717 | ≥ 0.50 ✔ | 0.605 | 0.588 |
+
+- **Informational (not gated):** S + L outside [0, 1] on 4.1% of Draft-B sides (so the UI uses signed bars, never a running total); "swingy" flag (|L| > 0.5 or |C| > 1) on 3.8%; variance shares of C: act 0.63, drift 0.37, end 0.11; mean \|end\| KO 0.023 / forfeit 0.123 / timeout 0.261. **Mean \|S_p1 + S_p2 − 1\| is 0.066 on Draft B** (0.046 on Draft A `run520`): research/27 §4.2 listed ≤ 0.06 measured on Draft A only; research/28 S1.5 does not gate it. Reported, not hidden.
+- **Reading:** the bridge passes on the shipped Draft-B path; Draft A fails the bias row (as expected) and is never shipped. These numbers reproduce the proposer's prototype exactly. Rerun on D2 with `run_b.jsonl` and `absolute_human_b` (S2.2).
