@@ -11,8 +11,9 @@ Time budget: the training subprocess gets --train-timeout, by default derived fr
 (--post-budget, default 2400 s; measured 1,421 s for eval-n/serve-n 400) and a 600 s margin. Training
 stops GRACEFULLY 15 min before that (sft_plugin DeadlineStop: checkpoint + final adapter save; the stop is
 all-reduced so every DDP rank stops at the same step); the subprocess timeout is only a backstop.
-DDP: ranks != 0 train only, then wait for rank 0's done marker (<out>/rank0.done) and exit 0, so the job
-is not torn down while rank 0 evaluates and serves.
+DDP: every rank trains to a fresh local directory. Rank 0 verifies persistent output before evaluation;
+other successful ranks await its explicit success/failure result and fail on deadline. Abrupt termination
+before persistence can lose checkpoints. DDP resume is not supported in this fallback.
 --resume-from CKPT: resume an interrupted run (adapter, optimizer, scheduler, RNG, data position) with the
 same data, world size and hyperparameters. --eval-only --adapter DIR: no training; eval + GGUF + serve.
 
@@ -20,7 +21,7 @@ Stages (each timed, logged under --out, failures recorded and later optional sta
   0 preflight: GPU, disk, pinned tokenizer/template hashes in the snapshot == the data manifest's
   1 background: build llama.cpp f8def7fe (CUDA sm_90) in /tmp, download the pinned Q4_K_M GGUF
     to /dev/shm (sha256 checked); /dev/shm is noexec, so binaries stay in /tmp
-  2 axolotl train (QLoRA, sft_plugin feeds pre-tokenized rows); checkpoints every --save-steps to --out
+  2 axolotl train (QLoRA, sft_plugin feeds pre-tokenized rows); DDP checkpoints are local until verified persistence
   3 eval_sft.py teacher (fresh-process reload of the saved adapter)
   4 convert_lora_to_gguf.py (llama.cpp, + one-line LoraTorchTensor.ndim shim needed by the Muse
     converter's Q/K rope un-permute) -> adapter.gguf
@@ -39,6 +40,7 @@ import sys
 import threading
 import time
 import urllib.request
+import uuid
 from pathlib import Path
 
 CODE = Path(__file__).resolve().parents[2]  # code root (contains azure/ and tools/)
@@ -58,6 +60,8 @@ OUT: Path
 STATE: dict = {"stages": {}}
 RANK = int(os.environ.get("RANK", "0"))  # set by AML `distribution: pytorch` on multi-node jobs
 SUFFIX = "" if RANK == 0 else f"-rank{RANK}"
+LOCAL_OUTPUT: Path | None = None
+MIN_LOCAL_FREE = 40 * 1024**3  # conservative floor, not a guarantee against disk exhaustion
 
 
 def log(msg):
@@ -178,7 +182,11 @@ def _train(args, env):
     cfg = yaml.safe_load((SFT / "qlora_sft.yaml").read_text())
     cfg["base_model"] = str(Path(args.snapshot).resolve())
     cfg["datasets"][0]["path"] = str((Path(args.data) / "train.jsonl.gz").resolve())
-    cfg["output_dir"] = str(OUT / "checkpoints")
+    cfg["output_dir"] = str(LOCAL_OUTPUT if is_ddp() else OUT / "checkpoints")
+    if is_ddp():
+        if cfg.get("save_total_limit") != 3:
+            raise ValueError("DDP persistence requires save_total_limit=3")
+        cfg["auto_resume_from_checkpoints"] = False
     for key, val in (("max_steps", args.max_steps), ("micro_batch_size", args.micro_batch),
                      ("gradient_accumulation_steps", args.grad_accum), ("learning_rate", args.lr),
                      ("save_steps", args.save_steps), ("num_epochs", args.epochs), ("lora_r", args.lora_r),
@@ -242,14 +250,92 @@ def n_steps_logged() -> int:
     return sum(1 for l in open(p) if '"kind": "step"' in l) if p.exists() else 0
 
 
-def find_adapter() -> Path:
-    root = OUT / "checkpoints"
+def find_adapter(root=None) -> Path:
+    root = Path(root) if root is not None else OUT / "checkpoints"
     if (root / "adapter_model.safetensors").exists():
         return root
     cks = sorted(root.glob("checkpoint-*"), key=lambda p: int(p.name.split("-")[1]))
     if cks and (cks[-1] / "adapter_model.safetensors").exists():
         return cks[-1]
     raise FileNotFoundError("no adapter_model.safetensors under checkpoints/")
+
+
+def is_ddp():
+    return int(os.environ.get("WORLD_SIZE", "1")) > 1
+
+
+def prepare_local_output(work: Path) -> Path:
+    """Use a fresh local directory; DDP resume is deliberately unsupported."""
+    probe = subprocess.run(["findmnt", "-n", "-o", "FSTYPE", "--target", str(work)],
+                           check=True, capture_output=True, text=True).stdout.strip()
+    if probe not in {"ext4", "xfs", "overlay"}:
+        raise RuntimeError(f"unsupported local output filesystem: {probe}")
+    free = shutil.disk_usage(work).free
+    if free < MIN_LOCAL_FREE:
+        raise RuntimeError(f"local output has {free} bytes free; requires at least {MIN_LOCAL_FREE}")
+    path = work / f"train-output-rank{RANK}-{uuid.uuid4().hex}"
+    path.mkdir(mode=0o700, exist_ok=False)
+    STATE["local_train_output"] = str(path)
+    STATE["local_output_fs"] = probe
+    STATE["local_free_bytes"] = free
+    STATE["local_checkpoint_limit"] = 3
+    STATE["resume_limit"] = "Abrupt termination before persistence may lose local checkpoints."
+    save_state()
+    return path
+
+
+def persist_local_output(local: Path) -> Path:
+    """Copy a fresh rank-0 tree, then verify every regular file before marking usable."""
+    checkpoints = [p for p in local.glob("checkpoint-*") if p.is_dir()]
+    if len(checkpoints) > 3:
+        raise ValueError("too many local checkpoints to persist")
+    source_adapter = local  # DDP requires the final adapter, not a saved intermediate checkpoint.
+    for required in (source_adapter / "adapter_model.safetensors", source_adapter / "adapter_config.json",
+                     local / "tokenizer.json", local / "tokenizer_config.json"):
+        if not required.is_file() or required.is_symlink():
+            raise FileNotFoundError(f"required local output missing: {required}")
+    files = []
+    for path in sorted(local.rglob("*")):
+        if path.is_symlink() or (not path.is_dir() and not path.is_file()):
+            raise ValueError(f"unsupported output entry: {path}")
+        if path.is_file():
+            files.append((path.relative_to(local), path.stat().st_size, sha256(path)))
+    STATE["local_output_bytes"] = sum(size for _, size, _ in files)
+    STATE["local_free_bytes_at_persistence"] = shutil.disk_usage(local).free
+    save_state()
+    destination = OUT / "checkpoints" / ("verified-" + uuid.uuid4().hex)
+    destination.parent.mkdir(exist_ok=True)
+    destination.mkdir(exist_ok=False)
+    for relative, size, digest in files:
+        target = destination / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(local / relative, target)
+        if target.stat().st_size != size or sha256(target) != digest:
+            raise IOError(f"persistent output verification failed: {relative}")
+    copied = sorted(p.relative_to(destination) for p in destination.rglob("*") if p.is_file())
+    if copied != sorted(row[0] for row in files):
+        raise IOError("persistent output file inventory mismatch")
+    persisted_adapter = destination / source_adapter.relative_to(local)
+    marker = destination / "verified-persistence.json"
+    marker_payload = {"files": [{"path": str(r), "bytes": n, "sha256": h} for r, n, h in files],
+                      "adapter": str(persisted_adapter.relative_to(destination))}
+    temporary_marker = destination / (".verified-" + uuid.uuid4().hex + ".tmp")
+    temporary_marker.write_text(json.dumps(marker_payload, indent=1))
+    os.replace(temporary_marker, marker)
+    if json.loads(marker.read_text()) != marker_payload:
+        raise IOError("persistent marker readback mismatch")
+    STATE["verified_persisted_adapter"] = str(persisted_adapter)
+    STATE["verified_persistence_marker"] = str(marker)
+    save_state()
+    return persisted_adapter
+
+
+def publish_terminal(status: str, detail: str = ""):
+    """Rank zero publishes a single terminal result; no failure is labeled success."""
+    payload = {"status": status, "detail": detail, "finished_unix": int(time.time())}
+    tmp = OUT / ("rank0-terminal-" + uuid.uuid4().hex + ".tmp")
+    tmp.write_text(json.dumps(payload))
+    os.replace(tmp, OUT / "rank0-terminal.json")
 
 
 @stage("eval_teacher")
@@ -332,7 +418,7 @@ def serve_eval(args, env, pre, lora_gguf):
 
 
 def main():
-    global OUT
+    global OUT, LOCAL_OUTPUT
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--snapshot", required=True)
     ap.add_argument("--data", required=True)
@@ -384,10 +470,16 @@ def main():
     if int(os.environ.get("WORLD_SIZE", "1")) > 1:
         # NC40ads_H100_v5 nodes have no InfiniBand: NCCL over TCP sockets. LoRA grads are ~0.4 GB/step.
         env.update(NCCL_IB_DISABLE="1", NCCL_DEBUG="WARN", TORCH_NCCL_ASYNC_ERROR_HANDLING="1")
+    if is_ddp() and args.resume_from:
+        raise RuntimeError("DDP resume is not supported by local-output fallback")
+    if is_ddp() and RANK == 0 and ((OUT / "rank0-terminal.json").exists() or (OUT / "checkpoints").exists()):
+        raise RuntimeError("DDP requires a fresh persistent output directory")
     if RANK == 0 and (OUT / "rank0.done").exists():
         (OUT / "rank0.done").unlink()  # stale marker from an earlier run in the same output dir
     if preflight(args) is None:
         sys.exit(2)
+    if is_ddp() and not args.eval_only:
+        LOCAL_OUTPUT = prepare_local_output(work)
     # Time budget (identical on every rank, so the all-reduced graceful stop agrees).
     post = args.post_budget if args.post_budget is not None else (300 if args.skip_serve and args.skip_teacher else 2400)
     if args.train_timeout is None:
@@ -412,33 +504,42 @@ def main():
         if all(STATE["stages"].get(k, {}).get("status") != "ok" for k in ("eval_teacher", "serve_eval")):
             sys.exit(4)
         return
-    try:
-        train(args, env)
-    except BaseException:
+    train(args, env)
+    if is_ddp():
+        # No rank-local objective or batch-size changes in a collective run.
+        if STATE["stages"].get("train", {}).get("status") != "ok":
+            STATE["fatal"] = "train failed on this rank"
+            save_state()
+            raise SystemExit(3)
         if RANK != 0:
-            wait_for_rank0()
-        raise
+            save_state()
+            raise SystemExit(0 if wait_for_rank0() else 4)
+        try:
+            adapter = persist_local_output(LOCAL_OUTPUT)
+        except Exception as exc:
+            STATE["fatal"] = f"persistence failed: {type(exc).__name__}: {exc}"
+            save_state()
+            raise SystemExit(3)
+        run_post(args, env, adapter, pre, shm)
+        required = ([] if args.skip_teacher else ["eval_teacher"]) + (
+            [] if args.skip_serve else ["convert_lora_gguf", "serve_eval"])
+        if any(STATE["stages"].get(k, {}).get("status") != "ok" for k in required):
+            raise SystemExit(4)
+        return
     mb = args.micro_batch or 4
     if STATE["stages"]["train"]["status"] != "ok" and n_steps_logged() == 0 and args.loss == "weighted" \
             and not args.no_mb_fallback:
-        # The weighted choice loss is the newest code path: fall back once to the smoke-proven plain loss.
         log("weighted-loss training failed before the first step; retrying with --loss plain (see summary)")
         args.loss = "plain"
         env["HRSFT_LOSS"] = "plain"
         STATE["loss_fallback"] = "weighted -> plain"
         train_retry_plain(args, env)
         if STATE["stages"]["train_retry_plain"]["status"] == "ok":
-            mb = 1  # skip the micro-batch retry
+            mb = 1
     if not train_ok() and n_steps_logged() == 0 and mb > 1 and not args.no_mb_fallback:
-        # The qualified canary only ever ran micro-batch 1: retry once there, same effective batch.
         log(f"train failed before the first step with micro-batch {mb}; retrying with micro-batch 1")
         args.grad_accum, args.micro_batch = (args.grad_accum or 4) * mb, 1
         train_retry_mb1(args, env)
-    if RANK != 0:
-        STATE["finished_unix"] = int(time.time())
-        save_state()
-        wait_for_rank0()
-        sys.exit(0)  # the job's outcome is rank 0's; a non-zero exit here would tear rank 0 down mid-eval
     try:
         try:
             adapter = find_adapter()
@@ -447,7 +548,6 @@ def main():
             save_state()
             sys.exit(3)
         run_post(args, env, adapter, pre, shm)
-        # Success = an adapter was produced and evaluated; summary.json keeps every stage's status.
         if not train_ok() and STATE["stages"].get("eval_teacher", {}).get("status") != "ok":
             sys.exit(4)
     finally:
@@ -469,16 +569,33 @@ def run_post(args, env, adapter: Path, pre: dict, shm: Path):
 
 
 def wait_for_rank0(poll: int = 30):
-    """Non-zero DDP ranks: stay alive until rank 0 has finished eval/serve (or the job deadline)."""
+    """A nonzero rank succeeds only on an explicit successful terminal result."""
     deadline = STATE["started_unix"] + int(STATE["args"].get("job_timeout") or 10800) - 120
-    log("waiting for rank 0 to finish")
+    log("waiting for rank 0 terminal result")
     while time.time() < deadline:
-        if (OUT / "rank0.done").exists():
-            log("rank 0 done; exiting 0")
-            return
-        time.sleep(poll)
+        marker = OUT / "rank0-terminal.json"
+        if marker.exists():
+            try:
+                status = json.loads(marker.read_text()).get("status")
+            except (OSError, ValueError, AttributeError):
+                return False
+            return status == "success"
+        time.sleep(min(poll, max(0, deadline - time.time())))
     log("job deadline reached while waiting for rank 0")
+    return False
+
+
+def entrypoint():
+    try:
+        main()
+    except BaseException as exc:
+        if is_ddp() and RANK == 0 and "OUT" in globals():
+            publish_terminal("failure", f"{type(exc).__name__}: {exc}")
+        raise
+    else:
+        if is_ddp() and RANK == 0:
+            publish_terminal("success")
 
 
 if __name__ == "__main__":
-    main()
+    entrypoint()
