@@ -198,12 +198,13 @@ def genders(lines, side):
     return out
 
 
-def active_by_decision(game, side):
-    """(turn, k) -> the reviewed side's active species at that decision (for the Draft-mode 'assumed' flag)."""
+def active_by_decision(game, side, which="self_active"):
+    """"turn:k" -> the active species (yours, or with which="opp_active" the opponent's) at each of your
+    decisions (the Draft-mode 'assumed' flag; the species a read is about)."""
     out = {}
     for r in game["parser"].rows:
-        if r["player"] == side and r.get("self_active"):
-            out[f'{r["turn"]}:{r["k"]}'] = r["self_active"]["species"]
+        if r["player"] == side and r.get(which):
+            out[f'{r["turn"]}:{r["k"]}'] = r[which]["species"]
     return out
 
 
@@ -256,9 +257,13 @@ def prepare(rep, side, team_text=None, game=None):
     team_text = (team_text or "").strip() or None
     if team_text:
         parse_export(team_text)
+    opp = "p2" if side == "p1" else "p1"
     ctx = {"mode": "export" if team_text else "draft", "side": side, "end_reason": game["end_reason"],
            "turns": game["turns"], "winner": game["winner"], "names": name_table(lines),
            "draft_rows": side_rows(game, side), "active": active_by_decision(game, side),
+           "opp_active": active_by_decision(game, side, "opp_active"),
+           "own_species": [m.species_preview for m in game["parser"].sides[side].roster],
+           "opp_species": [m.species_preview for m in game["parser"].sides[opp].roster],
            "private": bool(rep.get("private"))}
     job_input = {"side": side, "team": team_text, "draft_rows": ctx["draft_rows"], "genders": genders(lines, side)}
     return lines, ctx, job_input
@@ -322,6 +327,13 @@ def _base_names():
                 if v.get("name"):
                     t[k] = v["name"]
         except (OSError, ValueError):
+            pass
+        try:   # items, abilities and types (Showdown dex snapshot used by tools/agent)
+            dex = json.loads((HARDREAD / "tools" / "sft" / "dex.json").read_text())
+            for sec in ("items", "abilities", "types"):
+                for k, v in (dex.get(sec) or {}).items():
+                    t.setdefault(k, v if isinstance(v, str) else v.get("n", k))
+        except (OSError, ValueError, AttributeError):
             pass
         _BASE_NAMES = t
     return _BASE_NAMES
@@ -490,3 +502,131 @@ def summary_text(view):
     parts.append("The engine had no clear disagreement with you in a balanced position." if n == 0 else
                  f"The engine disagreed clearly with {n} of your decisions in balanced positions (listed below).")
     return " ".join(parts)
+
+
+# ---------------------------------------------------------------- the player's read and the verdict card
+
+def species_lists(ctx):
+    """(own six, opponent six) display names for the note parser."""
+    own = ctx.get("own_species") or [r["species_preview"] for r in ctx.get("draft_rows") or []]
+    return list(own), list(ctx.get("opp_species") or [])
+
+
+_SETS = None
+
+
+def _set_counts():
+    global _SETS
+    if _SETS is None:
+        p = HARDREAD / "foul-play" / "fp" / "data" / "pkmn_sets_cache" / "gen9ou" / "pokemon_full_sets.json"
+        try:
+            _SETS = json.loads(p.read_text())
+        except (OSError, ValueError):
+            _SETS = {}
+    return _SETS
+
+
+def belief_options(ctx):
+    """For the 'add a detail' form: the opponent's six with their most common items, abilities, tera types and
+    moves (engine set data), plus which one was active at each decision."""
+    base = _base_names()
+    out = {}
+    for sp in ctx.get("opp_species") or []:
+        cands = _set_counts().get(_norm(sp)) or _set_counts().get(_norm(sp.split("-")[0])) or {}
+        tally = {"items": {}, "abilities": {}, "teras": {}, "moves": {}}
+        for k, cnt in cands.items():
+            tera, abil, item, _nat, _evs, *mv = k.split("|")
+            for f, v in (("teras", tera), ("abilities", abil), ("items", item)):
+                tally[f][v] = tally[f].get(v, 0) + cnt
+            for m in mv:
+                tally["moves"][m] = tally["moves"].get(m, 0) + cnt
+        out[sp] = {f: [{"id": v, "name": base.get(v) or _title(v)} for v, _ in
+                       sorted(d.items(), key=lambda kv: -kv[1])[:12 if f != "moves" else 16]]
+                   for f, d in tally.items()}
+    return {"opp_species": ctx.get("opp_species") or [], "options": out, "opp_active": ctx.get("opp_active") or {}}
+
+
+def clean_belief(b):
+    """The belief schema of research/27 4.4, size-limited: sets (<= 6 species), expects_action, confidence."""
+    def txt(x):
+        return re.sub(r"[^A-Za-z0-9 '\-.:]", "", str(x or ""))[:40]
+    out = {"sets": {}}
+    for sp, f in list((b.get("sets") or {}).items())[:6]:
+        if not isinstance(f, dict):
+            continue
+        e = {}
+        for key in ("item", "ability", "tera"):
+            if f.get(key):
+                e[key] = txt(f[key])
+        for key in ("moves_has", "moves_not"):
+            vals = [txt(m) for m in (f.get(key) or [])[:4] if m]
+            if vals:
+                e[key] = vals
+        if e:
+            out["sets"][txt(sp)] = e
+    ea = b.get("expects_action")
+    if isinstance(ea, dict) and ea.get("kind") in ("switch", "move", "tera"):
+        out["expects_action"] = {k: txt(v) for k, v in ea.items() if k in ("kind", "move", "species") and v}
+    if b.get("confidence") in ("sure", "think", "guess"):
+        out["confidence"] = b["confidence"]
+    return out
+
+
+def verdict_card(v, ctx, review=None):
+    """verdict.py output -> the card the UI shows (display names, points, the three runs, receipts)."""
+    names = ctx.get("names") or {}
+    x, chosen = pretty_action(v.get("X"), names), pretty_action(v.get("chosen"), names)
+    xg = ("switching to " + x[10:]) if x and x.startswith("switch to ") else x
+    pts = lambda ds: [None if d is None else round(100 * d, 1) for d in ds or []]  # noqa: E731
+    ref = v.get("reference")
+    ref_label = {"later": "revealed later in the game", "truth": "the true sets",
+                 "engine": "the engine's estimate"}.get(ref, "the engine's estimate")
+    verdict = v.get("verdict")
+    mean_u, mean_r = v.get("mean_delta_U"), v.get("mean_delta_R")
+    if verdict == "Misplay":
+        headline = f"Even if your read were right, {xg} was better by {round(100 * mean_u)} points."
+    elif verdict == "Misread":
+        why = "wrong (revealed later)" if ref == "later" else "unlikely (the engine's estimate)"
+        headline = (f"Your move fit your read; the read was {why}: under {ref_label}, {xg} was better by "
+                    f"{round(100 * mean_r)} points.")
+    elif verdict == "Defensible":
+        headline = "Your move holds up under your read and under the reference."
+    else:
+        headline = "Within noise: the three runs do not agree enough to call it either way."
+    third = v.get("info_third_option")
+    stated = []
+    for sp, f in ((v.get("stated") or {}).get("sets") or {}).items():
+        for key in ("item", "ability", "tera"):
+            if f.get(key):
+                stated.append(f"{sp}: {key} {pretty_action(f[key], names) if key != 'tera' else _title(f[key])}")
+        for m in f.get("moves_has") or []:
+            stated.append(f"{sp}: has {pretty_action(m, names)}")
+        for m in f.get("moves_not") or []:
+            stated.append(f"{sp}: no {pretty_action(m, names)}")
+    rc = read_check(review, v["turn"], v["k"], v.get("app_belief") or {}) if review else None
+    return {"turn": v["turn"], "k": v["k"], "verdict": verdict, "headline": headline,
+            "x": x, "chosen": chosen, "delta_U": pts(v.get("delta_U")), "delta_R": pts(v.get("delta_R")),
+            "mean_U": None if mean_u is None else round(100 * mean_u, 1),
+            "mean_R": None if mean_r is None else round(100 * mean_r, 1),
+            "reference": ref, "reference_label": ref_label, "stated": stated,
+            "contradictions": [c.get("text") + (f": {c.get('field')} " if c.get("field") else "") +
+                               (f"(you said {c.get('stated')}, the log showed {c.get('revealed')})"
+                                if c.get("revealed") else "") for c in v.get("contradictions") or []],
+            "third_option": None if not third else f"Under your read, {pretty_action(third['option'], names)} "
+                                                   f"looked even better.",
+            "margin_pts": round(100 * v.get("margin", 0.05)), "ok_margin_pts": round(100 * v.get("ok_margin", 0.02)),
+            "runs": len(v.get("seeds") or []), "iterations": v.get("iterations"), "worlds": v.get("worlds"),
+            "seconds": v.get("seconds"), "wording": v.get("wording"), "read_check": rc}
+
+
+def read_check(review, turn, k, belief):
+    """The v1 read check (your expected opponent action vs the engine's opponent policy and what they played),
+    from tools/agent/parse_note.read_check when available. Every number is copied from the review."""
+    if not belief or not belief.get("expects_action") or review is None:
+        return None
+    try:
+        sys.path.insert(0, str(HARDREAD / "tools" / "agent"))
+        import parse_note as PN
+        return PN.read_check(review, turn, k, belief)
+    except Exception:  # noqa: BLE001
+        return None

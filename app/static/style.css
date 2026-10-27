@@ -354,3 +354,50 @@ dialog.gate li + li { margin-top: 6px; }
   .wp-line { stroke: CanvasText; }
   .glyph-pos, .dis-mark { fill: CanvasText; }
 }
+
+/* ---------- D2: share, explanation, read + verdict ---------- */
+.btn-sm { padding: 7px 14px; font-size: 14px; }
+.review-head .head-actions { margin-left: auto; }
+.share-box { margin: 0 0 18px; padding: 16px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+.share-box input[type="text"] { flex: 1 1 280px; font-family: var(--mono); font-size: 13px; padding: 9px 12px; }
+.share-img { display: block; width: 100%; max-width: 600px; height: auto; border-radius: 12px; border: 1px solid var(--line); }
+
+.ex-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.badge-model { font-size: 12px; font-weight: 600; color: var(--ink-2); background: var(--surface-2); border: 1px solid var(--line); border-radius: 999px; padding: 3px 10px; }
+.q-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.q-tab { font: inherit; font-size: 12.5px; text-align: left; color: var(--ink-2); background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; padding: 6px 10px; cursor: pointer; }
+.q-tab[aria-pressed="true"] { color: var(--ink); border-color: var(--accent); background: var(--pos-wash); }
+.ex-text { font-size: 16px; line-height: 1.6; margin: 0; }
+mark.cite { background: var(--pos-wash); color: var(--ink); border-bottom: 2px solid var(--pos); border-radius: 3px; padding: 0 2px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.ex-mode { font-size: 12.5px; color: var(--ink-3); margin: 10px 0 0; }
+.ex-sources { margin-top: 8px; font-size: 13px; }
+.ex-sources ul { margin: 6px 0 0; padding-left: 18px; color: var(--ink-2); }
+.ex-sources code { font-family: var(--mono); font-size: 12px; }
+.ex-wait { display: flex; align-items: center; gap: 10px; }
+.spinner { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--line-strong); border-top-color: var(--accent); animation: spin .8s linear infinite; flex: none; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.read-block { margin-top: 6px; }
+.read-panel { margin-top: 10px; padding: 14px; border-radius: 12px; background: var(--surface-2); }
+textarea.note { min-height: 70px; background: var(--surface); }
+ul.chip-list { list-style: none; padding: 0; margin: 12px 0 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.chip-edit { background: var(--surface); padding-right: 4px; }
+.chip-x { font: inherit; font-size: 15px; line-height: 1; border: 0; background: transparent; color: var(--ink-3); cursor: pointer; border-radius: 50%; width: 22px; height: 22px; }
+.chip-x:hover { background: var(--surface-3); color: var(--ink); }
+.add-detail { margin-top: 10px; }
+.add-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; align-items: center; }
+.add-row select, .add-row input { font: inherit; font-size: 14px; color: var(--ink); background: var(--surface); border: 1px solid var(--line-strong); border-radius: 8px; padding: 7px 9px; }
+.add-row input { flex: 1 1 160px; }
+
+.verdict { margin-top: 12px; border-radius: 12px; padding: 14px 16px; border: 1px solid var(--line-strong); background: var(--surface); }
+.verdict h3 { font-size: 15px; margin: 0 0 6px; outline: none; }
+.v-badge { display: inline-flex; align-items: center; gap: 4px; font-weight: 750; padding: 3px 10px; border-radius: 999px; background: var(--surface-2); }
+.v-misplay .v-badge { background: color-mix(in srgb, var(--neg) 14%, var(--surface)); color: var(--neg-ink); }
+.v-misread .v-badge { background: var(--warn-bg); color: var(--warn-ink); }
+.v-ok .v-badge { background: var(--pos-wash); color: var(--pos-ink); }
+.v-head { margin: 4px 0 8px; font-size: 15px; font-weight: 600; }
+figure.runs { margin: 6px 0 8px; }
+.runs-plot { width: 100%; max-width: 560px; display: block; }
+.rp-label { fill: var(--ink-2); font-size: 12px; font-family: var(--font); }
+.rp-axis { fill: var(--ink-3); font-size: 10.5px; font-family: var(--font); }
+.notice-inline { color: var(--warn-ink); background: var(--warn-bg); padding: 6px 10px; border-radius: 8px; }

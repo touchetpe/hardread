@@ -76,6 +76,90 @@
     ],
     "realised_prob": 0.1
    }
+  },
+  {
+   "id": "showcase-4",
+   "title": "Mostly the dice",
+   "band": "rated 1900+",
+   "turns": 24,
+   "end_reason": "ko",
+   "result": "loss",
+   "bridge": {
+    "s": 51,
+    "l": -42,
+    "c": -9,
+    "r": 0
+   },
+   "disagreements": 1,
+   "top_luck": {
+    "turn": 16,
+    "luck_pts": -12,
+    "events": [
+     {
+      "type": "miss_by",
+      "sufferer": "you",
+      "n": 1,
+      "text": "your move missed"
+     }
+    ],
+    "realised_prob": 0.0958
+   }
+  },
+  {
+   "id": "showcase-5",
+   "title": "More choices than dice",
+   "band": "rated under 1300",
+   "turns": 28,
+   "end_reason": "ko",
+   "result": "win",
+   "bridge": {
+    "s": 54,
+    "l": 13,
+    "c": 33,
+    "r": 100
+   },
+   "disagreements": 2,
+   "top_luck": {
+    "turn": 22,
+    "luck_pts": -17,
+    "events": [
+     {
+      "type": "cant",
+      "sufferer": "you",
+      "n": 1,
+      "text": "your Pok\u00e9mon could not move (paralysis, sleep, freeze or flinch)"
+     }
+    ],
+    "realised_prob": 0.25
+   }
+  },
+  {
+   "id": "showcase-6",
+   "title": "The engine kept reaching for the same switch",
+   "band": "rated 1700-1899",
+   "turns": 22,
+   "end_reason": "ko",
+   "result": "loss",
+   "bridge": {
+    "s": 51,
+    "l": -13,
+    "c": -38,
+    "r": 0
+   },
+   "disagreements": 3,
+   "top_luck": {
+    "turn": 15,
+    "luck_pts": -17,
+    "events": [
+     {
+      "type": "miss_by",
+      "sufferer": "you",
+      "n": 1,
+      "text": "your move missed"
+     }
+    ],
+    "realised_prob": 0.2875
+   }
   }
  ]
 }

@@ -23,11 +23,32 @@ def build(views, showcases, start):
     js = (APP / "static" / "app.js").read_text()
     theme = (APP / "static" / "theme.js").read_text()
     data = json.dumps({"views": views, "showcases": showcases}).replace("</", "<\\/")
+    html = html.replace('href="/#/', 'href="#/')
     html = html.replace('<link rel="stylesheet" href="/static/style.css">', f"<style>\n{css}\n</style>")
     html = html.replace('<script src="/static/theme.js"></script>', f"<script>\n{theme}\n</script>")
     boot = f"<script>window.HARDREAD_STATIC = {data};\nif (!location.hash) location.hash = {json.dumps(start)};</script>"
     html = html.replace('<script src="/static/app.js" defer></script>', f"{boot}\n<script>\n{js}\n</script>")
     return html
+
+
+QUESTIONS = {"q1": "Was this game decided by luck or by my choices?",
+             "q2": "What was the biggest piece of luck in this game, and how much did it matter?",
+             "q3": "Where did the engine disagree most with my choices, and by how much?"}
+
+
+def explanations(review, glimmer_file=None):
+    """Glimmer's cached answers where they exist, else the deterministic templates (tools/agent/explain.py)."""
+    have = json.loads(glimmer_file.read_text()) if glimmer_file and glimmer_file.exists() else {}
+    try:
+        sys.path.insert(0, str(APP.parent / "tools" / "agent"))
+        import explain
+    except Exception:  # noqa: BLE001
+        return have
+    for q, text in QUESTIONS.items():
+        if q not in have:
+            res = explain.run(review, text, mode="template")
+            have[q] = {"question": text, "final": "template", "rendered": res.get("rendered")}
+    return have
 
 
 def main():
@@ -45,6 +66,8 @@ def main():
             ctx = json.loads((SHOW / f"{sc['id']}.ctx.json").read_text())
             v = P.build_view(review, ctx)
             v.update(id=sc["id"], showcase=True, private=False)
+            v["explanations"] = explanations(review, SHOW / f"{sc['id']}.explain.json")
+            v["questions"], v["features"] = QUESTIONS, {"explain": True, "verdict": False, "share": False}
             views[sc["id"]] = v
     if a.review:
         review = json.loads(Path(a.review).read_text())

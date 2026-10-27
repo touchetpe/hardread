@@ -126,11 +126,14 @@
   var lastRender = null;
   var pollTimer = null;
   function route() {
-    if (pollTimer) { clearTimeout(pollTimer); pollTimer = null; }
     var hsh = location.hash.replace(/^#/, "") || "/";
+    if (hsh.charAt(0) !== "/") return;   // in-page anchors (e.g. the skip link) are not routes
+    if (pollTimer) { clearTimeout(pollTimer); pollTimer = null; }
     var m;
     var nav = "home";
-    if ((m = hsh.match(/^\/review\/([A-Za-z0-9_-]+)$/))) { renderReview(m[1]); nav = ""; }
+    var pm = location.pathname.match(/^\/r\/([A-Za-z0-9_-]+)$/);
+    if (pm && hsh === "/") { renderReview(pm[1]); nav = ""; }
+    else if ((m = hsh.match(/^\/review\/([A-Za-z0-9_-]+)$/))) { renderReview(m[1]); nav = ""; }
     else if ((m = hsh.match(/^\/job\/([A-Za-z0-9_-]+)$/))) { renderJob(m[1]); nav = ""; }
     else if (hsh === "/about") { renderAbout(); nav = "about"; }
     else renderLanding();
@@ -255,7 +258,7 @@
 
     var showcaseSec = h("section", { "aria-labelledby": "sc-title", style: "margin-top:34px" },
       h("h2", { id: "sc-title", class: "section-title" }, "Try a showcase"),
-      h("p", { class: "section-sub" }, "Three ladder games from public replays, reviewed from one player's side. Names removed; sets drafted from the replay."));
+      h("p", { class: "section-sub" }, "Ladder games from public replays across rating bands, each reviewed from one player's side. Names removed; sets drafted from the replay."));
     var scGrid = h("div", { class: "showcases" }, h("p", { class: "muted" }, "Loading showcases…"));
     showcaseSec.appendChild(scGrid);
     getShowcases().then(function (d) {
@@ -371,17 +374,21 @@
   function drawReview(id, v, focus) {
     var b = v.bridge;
     var res = v.result;
-    var title = v.showcase ? "Showcase: " + (res === "win" ? "a win" : res === "loss" ? "a loss" : "a tie") + " in " + v.turns + " turns"
+    var sharedPage = location.pathname.indexOf("/r/") === 0;
+    var title = v.showcase || sharedPage ? (v.showcase ? "Showcase: " : "Shared review: ") + (res === "win" ? "a win" : res === "loss" ? "a loss" : "a tie") + " in " + v.turns + " turns"
       : (res === "win" ? "Your win" : res === "loss" ? "Your loss" : "Your game") + " in " + v.turns + " turns";
     var chips = h("div", { class: "chips" },
       h("span", { class: "chip " + (res === "win" ? "result-win" : res === "loss" ? "result-loss" : "") }, res === "win" ? "✓ Win" : res === "loss" ? "✗ Loss" : "Tie"),
       v.end_reason ? h("span", { class: "chip" }, endText(v.end_reason)) : null,
-      h("span", { class: "chip" }, "You: " + (v.side === "p1" ? "Player 1" : "Player 2")),
+      h("span", { class: "chip" }, (sharedPage || v.showcase ? "Reviewed side: " : "You: ") + (v.side === "p1" ? "Player 1" : "Player 2")),
       h("span", { class: "chip", title: "Sets drafted from the replay: what you revealed plus the most common set for the rest" },
         v.mode === "export" ? "your team export" : "sets drafted from the replay"),
       v.private ? h("span", { class: "chip" }, "private · kept 24 h") : null);
-    var head = h("div", null, h("a", { class: "back", href: "#/" }, "← Review another game"),
-      h("div", { class: "review-head" }, h("h1", null, title), chips));
+    var shareBox = h("div", { class: "share-box", hidden: true });
+    var shareBtn = (!STATIC && v.features && v.features.share) ? h("button", { type: "button", class: "btn btn-ghost btn-sm",
+      "aria-expanded": "false", onclick: function () { toggleShare(id, v, shareBtn, shareBox); } }, "Share") : null;
+    var head = h("div", null, h("a", { class: "back", href: location.pathname.indexOf("/r/") === 0 ? "/" : "#/" }, "← Review " + (location.pathname.indexOf("/r/") === 0 ? "your own game" : "another game")),
+      h("div", { class: "review-head" }, h("h1", null, title), chips, shareBtn ? h("div", { class: "head-actions" }, shareBtn) : null), shareBox);
 
     var bridgeCard = h("section", { class: "card", "aria-labelledby": "bridge-title" },
       h("h2", { id: "bridge-title" }, "Start → Luck → Choices → Result"),
@@ -396,7 +403,7 @@
     var disCard = h("section", { class: "card", "aria-labelledby": "dis-title" },
       h("h2", { id: "dis-title" }, "Biggest disagreements with the engine"),
       h("p", { class: "card-sub" }, "Up to three decisions made while the game was still open (win chance 20–80%) where the engine preferred another option by 5 points or more. Never added up: one search can be off by about 3 points."),
-      disagreementsList(v));
+      disagreementsList(v, id));
 
     var luckCard = h("section", { class: "card", "aria-labelledby": "luck-title" },
       h("h2", { id: "luck-title" }, "Biggest luck moments"),
@@ -405,7 +412,7 @@
 
     var receipts = receiptsDrawer(id, v);
     var nodes = [head, bridgeCard, h("div", { class: "grid-2", style: "margin-top:18px" },
-      h("div", { class: "stack" }, wpCard, disCard), h("div", { class: "stack" }, luckCard, aboutCard(v))), receipts];
+      h("div", { class: "stack" }, wpCard, disCard), h("div", { class: "stack" }, explainCard(id, v), luckCard, aboutCard(v))), receipts];
     show(nodes, title, focus);
   }
 
@@ -531,7 +538,7 @@
       sv.appendChild(s("path", { d: "M" + xl + "," + Y(pts[pts.length - 1].wp) + " L" + xe + "," + Y(R), fill: "none",
         stroke: "var(--ink-3)", "stroke-width": 1.5, "stroke-dasharray": "3 3" }));
       sv.appendChild(s("circle", { cx: xe, cy: Y(R), r: 4, fill: "var(--ink)", stroke: "var(--surface)", "stroke-width": 2 }));
-      sv.appendChild(s("text", { class: "glyph-label", x: xe - 6, y: R ? Y(R) - 8 : Y(R) - 8, "text-anchor": "end", text: v.result === "win" ? "won" : "lost" }));
+      sv.appendChild(s("text", { class: "glyph-label", x: xe - 4, y: R ? Y(R) + 18 : Y(R) - 10, "text-anchor": "end", text: v.result === "win" ? "won" : "lost" }));
     }
     sv.appendChild(axis);
     // luck glyphs: ▲ above the line in your favour (solid), ▼ below it against you (striped); top 3 labelled
@@ -547,7 +554,9 @@
         : "M" + x + "," + (gy + size) + " L" + (x + size) + "," + (gy - size * 0.7) + " L" + (x - size) + "," + (gy - size * 0.7) + " Z";
       sv.appendChild(s("path", { d: d, class: up ? "glyph-pos" : "glyph-neg", stroke: "var(--surface)", "stroke-width": up ? 1.5 : 1 }));
       if (labelled[p.turn]) {
-        sv.appendChild(s("text", { class: "glyph-label", x: x + 10, y: up ? gy - 2 : gy + 10, text: signed(p.luck_pts) }));
+        var nearRight = x > W - m.r - 40;
+        sv.appendChild(s("text", { class: "glyph-label", x: nearRight ? x - 10 : x + 10, "text-anchor": nearRight ? "end" : "start",
+          y: up ? Math.max(m.t - 4, gy - 2) : gy + 10, text: signed(p.luck_pts) }));
       }
     });
     // disagreement diamonds on the turn axis
@@ -629,7 +638,7 @@
       h("p", { class: "summary-text", style: "margin-top:12px" }, txt), table);
   }
 
-  function disagreementsList(v) {
+  function disagreementsList(v, id) {
     var list = v.disagreements || [];
     if (!list.length) {
       return h("div", { class: "empty" }, "No clear disagreement while the game was open: wherever the result was still in doubt, the engine agreed with you or preferred another option by less than 5 points.");
@@ -650,9 +659,11 @@
           h("span", { class: "muted small" }, "your win chance before: " + d.wp_before_pct + "%")),
         h("p", { class: "claim" }, "The engine prefers ", h("b", null, gerund(d.best)), " over ", h("b", null, gerund(d.chosen)), " by ", h("b", { class: "num" }, gap + " points"), " (search noise ≈ ±3)."),
         bars,
-        opp ? h("p", { class: "opp" }, "The engine expected the opponent to pick: " + opp + ".") : null));
+        opp ? h("p", { class: "opp" }, "The engine expected the opponent to pick: " + opp + ".") : null,
+        readBlock(id, v, d)));
     });
-    var note = v.mode === "draft" ? h("p", { class: "footnote" }, "Your sets were drafted from the replay, so options that rely on a move you never revealed are left out.") : null;
+    var note = v.mode === "draft" ? h("p", { class: "footnote" }, "Your sets were drafted from the replay, so options that rely on a move you never revealed are left out." +
+      (v.showcase ? "" : " To check one of these decisions against what you were thinking, review the game again with your team export.")) : null;
     return h("div", null, box, note);
   }
 
@@ -701,6 +712,295 @@
   }
   function fmt(x) { return x === null || x === undefined ? "–" : Number(x).toFixed(3); }
 
+  // ------------------------------------------------------------------ explanation (Muse Glimmer, async)
+  var MODE_TEXT = {
+    glimmer_raw: "Written by Muse Glimmer-30B (base); it passed every check on the first draft.",
+    glimmer_repaired: "Written by Muse Glimmer-30B (base); it passed the checks after one repair.",
+    template: "Fixed template: Muse Glimmer was not available, or its draft failed the checks."
+  };
+  function explainCard(id, v) {
+    var qs = v.questions || {};
+    var body = h("div", { class: "explain-body", "aria-live": "polite" });
+    var tabs = h("div", { class: "q-tabs", role: "group", "aria-label": "Questions" });
+    var current = "q1";
+    var card = h("section", { class: "card explain-card", "aria-labelledby": "ex-title" },
+      h("div", { class: "ex-head" }, h("h2", { id: "ex-title" }, "In plain words"),
+        h("span", { class: "badge-model" }, "Muse Glimmer-30B (base) · explainer")),
+      h("p", { class: "card-sub" }, "Every number below is copied from a cited engine result; the model only writes the words."),
+      tabs, body);
+    Object.keys(qs).forEach(function (q) {
+      tabs.appendChild(h("button", { type: "button", class: "q-tab", "data-q": q, "aria-pressed": q === current ? "true" : "false",
+        onclick: function () { current = q; tabs.querySelectorAll(".q-tab").forEach(function (b) { b.setAttribute("aria-pressed", b.getAttribute("data-q") === q ? "true" : "false"); }); load(q); } }, qs[q]));
+    });
+    function draw(ex, pending) {
+      clear(body);
+      var r = ex.rendered || {};
+      var p = h("p", { class: "ex-text" });
+      (r.sentences || []).forEach(function (snt, i) {
+        if (i) p.appendChild(document.createTextNode(" "));
+        var text = snt.text, pos = 0;
+        (snt.citations || []).forEach(function (c) {
+          var at = text.indexOf(c.shown, pos);
+          if (at < 0) return;
+          p.appendChild(document.createTextNode(text.slice(pos, at)));
+          p.appendChild(h("mark", { class: "cite", title: "from " + c.tool + " · " + c.field }, c.shown));
+          pos = at + c.shown.length;
+        });
+        p.appendChild(document.createTextNode(text.slice(pos)));
+      });
+      var cites = [];
+      (r.sentences || []).forEach(function (snt) { (snt.citations || []).forEach(function (c) { cites.push(c); }); });
+      body.appendChild(p);
+      body.appendChild(h("p", { class: "ex-mode" }, pending ? "Fixed template, shown while Muse Glimmer writes." : (MODE_TEXT[ex.final] || ""),
+        !pending && ex.final !== "template" && ex.latency_s ? " (" + Math.round(ex.latency_s) + " s)" : ""));
+      if (pending) body.appendChild(h("p", { class: "muted ex-wait ex-pending" }, h("span", { class: "spinner", "aria-hidden": "true" }), h("span", null, "Muse Glimmer is writing its own version…")));
+      if (cites.length) {
+        body.appendChild(h("details", { class: "ex-sources" }, h("summary", null, "Sources for each number (" + cites.length + ")"),
+          h("ul", null, cites.map(function (c) {
+            return h("li", null, h("b", null, c.shown), " ← ", h("code", null, c.tool + "." + c.field), " = " + JSON.stringify(c.value));
+          }))));
+      }
+    }
+    function waiting(msg) { clear(body); body.appendChild(h("p", { class: "muted ex-wait" }, h("span", { class: "spinner", "aria-hidden": "true" }), msg)); }
+    function load(q) {
+      var have = (v.explanations || {})[q];
+      if (have) { draw(have); return; }
+      if (STATIC) { clear(body); body.appendChild(h("p", { class: "muted" }, "Not included in this static copy.")); return; }
+      waiting("Muse Glimmer is reading the review…");
+      api("/api/explain", { review_id: id, question: q }).then(function (d) {
+        if (!d.ok) { clear(body); body.appendChild(h("p", { class: "muted" }, d.error || "No explanation available.")); return; }
+        if (d.cached) { refresh(q); return; }
+        if (d.template) { draw(d.template, true); }
+        poll(d.job_id, q, !!d.template);
+      });
+    }
+    function poll(jid, q, hasTemplate) {
+      api("/api/job/" + jid).then(function (st) {
+        if (current !== q || !document.body.contains(body)) return;
+        if (st.state === "done") { refresh(q); return; }
+        if (st.state === "error") {
+          if (!hasTemplate) { clear(body); body.appendChild(h("p", { class: "muted" }, "The explanation could not be written: " + (st.message || ""))); }
+          else { var w0 = body.querySelector(".ex-pending"); if (w0) w0.textContent = "Muse Glimmer could not finish; the template above stands."; }
+          return;
+        }
+        var msg = st.state === "queued" ? "Muse Glimmer is queued…" : "Muse Glimmer is writing its own version (it runs on this machine)… " + Math.round(st.elapsed || 0) + " s";
+        var w = body.querySelector(".ex-pending");
+        if (hasTemplate && w) w.lastChild.textContent = msg; else if (!hasTemplate) waiting(msg);
+        setTimeout(function () { poll(jid, q, hasTemplate); }, 1500);
+      });
+    }
+    function refresh(q) {
+      getView(id).then(function (nv) { if (nv && nv.explanations) { v.explanations = nv.explanations; } if (current === q && v.explanations[q]) draw(v.explanations[q]); });
+    }
+    if (!v.features || v.features.explain === false) return null;
+    load(current);
+    return card;
+  }
+
+  // ------------------------------------------------------------------ "What were you thinking?" -> chips -> verdict
+  var FIELD_LABEL = { item: "item", ability: "ability", tera: "Tera type", moves_has: "has the move", moves_not: "does not have the move",
+    expects_action: "I expected them to", confidence: "confidence" };
+  function chipText(c) {
+    if (c.field === "confidence") return "Confidence: " + c.value;
+    if (c.field === "expects_action") return "Expected: " + c.value;
+    return (c.species ? c.species + " · " : "") + FIELD_LABEL[c.field] + ": " + c.value;
+  }
+  function beliefFromChips(chips) {
+    var b = { sets: {} };
+    chips.forEach(function (c) {
+      if (c.field === "item" || c.field === "ability" || c.field === "tera") { (b.sets[c.species] = b.sets[c.species] || {})[c.field] = c.id; }
+      else if (c.field === "moves_has" || c.field === "moves_not") {
+        var e = (b.sets[c.species] = b.sets[c.species] || {}); e[c.field] = e[c.field] || [];
+        if (e[c.field].indexOf(c.id) < 0) e[c.field].push(c.id);
+      } else if (c.field === "expects_action") { b.expects_action = c.id; }
+      else if (c.field === "confidence") { b.confidence = c.id; }
+    });
+    return b;
+  }
+
+  function readBlock(id, v, d) {
+    var key = d.turn + ":" + d.k;
+    var have = (v.verdicts || {})[key];
+    var wrap = h("div", { class: "read-block" });
+    if (STATIC) return have ? verdictCard(have) : null;
+    if (!v.features || !v.features.verdict) return have ? verdictCard(have) : null;
+    var panel = h("div", { class: "read-panel", hidden: true });
+    var btn = h("button", { type: "button", class: "btn btn-ghost btn-sm", "aria-expanded": "false" }, have ? "Check again with another read" : "What were you thinking?");
+    btn.addEventListener("click", function () {
+      var open = panel.hidden;
+      panel.hidden = !open; btn.setAttribute("aria-expanded", open ? "true" : "false");
+      if (open && !panel.firstChild) buildReadPanel(id, v, d, panel, wrap);
+      if (open) { var t = panel.querySelector("textarea"); if (t) t.focus(); }
+    });
+    if (have) wrap.appendChild(verdictCard(have));
+    wrap.appendChild(h("div", { class: "form-row", style: "margin-top:10px" }, btn));
+    wrap.appendChild(panel);
+    return wrap;
+  }
+
+  function buildReadPanel(id, v, d, panel, wrap) {
+    var chips = [];
+    var uid = "n" + d.turn + "_" + d.k;
+    var note = h("textarea", { id: uid, rows: 3, class: "note", placeholder: "e.g. I thought Kingambit had Black Glasses and would Sucker Punch, so I switched" });
+    var chipList = h("ul", { class: "chip-list", "aria-label": "Your read, as details" });
+    var msg = h("p", { class: "hint", "aria-live": "polite" });
+    var readBtn = h("button", { type: "button", class: "btn btn-ghost btn-sm" }, "Read my note");
+    var checkBtn = h("button", { type: "button", class: "btn btn-primary btn-sm" }, "Check this decision");
+    function drawChips() {
+      clear(chipList);
+      if (!chips.length) chipList.appendChild(h("li", { class: "muted small" }, "No details yet. With none, the check uses the engine's own guess at their sets."));
+      chips.forEach(function (c, i) {
+        chipList.appendChild(h("li", { class: "chip chip-edit" }, chipText(c),
+          h("button", { type: "button", class: "chip-x", "aria-label": "Remove " + chipText(c), onclick: function () { chips.splice(i, 1); drawChips(); } }, "×")));
+      });
+    }
+    readBtn.addEventListener("click", function () {
+      if (!note.value.trim()) { msg.textContent = "Write what you were thinking first."; return; }
+      readBtn.disabled = true; msg.textContent = "Reading your note…";
+      api("/api/note/parse", { review_id: id, note: note.value }).then(function (r) {
+        readBtn.disabled = false;
+        if (!r.ok) { msg.textContent = r.error || "Could not read the note."; return; }
+        chips = chips.concat(r.chips || []);
+        drawChips();
+        var dropped = (r.dropped || []).length;
+        msg.textContent = (r.chips || []).length + " detail(s) found by the " + (r.parser.indexOf("glimmer") === 0 ? "Muse Glimmer note reader" : "keyword reader") +
+          (dropped ? "; " + dropped + " left out because the note does not name them" : "") + ". Edit them before checking.";
+      });
+    });
+    // add a detail by hand
+    var add = h("details", { class: "add-detail" }, h("summary", null, "Add a detail by hand"));
+    api("/api/options/" + encodeURIComponent(id)).then(function (o) {
+      if (!o.ok) return;
+      var active = (o.opp_active || {})[d.turn + ":" + d.k];
+      var spSel = h("select", { "aria-label": "Their Pokémon" }, (o.opp_species || []).map(function (sp) { return h("option", { value: sp, selected: sp === active }, sp); }));
+      var fSel = h("select", { "aria-label": "Detail" }, ["item", "ability", "tera", "moves_has", "moves_not", "expects_action"].map(function (f) { return h("option", { value: f }, FIELD_LABEL[f]); }));
+      var dl = h("datalist", { id: uid + "-dl" });
+      var val = h("input", { type: "text", list: uid + "-dl", "aria-label": "Value", placeholder: "value" });
+      function fillList() {
+        clear(dl);
+        var opts = (o.options || {})[spSel.value] || {};
+        var f = fSel.value;
+        var src = f === "item" ? opts.items : f === "ability" ? opts.abilities : f === "tera" ? opts.teras : f === "expects_action" ? [{ name: "switch out" }, { name: "Terastallize" }].concat(opts.moves || []) : opts.moves;
+        (src || []).forEach(function (x) { dl.appendChild(h("option", { value: x.name })); });
+      }
+      spSel.addEventListener("change", fillList); fSel.addEventListener("change", fillList); fillList();
+      var ok = h("button", { type: "button", class: "btn btn-ghost btn-sm" }, "Add");
+      ok.addEventListener("click", function () {
+        var t = val.value.trim(); if (!t) return;
+        var f = fSel.value, idv = t.toLowerCase().replace(/[^a-z0-9]/g, "");
+        if (f === "expects_action") {
+          var kind = /^switch/i.test(t) ? "switch" : /^tera/i.test(t) ? "tera" : "move";
+          chips.push({ species: spSel.value, field: f, value: t + " (" + spSel.value + ")", id: kind === "move" ? { kind: kind, move: idv, species: spSel.value } : { kind: kind, species: spSel.value } });
+        } else chips.push({ species: spSel.value, field: f, value: t, id: idv });
+        val.value = ""; drawChips(); val.focus();
+      });
+      add.appendChild(h("div", { class: "add-row" }, spSel, fSel, val, dl, ok));
+    });
+    checkBtn.addEventListener("click", function () {
+      checkBtn.disabled = true; msg.textContent = "Starting the check…";
+      api("/api/verdict", { review_id: id, turn: d.turn, k: d.k, belief: beliefFromChips(chips) }).then(function (r) {
+        if (!r.ok) { checkBtn.disabled = false; msg.textContent = r.error || "Could not start the check."; return; }
+        var finish = function () {
+          getView(id).then(function (nv) {
+            checkBtn.disabled = false;
+            var card = (nv.verdicts || {})[d.turn + ":" + d.k];
+            if (!card) { msg.textContent = "The check finished but returned nothing."; return; }
+            v.verdicts = nv.verdicts;
+            var old = wrap.querySelector(".verdict"); var fresh = verdictCard(card);
+            if (old) old.replaceWith(fresh); else wrap.insertBefore(fresh, wrap.firstChild);
+            msg.textContent = "Done."; fresh.querySelector("h3").focus();
+          });
+        };
+        if (r.cached) { finish(); return; }
+        (function poll() {
+          api("/api/job/" + r.job_id).then(function (st) {
+            if (st.state === "done") { finish(); return; }
+            if (st.state === "error") { checkBtn.disabled = false; msg.textContent = st.message || "The check failed."; return; }
+            msg.textContent = st.state === "queued" ? "Waiting for a free engine slot (#" + (st.position || 1) + ")…" : "Running 3 independent searches on the same sampled worlds… " + Math.round(st.elapsed || 0) + " s";
+            setTimeout(poll, 1500);
+          });
+        })();
+      });
+    });
+    drawChips();
+    append(panel, [h("label", { class: "field-label", for: uid }, "Your read at the time, in your own words"), note,
+      h("div", { class: "form-row" }, readBtn, h("span", { class: "hint", style: "margin:0" }, "Their items, abilities, Tera, moves, or what you expected them to do.")),
+      chipList, add, h("div", { class: "form-row" }, checkBtn), msg,
+      h("p", { class: "footnote" }, "We check your read against the engine. Spreads and EVs are not used, and we don't yet replay the turn under the move you expected.")]);
+  }
+
+  var VERDICT_GLYPH = { "Misplay": "▼", "Misread": "◐", "Defensible": "✓", "Within noise": "≈" };
+  function verdictCard(c) {
+    var cls = { "Misplay": "v-misplay", "Misread": "v-misread", "Defensible": "v-ok", "Within noise": "v-noise" }[c.verdict] || "v-noise";
+    var box = h("div", { class: "verdict " + cls },
+      h("h3", { tabindex: "-1" }, h("span", { class: "v-badge" }, h("span", { "aria-hidden": "true" }, VERDICT_GLYPH[c.verdict] + " "), c.verdict)),
+      h("p", { class: "v-head" }, c.headline),
+      runsPlot(c),
+      c.stated && c.stated.length ? h("p", { class: "small muted" }, "Your read: " + c.stated.join("; ") + ".") : h("p", { class: "small muted" }, "Your read: no details (the engine's own guess at their sets)."),
+      (c.contradictions || []).map(function (t) { return h("p", { class: "small notice-inline" }, t + ". That detail was left out."); }),
+      c.third_option ? h("p", { class: "small" }, c.third_option) : null,
+      c.read_check ? h("p", { class: "small" }, c.read_check.sentence, h("br"), h("span", { class: "muted" }, c.read_check.scope)) : null,
+      h("p", { class: "footnote" }, (c.runs || 3) + " independent runs on the same sampled worlds · " + (c.worlds || 4) + " worlds × " + (c.iterations || 20000).toLocaleString("en") + " iterations each" + (c.seconds ? " · " + Math.round(c.seconds) + " s" : "") + "."));
+    return box;
+  }
+  function runsPlot(c) {
+    var W = 520, rowH = 34, top = 8, lab = 92, R = 20;
+    var rows = [["Your read", c.delta_U], ["Reference", c.delta_R]];
+    var H = top + rows.length * rowH + 22;
+    var plotW = W - lab - 14;
+    function X(p) { var q = Math.max(-R, Math.min(R, p)); return lab + (q + R) / (2 * R) * plotW; }
+    var sv = s("svg", { viewBox: "0 0 " + W + " " + H, class: "runs-plot", role: "img",
+      "aria-label": c.x + " minus your move, in points, three runs per row: under your read " + (c.delta_U || []).join(", ") + "; under " + c.reference_label + " " + (c.delta_R || []).join(", ") + ". Threshold " + c.margin_pts + " points." });
+    sv.appendChild(s("rect", { x: X(c.margin_pts), y: top - 4, width: X(R) - X(c.margin_pts), height: rows.length * rowH, fill: "var(--pos-wash)" }));
+    sv.appendChild(s("line", { x1: X(0), x2: X(0), y1: top - 4, y2: top + rows.length * rowH, stroke: "var(--ink-3)", "stroke-width": 1.5 }));
+    sv.appendChild(s("line", { x1: X(c.margin_pts), x2: X(c.margin_pts), y1: top - 4, y2: top + rows.length * rowH, stroke: "var(--pos)", "stroke-width": 1, "stroke-dasharray": "4 3" }));
+    rows.forEach(function (r, i) {
+      var y = top + i * rowH + rowH / 2;
+      sv.appendChild(s("text", { x: 0, y: y + 4, class: "rp-label", text: r[0].length > 24 ? r[0].slice(0, 23) + "…" : r[0] }));
+      sv.appendChild(s("line", { x1: lab, x2: lab + plotW, y1: y, y2: y, stroke: "var(--line)", "stroke-width": 1 }));
+      (r[1] || []).forEach(function (dv) {
+        if (dv === null || dv === undefined) return;
+        sv.appendChild(s("circle", { cx: X(dv), cy: y, r: 5.5, fill: "var(--ink)", stroke: "var(--surface)", "stroke-width": 2 }));
+      });
+    });
+    [-20, -10, 0, 10, 20].forEach(function (t) {
+      sv.appendChild(s("text", { x: X(t), y: H - 4, "text-anchor": "middle", class: "rp-axis", text: t > 0 ? "+" + t : t < 0 ? MINUS + Math.abs(t) : "0" }));
+    });
+    return h("figure", { class: "runs" }, sv, h("figcaption", { class: "small muted" },
+      c.x + " minus your move (" + c.chosen + "), in win-chance points. Each dot is one run. Reference: " + c.reference_label +
+      ". The shaded zone (+" + c.margin_pts + " or more, in all three runs) is where the engine's option is clearly better."));
+  }
+
+  // ------------------------------------------------------------------ share (opt-in; public replays only)
+  function toggleShare(id, v, btn, box) {
+    var open = box.hidden;
+    box.hidden = !open; btn.setAttribute("aria-expanded", open ? "true" : "false");
+    if (!open || box.firstChild) return;
+    box.appendChild(h("p", { class: "muted" }, "Creating the share page…"));
+    api("/api/share/" + encodeURIComponent(id), {}).then(function (r) {
+      clear(box);
+      if (!r.ok) { box.appendChild(h("p", { class: "form-error" }, r.error || "Cannot share this review.")); return; }
+      var url = location.origin + r.url;
+      var link = h("input", { type: "text", readonly: true, value: url, "aria-label": "Share link" });
+      var copy = h("button", { type: "button", class: "btn btn-ghost btn-sm", onclick: function () {
+        link.select(); try { navigator.clipboard.writeText(url); copy.textContent = "Copied"; } catch (e) { document.execCommand("copy"); copy.textContent = "Copied"; }
+      } }, "Copy link");
+      var dl = h("button", { type: "button", class: "btn btn-ghost btn-sm", onclick: function () { downloadPng(r.card, "hardread-" + id + ".png"); } }, "Download image");
+      append(box, [h("img", { src: r.card, alt: "Share card: " + (v.summary_text || ""), class: "share-img", width: 600, height: 315 }),
+        h("div", { class: "form-row" }, link, copy, dl),
+        h("p", { class: "hint" }, "The card shows numbers only: no names, no chat, no notes. This build runs on your machine, so the link works only here.")]);
+    });
+  }
+  function downloadPng(src, name) {
+    var img = new Image();
+    img.onload = function () {
+      var c = document.createElement("canvas"); c.width = 2400; c.height = 1260;
+      c.getContext("2d").drawImage(img, 0, 0, 2400, 1260);
+      c.toBlob(function (b) { var a = document.createElement("a"); a.href = URL.createObjectURL(b); a.download = name; document.body.appendChild(a); a.click(); setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 500); }, "image/png");
+    };
+    img.src = src;
+  }
+
   // ------------------------------------------------------------------ about & privacy
   function renderAbout() {
     lastRender = null;
@@ -719,7 +1019,9 @@
       h("ul", null,
         h("li", null, "This build runs on your own machine. The only outside request is fetching the replay link you paste, from replay.pokemonshowdown.com."),
         h("li", null, "Player names and chat are removed before the review runs; the review says “You” and “Opponent”. Names are shown once, on the side picker, and never stored."),
-        h("li", null, "Reviews of public replays are kept 14 days so a reload is instant; private (password) replays 24 hours, with no share page. The pasted log itself is deleted as soon as the review finishes."),
+        h("li", null, "Reviews of public replays are kept 14 days so a reload is instant; private (password) replays 24 hours, with no share page and no card."),
+        h("li", null, "The pasted log is deleted when the review finishes, unless you added your team export: then the name-free log and the export stay with the review, for the same time, so you can check decisions. A note you write about a decision is read on this machine and not stored; the details you confirm are kept with that check."),
+        h("li", null, "Sharing is opt-in: a share page and card exist only after you press Share, and they show numbers only (no names, chat or notes)."),
         h("li", null, "No accounts, no tracking, no cookies. Your theme and the 18+ confirmation are remembered in this browser only.")),
       h("h2", null, "Fair play"),
       h("p", null, "HardRead only reviews finished games. Links to live battle rooms are refused."),
@@ -741,6 +1043,8 @@
   // ------------------------------------------------------------------ boot
   installDefs();
   initTheme();
+  var skip = document.querySelector(".skip");
+  if (skip) skip.addEventListener("click", function (e) { e.preventDefault(); main.focus(); });
   window.addEventListener("hashchange", route);
   initGate();
   route();
