@@ -163,9 +163,12 @@ def all_tool_schemas():
 class ToolSession:
     """One explanation session over one review. Records accumulate across calls; ids are never reused."""
 
-    def __init__(self, review, verdicts=None, luck_reference=None):
+    def __init__(self, review, verdicts=None, luck_reference=None, offered=None):
+        """verdicts: {"turn:k": verdict.py result dict} (cached only). offered: the disagreement decisions the UI
+        shows (app pipeline.disagreements); default: tools/review/select_offered.offered_from_review (Ag-Sci)."""
         self.review = review
         self.verdicts = verdicts or {}
+        self.offered = offered
         self.luck_reference = luck_reference
         self.records = {}          # "#n" -> record dict (as returned to the model)
         self.record_call = {}      # "#n" -> index into self.calls
@@ -282,7 +285,16 @@ class ToolSession:
         return out
 
     def disagreements(self):
-        """research/27 §4.3: known action, WP before in [0.20, 0.80], cost >= 0.05; by cost, never summed."""
+        """research/27 §4.3: known action, WP before in [0.20, 0.80], cost >= 0.05; by cost, never summed.
+        Exactly the UI's list when given; else Ag-Sci's offered_from_review; else the same rule locally."""
+        if self.offered is not None:
+            return list(self.offered)
+        try:
+            sys.path.insert(0, str(HERE.parent / "review"))
+            import select_offered  # tools/review/select_offered.py (pure Python)
+            return select_offered.offered_from_review(self.review)
+        except Exception:  # noqa: BLE001
+            pass
         c = []
         for d in self.decisions:
             if d.get("action") is None or d.get("decision_cost") is None or d.get("win_prob") is None:
@@ -405,18 +417,28 @@ class ToolSession:
         return rec
 
     def get_verdict(self, turn, k=0):
+        """The cached verdict.py result for (turn, k) (tools/review/verdict.py, Ag-Sci); never computes one."""
         key = f"{turn}:{k}"
         v = self.verdicts.get(key)
-        if not v:
+        if not v or not v.get("verdict"):
             return self._rec({"turn": turn, "note": "no verdict was run for this decision"})
-        f = {"turn": turn, "verdict": v.get("verdict"), "engine_best": action_name(v.get("x") or v.get("engine_best")),
-             "chosen": action_name(v.get("chosen")), "reference": v.get("reference"),
-             "_raw": {"engine_best": v.get("x") or v.get("engine_best"), "chosen": v.get("chosen")}}
-        runs = v.get("delta_u") or v.get("runs") or []
-        for i, x in enumerate(runs[:3]):
-            f[f"run{i + 1}_pts"] = _pts(x)
-        if runs:
-            f["mean_gap_pts"] = _pts(sum(runs) / len(runs))
+        x = v.get("X") or v.get("x") or v.get("engine_best")
+        ref = v.get("reference")
+        ref_txt = {"later": "revealed later", "engine": "the engine's estimate", "truth": "the true sets"}.get(ref, ref)
+        f = {"turn": turn, "verdict": v.get("verdict"), "engine_best": action_name(x),
+             "chosen": action_name(v.get("chosen")), "reference": ref_txt,
+             "_raw": {"engine_best": x, "chosen": v.get("chosen")}}
+        du = v.get("delta_U") or v.get("delta_u") or []
+        dr = v.get("delta_R") or []
+        for i, d in enumerate(du[:3]):
+            f[f"read_run{i + 1}_pts"] = _pts(d)
+        for i, d in enumerate(dr[:3]):
+            f[f"ref_run{i + 1}_pts"] = _pts(d)
+        if v.get("mean_delta_U") is not None or (du and None not in du):
+            f["read_run_mean_pts"] = _pts(v.get("mean_delta_U") if v.get("mean_delta_U") is not None
+                                          else sum(du) / len(du))
+        if v.get("mean_delta_R") is not None:
+            f["ref_run_mean_pts"] = _pts(v["mean_delta_R"])
         return self._rec(f)
 
     # ------------------------------------------------------------------ prefetch (single-call fallback mode)

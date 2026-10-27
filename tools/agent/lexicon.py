@@ -5,7 +5,7 @@ verifier's strictness is part of the eval protocol (EVAL_PROTOCOL_AGENT.md), so 
 """
 import re
 
-LEXICON_VERSION = "agent-lex-v3"
+LEXICON_VERSION = "agent-lex-v4"
 
 # ---- rule 2: phrase classes. Each class: trigger regex -> allowed (kind, pts-subkind or None) of a slot.
 PHRASE_CLASSES = [
@@ -24,6 +24,8 @@ PHRASE_CLASSES = [
      {("pts", "gap")}),
     ("choices", r"\bchoices\b|\bdecisions\b|\bskill\b", {("pts", "choices")}),
     ("verdict", r"\bverdict\b", {("verdict", None)}),
+    # verdict margins (get_verdict): "X was better by {m} under your read (three runs: ...)"
+    ("verdict_runs", r"\bbetter\s+by\b|\bruns?\b|\bunder\s+(?:your\s+read|the\s+reference)\b", {("pts", "run")}),
 ]
 PHRASE_RE = [(n, re.compile(rx, re.I), allowed) for n, rx, allowed in PHRASE_CLASSES]
 TURN_ADJ_RE = re.compile(r"\bturns?\s*$", re.I)   # "turn {t}": the placeholder must be a turn number

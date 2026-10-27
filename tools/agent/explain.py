@@ -50,10 +50,10 @@ def _now():
 
 
 def run(review, question, client=None, mode="loop", verdicts=None, luck_reference=None, repair=True,
-        template_fallback=True, max_tool_calls=MAX_TOOL_CALLS):
+        template_fallback=True, max_tool_calls=MAX_TOOL_CALLS, offered=None):
     """-> result dict (see module doc). `client` is a GlimmerClient (None only for mode='template')."""
     t0 = _now()
-    session = ToolSession(review, verdicts=verdicts, luck_reference=luck_reference)
+    session = ToolSession(review, verdicts=verdicts, luck_reference=luck_reference, offered=offered)
     res = {"question": question, "mode": mode, "prompt_version": PROMPT_VERSION, "verifier_version": VERIFIER_VERSION,
            "steps": [], "attempts": [], "errors": [], "data_tool_calls": 0, "llm_requests": 0,
            "raw_pass": False, "after_repair_pass": False, "final": None}

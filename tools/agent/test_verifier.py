@@ -60,8 +60,9 @@ REVIEW = {
          "top_alternatives": [], "opponent_policy_top": []},
     ],
 }
-VERDICTS = {"2:0": {"verdict": "Within noise", "x": "knockoff", "chosen": "swordsdance",
-                    "reference": "engine's estimate", "delta_u": [0.04, 0.07, 0.01]}}
+VERDICTS = {"2:0": {"verdict": "Within noise", "X": "knockoff", "chosen": "swordsdance", "reference": "engine",
+                    "delta_U": [0.04, 0.07, 0.01], "delta_R": [0.02, 0.03, -0.01], "mean_delta_U": 0.04,
+                    "mean_delta_R": 0.0133}}  # the shape tools/review/verdict.py returns
 
 
 def S(*sents):
@@ -184,6 +185,18 @@ class TestVerifierPass(Base):
                                        "swung {c} against you.", {"l": "#1.luck_pts", "c": "#1.choices_pts"})))
         self.assertTrue(ok, rep)
 
+    def test_trigger_binding_preceding_same_clause(self):
+        # v3 pilot item 1 regression: "choices" after {l} belongs to {c}, not to {l}
+        ok, rules, rep = self.rules(S(("Luck was net {l} and choices, yours and your opponent's, came to {c}.",
+                                       {"l": "#1.luck_pts", "c": "#1.choices_pts"})))
+        self.assertTrue(ok, rep)
+
+    def test_trigger_binding_adjacent_following(self):
+        m = self.luck[0]["id"]
+        ok, rules, rep = self.rules(S(("The crit missed nothing, a {p} chance event that gave {x} luck points "
+                                       "against you.", {"p": f"{m}.realised_prob", "x": f"{m}.luck_pts"})))
+        self.assertTrue(ok, rep)
+
     def test_event_word_labels_luck(self):
         m = self.luck[0]["id"]
         ok, rules, rep = self.rules(S(("On turn {t}, the critical hit swung {x} against you.",
@@ -195,6 +208,22 @@ class TestVerifierPass(Base):
         ok, rules, rep = self.rules(S(("The verdict on turn {t} is {v}.", {"t": f"{v['id']}.turn",
                                                                           "v": f"{v['id']}.verdict"})))
         self.assertTrue(ok, rep)
+
+
+    def test_verdict_margin_sentence(self):
+        v = self.s.call("get_verdict", {"turn": 2, "k": 0})
+        self.assertEqual((v["engine_best"], v["read_run_mean_pts"], v["reference"]),
+                         ("Knock Off", 4, "the engine's estimate"))
+        ok, rules, rep = self.rules(S(("The verdict is {v}: under your read, {x} was better by {m}.",
+                                       {"v": f"{v['id']}.verdict", "x": f"{v['id']}.engine_best",
+                                        "m": f"{v['id']}.read_run_mean_pts"})))
+        self.assertTrue(ok, rep)
+
+    def test_offered_list_from_the_app(self):
+        s = ToolSession(REVIEW, offered=[REVIEW["decisions"][3]])  # the UI shows only turn 5
+        self.assertEqual([m["turn"] for m in s.call("list_key_moments", {"kind": "disagreement"})["moments"]], [5])
+        s2 = ToolSession(REVIEW, offered=[])
+        self.assertIn("note", s2.call("list_key_moments", {"kind": "disagreement"}))
 
 
 class TestVerifierFail(Base):

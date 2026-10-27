@@ -114,6 +114,49 @@ class TestAttribution(unittest.TestCase):
         self.assertFalse([x for x in c if x["field"] == "moves_has"])
 
 
+class TestAgAppFollowups(unittest.TestCase):
+    """Ag-App verdict-flow test (review rda6f9b4ca0faa7e7480), 2026-10-27."""
+    OPP2 = TestAttribution.OPP2
+    OWN2 = TestAttribution.OWN2
+    NOTE = "I thought Ceruledge had Heavy-Duty Boots and would use Bitter Blade, so Crunch was safe"
+
+    def test_keyword_item_kept_when_opponent_is_the_subject(self):
+        r = P.parse(self.NOTE, self.OWN2, self.OPP2, "keyword")
+        self.assertEqual(r["belief"]["sets"], {"Ceruledge": {"item": "heavydutyboots", "moves_has": ["bitterblade"]}})
+        self.assertIn("Crunch", [d["value"] for d in r["dropped"]])  # rejected, with its reason, never silent
+        self.assertTrue(all(d.get("reason") for d in r["dropped"]))
+
+    def test_glimmer_item_kept_and_own_move_dropped(self):
+        c, d = P.to_chips({"sets": [{"species": "Ceruledge", "item": "Heavy-Duty Boots",
+                                     "moves_has": ["Bitter Blade", "Crunch"]}]}, self.NOTE, self.OWN2, self.OPP2, "glimmer")
+        self.assertEqual(sorted((x["field"], x["id"]) for x in c),
+                         [("item", "heavydutyboots"), ("moves_has", "bitterblade")])
+        self.assertEqual([(x["value"], x["reason"].split(":")[0]) for x in d], [("Crunch", "not attributed to Ceruledge")])
+
+    def test_i_guess_it_had(self):
+        c, _ = P.to_chips({"sets": [{"species": "Dragapult", "item": "Choice Specs"}]},
+                          "I guess it had Choice Specs, Dragapult hit hard", self.OWN2, self.OPP2, "glimmer")
+        self.assertEqual([x["id"] for x in c], [])  # "it" before Dragapult is named: no antecedent, dropped
+        c, _ = P.to_chips({"sets": [{"species": "Dragapult", "item": "Choice Specs"}]},
+                          "Dragapult hit hard, I guess it had Choice Specs", self.OWN2, self.OPP2, "glimmer")
+        self.assertEqual([x["id"] for x in c], ["choicespecs"])
+
+    def test_read_check_forced_replacement(self):
+        for pol in ([["nomove", 1.0]], [["switch clefable", 1.0]], [["none", 1.0]]):
+            rv = {"turns": [{"turn": 9, "opponent_action": "switch clefable"}],
+                  "decisions": [{"turn": 9, "k": 1, "opponent_policy_top": pol}]}
+            rc = P.read_check(rv, 9, 1, {"expects_action": {"kind": "switch", "species": "Dragapult"}})
+            self.assertEqual(rc["status"], "no_opponent_choice", pol)
+            self.assertNotIn("%", rc["sentence"])
+
+    def test_read_check_confident_but_real_choice(self):
+        rv = {"turns": [{"turn": 8, "opponent_action": "fierydance"}],
+              "decisions": [{"turn": 8, "k": 0, "opponent_policy_top": [["fierydance", 0.99], ["uturn", 0.006],
+                                                                        ["switch ironvaliant", 0.004]]}]}
+        rc = P.read_check(rv, 8, 0, {"expects_action": {"kind": "move", "move": "fierydance"}})
+        self.assertEqual(rc["status"], "checked")
+
+
 class TestKeywordAndReadCheck(unittest.TestCase):
     def test_keyword_negation(self):
         r = P.keyword_parse("Dragapult was Choice Specs for sure, no way it had Will-O-Wisp", OWN, OPP)

@@ -99,6 +99,7 @@ def main():
     reviews = {}
     rows = []
     t0 = time.time()
+    commit_at_start = git_head()  # the code that runs (a commit during the run must not relabel it)
     # recorded runs own the shared server (EVAL_LOCK); pilots run without it and label latency as an upper bound
     lock = contextlib.nullcontext(None) if a.pilot else eval_lock(f"A1 record {Path(a.out).name}", 330 * len(items))
     with lock as lock_line, open(out_items, "w") as fo:
@@ -143,7 +144,10 @@ def main():
                        "request": {"temperature": 0, "top_k": 40, "top_p": 1, "seed": 42,
                                    "reasoning_strength": a.reasoning, "max_tokens": a.max_tokens},
                        "prompt_version": explain.PROMPT_VERSION, "verifier_version": VERIFIER_VERSION,
-                       "lexicon_version": LEXICON_VERSION, "tools_agent_commit": git_head(), "host": a.host_note,
+                       "lexicon_version": LEXICON_VERSION, "tools_agent_commit": commit_at_start,
+                       "tools_agent_dirty": bool(subprocess.run(["git", "-C", str(ROOT), "status", "--porcelain",
+                                                                 "--", "tools/agent"], capture_output=True,
+                                                                text=True).stdout.strip()), "host": a.host_note,
                        "eval_lock": lock_line,
                        "latency_label": "exclusive server (EVAL_LOCK)" if lock_line else
                                         "shared server, upper bound (other clients may call :18131)",

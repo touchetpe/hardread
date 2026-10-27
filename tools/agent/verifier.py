@@ -33,7 +33,7 @@ from lexicon import (BOTH_PLAYERS_RE, CERTAIN_RE, DIGIT_RE, HEDGE_RE, LEXICON_VE
 from names import find_entities, to_id  # noqa: E402
 from tools import field_kind, pts_subkind  # noqa: E402
 
-VERIFIER_VERSION = "agent-verifier-v3 (" + LEXICON_VERSION + ")"
+VERIFIER_VERSION = "agent-verifier-v4 (" + LEXICON_VERSION + ")"
 MAX_SENTENCES = 4
 MAX_CHARS = 300
 
@@ -50,6 +50,31 @@ def _neutral(text):
 def _free_text(text):
     """Text without placeholders; a unit right after a placeholder ("{p} percent") goes with it."""
     return PLACEHOLDER_RE.sub(" ", UNIT_AFTER_PLACEHOLDER_RE.sub(r"\1", text))
+
+
+CLAUSE_GAP_RE = re.compile(r"[,;.:!?]|\b(?:and|while|but|so|whereas|then)\b", re.I)
+
+
+def _bind_trigger(neutral, a, b, triggers):
+    """Which phrase-class trigger names the placeholder at [a, b)? (rule 2)
+    1. a trigger right after it ("{x} luck points", "{p} chance", "{s}% win chance");
+    2. else the nearest preceding trigger in the same clause ("Luck was net {l}");
+    3. else the nearest trigger by distance, preceding ones first on ties."""
+    after = [t for t in triggers if t[1] >= b and re.fullmatch(r"[\s%]*", neutral[b:t[1]])]
+    if after:
+        t = min(after, key=lambda t: t[1])
+        return (0, t[0], t[3])
+    same = [t for t in triggers if t[2] <= a and not CLAUSE_GAP_RE.search(neutral[t[2]:a])]
+    if same:
+        t = max(same, key=lambda t: t[2])
+        return (0, t[0], t[3])
+    best = None
+    for cname, ta, tb, allowed in triggers:
+        d = a - tb if tb <= a else (ta - b if ta >= b else 0)
+        key = (d, 0 if tb <= a else 1)
+        if best is None or key < best[0]:
+            best = (key, cname, allowed)
+    return best
 
 
 def _sign(kind, sub, value):
@@ -138,12 +163,7 @@ def verify(payload, session):
                 continue
             if kind not in NUMERIC_KINDS:
                 continue
-            best = None
-            for cname, ta, tb, allowed in triggers:
-                d = a - tb if tb <= a else (ta - b if ta >= b else 0)
-                key = (d, 0 if tb <= a else 1)
-                if best is None or key < best[0]:
-                    best = (key, cname, allowed)
+            best = _bind_trigger(neutral, a, b, triggers)
             if best is None:
                 _fail(fails, 2, i, f"{{{name}}} ({field}) has no words saying what the number is (e.g. 'luck', "
                                    f"'win chance', 'chance', 'preferred by')", name)

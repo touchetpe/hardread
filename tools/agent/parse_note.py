@@ -27,7 +27,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 from names import action_name, dex, move_name, species_name, to_id  # noqa: E402
 
-PARSER_VERSION = "parse-note-v3"
+PARSER_VERSION = "parse-note-v4"
 
 ITEM_ALIASES = {
     "scarf": "choicescarf", "specs": "choicespecs", "band": "choiceband", "lefties": "leftovers",
@@ -209,7 +209,10 @@ def attributed(note_n, ev, species, opp, own_moves=None, move_id=None):
         return False, "not found in the note"
     pos = m.start()
     clause = clause_before(note_n, pos)
-    if OWN_BEFORE_RE.search(note_n[max(0, pos - 40):pos]):
+    own_m = OWN_BEFORE_RE.search(note_n[max(0, pos - 40):pos])
+    # "I thought Ceruledge had X" / "I guess it had X": the opponent is the subject, so it is not the player's own
+    if own_m and not (species_evidence(own_m.group(0), species) or OPP_PRONOUN_RE.search(own_m.group(0))
+                      or any(species_evidence(own_m.group(0), o) for o in opp)):
         return False, "the player's own (\"I used\", \"my\")"
     named_here = species_evidence(clause, species) is not None
     if not named_here:
@@ -259,6 +262,10 @@ def keyword_parse(note, own, opp, own_moves=None):
         return opp_named[0][1] if opp_named else None
 
     sets = {}
+    rejected = []  # every candidate the baseline does not keep, with its reason (reported in "dropped")
+
+    def reject(sp, field, value, why):
+        rejected.append({"field": field, "value": value, "species": sp, "reason": why})
 
     def put(sp, field, value, ev, neg=False):
         if sp is None:
@@ -276,8 +283,11 @@ def keyword_parse(note, own, opp, own_moves=None):
         ev = item_evidence(note_n, iid)
         if ev:
             sp = owner(note_n.find(ev))
-            if sp and attributed(note_n, ev, sp, opp)[0]:
+            ok, why = attributed(note_n, ev, sp, opp) if sp else (False, "no opponent Pokémon named before it")
+            if ok:
                 put(sp, "item", iid, ev)
+            else:
+                reject(sp, "item", disp, f"not attributed{' to ' + sp if sp else ''}: {why}")
     seen_moves = set()
     spans = []
     for mid, e in dex()["moves"].items():
@@ -294,8 +304,10 @@ def keyword_parse(note, own, opp, own_moves=None):
             continue  # the player's own move ("I used Defog")
         mentioned.append((mid, ev))
         sp = owner(pos)
-        if not sp or not attributed(note_n, ev, sp, opp, own_moves, mid)[0]:
-            continue  # e.g. "so Crunch was safe": the player's own move, not the opponent's
+        ok, why = attributed(note_n, ev, sp, opp, own_moves, mid) if sp else (False, "no opponent Pokémon named")
+        if not ok:  # e.g. "so Crunch was safe": the player's own move, not the opponent's
+            reject(sp, "moves", move_name(mid), f"not attributed{' to ' + sp if sp else ''}: {why}")
+            continue
         seen_moves.add(mid)
         neg = re.search(r"\b" + NOT_RE + r"\s+(?:[\w']+\s+){0,4}$", before)
         put(sp, "moves_not" if neg else "moves_has", mid, ev)
@@ -323,7 +335,8 @@ def keyword_parse(note, own, opp, own_moves=None):
         if re.search(rx, note, re.I):
             conf = c
             break
-    return {"sets": [{"species": sp, **{k: v for k, v in d.items() if k != "_evidence"}} for sp, d in sets.items()],
+    return {"_rejected": rejected,
+            "sets": [{"species": sp, **{k: v for k, v in d.items() if k != "_evidence"}} for sp, d in sets.items()],
             "expects_action": exp, "confidence": conf or "think"}
 
 
@@ -385,6 +398,7 @@ def to_chips(raw, note, own, opp, source, own_moves=None):
 
     for st in (raw or {}).get("sets") or []:
         if not isinstance(st, dict):
+            dropped.append({"field": "sets", "value": st, "reason": "not an object"})
             continue
         sp = _resolve_species(st.get("species"), own + opp)
         if sp is None:
@@ -501,6 +515,9 @@ def has_invented_number(obj, note):
 
 # ------------------------------------------------------------------ read check (v1: data only)
 
+NO_CHOICE_IDS = {"", "none", "nomove", "noop", "pass", "wait", "recharge", "struggle"}
+
+
 def read_check(review, turn, k, belief):
     """Compare the expected opponent action with the engine's opponent policy (top three) and what was played.
     Every number is copied from decisions[].opponent_policy_top; returns None if no expectation or no data."""
@@ -513,6 +530,15 @@ def read_check(review, turn, k, belief):
         return None
     top = [(a, p) for a, p in d["opponent_policy_top"]]
     played = (t or {}).get("opponent_action")
+    real = [(a, p) for a, p in top if to_id(a) not in NO_CHOICE_IDS]
+    if not real or (len(real) == 1 and real[0][1] >= 0.999):
+        # e.g. a replacement after a faint: the opponent had no meaningful choice, so there is no read to check
+        return {"turn": turn, "k": k, "expected": exp, "status": "no_opponent_choice",
+                "engine_top": [[action_name(a), p] for a, p in top],
+                "sentence": "Your opponent had no real choice at this decision (for example a replacement after a "
+                            "faint), so there is no read to check here.",
+                "scope": "We check your read of their move against the engine; we don't yet replay the turn under it."}
+    top = real
 
     def matches(a):
         if exp["kind"] == "switch":
@@ -538,7 +564,8 @@ def read_check(review, turn, k, belief):
         eng = f"It was not in the engine's top three (each of those had at least {fp(top[-1][1])})"
     eng += f"; its top guess was {action_name(top[0][0])} at {fp(top[0][1])}. "
     third = f"They played {action_name(played)}." if played else "The log does not show their action."
-    return {"turn": turn, "k": k, "expected": exp, "engine_top": [[action_name(a), p] for a, p in top],
+    return {"turn": turn, "k": k, "expected": exp, "status": "checked",
+            "engine_top": [[action_name(a), p] for a, p in top],
             "engine_prob_of_expected": round(sum(p for _, p in hits), 4) if hits else None,
             "upper_bound_if_not_listed": None if hits else top[-1][1], "played": action_name(played),
             "matched": bool(played) and matches(played), "sentence": first + eng + third,
@@ -557,6 +584,8 @@ def parse(note, own, opp, parser="glimmer", client=None, context=None, own_moves
     else:
         raw = keyword_parse(note, own, opp, own_moves)
     chips, dropped = to_chips(raw, note, own, opp, parser, own_moves)
+    dropped = (raw or {}).get("_rejected", []) + dropped  # keyword-path rejections too: nothing is dropped silently
+    raw = {k: v for k, v in (raw or {}).items() if k != "_rejected"}
     belief = belief_from_chips(chips)
     return {"version": PARSER_VERSION, "parser": parser, "note": note, "raw": raw, "chips": chips,
             "dropped": dropped, "belief": belief, "invented_number": has_invented_number(belief, note),
