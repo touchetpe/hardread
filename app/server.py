@@ -419,8 +419,15 @@ def create_app(concurrency=1, processes=4):
     def err(status, msg, **kw):
         return JSONResponse({"ok": False, "error": msg, **kw}, status_code=status)
 
+    blocked = set()
+    bl = os.environ.get("HARDREAD_BLOCKLIST")   # optional file: one client address per line (abuse control)
+    if bl and Path(bl).exists():
+        blocked = {x.strip() for x in Path(bl).read_text().splitlines() if x.strip() and not x.startswith("#")}
+
     @app.middleware("http")
     async def headers(request, call_next):
+        if blocked and request.method == "POST" and client_of(request) in blocked:
+            return JSONResponse({"ok": False, "error": "Not available from this address."}, status_code=403)
         resp = await call_next(request)
         resp.headers["X-Content-Type-Options"] = "nosniff"
         resp.headers["Referrer-Policy"] = "no-referrer"
