@@ -837,7 +837,9 @@
 
   function readBlock(id, v, d) {
     var key = d.turn + ":" + d.k;
-    var have = (v.verdicts || {})[key];
+    // A review view has no current note/chip identity. Never show its most
+    // recently cached read as if it answered the read the user is entering now.
+    var have = STATIC ? (v.verdicts || {})[key] : null;
     var wrap = h("div", { class: "read-block" });
     if (STATIC) return have ? verdictCard(have) : null;
     if (!v.features || !v.features.verdict) return have ? verdictCard(have, id) : null;
@@ -857,6 +859,14 @@
 
   function buildReadPanel(id, v, d, panel, wrap) {
     var chips = [];
+    var revision = 0;
+    function invalidateRead() {
+      revision += 1;
+      var old = wrap.querySelector(".verdict");
+      if (old) old.remove();
+      if (v.verdicts) delete v.verdicts[d.turn + ":" + d.k];
+      msg.textContent = "Your read changed. Check this decision again.";
+    }
     var uid = "n" + d.turn + "_" + d.k;
     var note = h("textarea", { id: uid, rows: 3, class: "note", placeholder: "e.g. I thought Kingambit had Black Glasses and would Sucker Punch, so I switched" });
     var chipList = h("ul", { class: "chip-list", "aria-label": "Your read, as details" });
@@ -864,13 +874,14 @@
     var droppedBox = h("div", { class: "dropped-box" });
     var readBtn = h("button", { type: "button", class: "btn btn-ghost btn-sm" }, "Read my note");
     var checkBtn = h("button", { type: "button", class: "btn btn-primary btn-sm" }, "Check this decision");
+    note.addEventListener("input", invalidateRead);
     function drawChips() {
       clear(chipList);
       if (!chips.length) chipList.appendChild(h("li", { class: "muted small" }, "No details yet. With none, the check uses the engine's own guess at their sets."));
       chips.forEach(function (c, i) {
         chipList.appendChild(h("li", { class: "chip chip-edit" }, chipText(c),
           h("button", { type: "button", class: "chip-x", "aria-label": "Remove " + chipText(c), onclick: function () {
-            chips.splice(i, 1); drawChips();
+            chips.splice(i, 1); invalidateRead(); drawChips();
             var xs = chipList.querySelectorAll(".chip-x");   // keep keyboard focus in the list
             (xs[Math.min(i, xs.length - 1)] || readBtn).focus();
           } }, "×")));
@@ -879,10 +890,12 @@
     readBtn.addEventListener("click", function () {
       if (!note.value.trim()) { msg.textContent = "Write what you were thinking first."; return; }
       readBtn.disabled = true; msg.textContent = "Reading your note…";
+      var noteRevision = revision;
       api("/api/note/parse", { review_id: id, note: note.value }).then(function (r) {
         readBtn.disabled = false;
+        if (noteRevision !== revision) { msg.textContent = "Your note changed. Read it again."; return; }
         if (!r.ok) { msg.textContent = r.error || "Could not read the note."; return; }
-        chips = chips.concat(r.chips || []);
+        if ((r.chips || []).length) { chips = chips.concat(r.chips); invalidateRead(); }
         drawChips();
         var dropped = r.dropped || [];
         msg.textContent = (r.chips || []).length + " detail(s) found by the " + (r.parser.indexOf("glimmer") === 0 ? "Muse Glimmer note reader" : "keyword reader") +
@@ -923,29 +936,50 @@
           var kind = /^switch/i.test(t) ? "switch" : /^tera/i.test(t) ? "tera" : "move";
           chips.push({ species: spSel.value, field: f, value: t + " (" + spSel.value + ")", id: kind === "move" ? { kind: kind, move: idv, species: spSel.value } : { kind: kind, species: spSel.value } });
         } else chips.push({ species: spSel.value, field: f, value: t, id: idv });
-        val.value = ""; drawChips(); val.focus();
+        invalidateRead(); val.value = ""; drawChips(); val.focus();
       });
       add.appendChild(h("div", { class: "add-row" }, spSel, fSel, val, dl, ok));
     });
     checkBtn.addEventListener("click", function () {
       checkBtn.disabled = true; msg.textContent = "Starting the check…";
-      api("/api/verdict", { review_id: id, turn: d.turn, k: d.k, belief: beliefFromChips(chips) }).then(function (r) {
+      var submittedBelief = beliefFromChips(chips);
+      var submittedRevision = revision;
+      var sameSubmittedRead = function () { return revision === submittedRevision && JSON.stringify(beliefFromChips(chips)) === JSON.stringify(submittedBelief); };
+      api("/api/verdict", { review_id: id, turn: d.turn, k: d.k, belief: submittedBelief }).then(function (r) {
+        if (!sameSubmittedRead()) { checkBtn.disabled = false; msg.textContent = "Your read changed. Check this decision again."; return; }
         if (!r.ok) { checkBtn.disabled = false; msg.textContent = r.error || "Could not start the check."; return; }
-        var finish = function () {
-          getView(id).then(function (nv) {
+        var finish = function (jobResult) {
+          if (!r.identity_sha256 || (jobResult && jobResult.identity_sha256 !== r.identity_sha256)) {
             checkBtn.disabled = false;
-            var card = (nv.verdicts || {})[d.turn + ":" + d.k];
-            if (!card) { msg.textContent = "The check finished but returned nothing."; return; }
-            v.verdicts = nv.verdicts;
-            var old = wrap.querySelector(".verdict"); var fresh = verdictCard(card, id);
+            msg.textContent = "The check receipt did not match this read. Retry the check.";
+            return;
+          }
+          if (!sameSubmittedRead()) {
+            checkBtn.disabled = false;
+            msg.textContent = "Your chips changed while the check was running. Check the current read again.";
+            return;
+          }
+          var receiptUrl = "/api/review/" + encodeURIComponent(id) + "/verdict/" + d.turn + "/" + d.k +
+            "?identity_sha256=" + encodeURIComponent(r.identity_sha256);
+          api(receiptUrl).then(function (receipt) {
+            checkBtn.disabled = false;
+            if (!receipt.ok || receipt.identity_sha256 !== r.identity_sha256 || !receipt.raw || !receipt.card ||
+                receipt.raw.cache_identity_sha256 !== r.identity_sha256 || !sameSubmittedRead()) {
+              msg.textContent = "No exact receipt matched this stated read. Retry the check.";
+              return;
+            }
+            v.verdicts = v.verdicts || {};
+            v.verdicts[d.turn + ":" + d.k] = receipt.card;
+            var old = wrap.querySelector(".verdict"); var fresh = verdictCard(receipt.card, id, r.identity_sha256);
             if (old) old.replaceWith(fresh); else wrap.insertBefore(fresh, wrap.firstChild);
             msg.textContent = "Done."; fresh.querySelector("h3").focus();
           });
         };
-        if (r.cached) { finish(); return; }
+        if (r.cached) { finish({ identity_sha256: r.identity_sha256 }); return; }
         (function poll() {
           api("/api/job/" + r.job_id).then(function (st) {
-            if (st.state === "done") { finish(); return; }
+            if (!sameSubmittedRead()) { checkBtn.disabled = false; msg.textContent = "Your read changed. Check this decision again."; return; }
+            if (st.state === "done") { finish(st.result); return; }
             if (st.state === "error") { checkBtn.disabled = false; msg.textContent = st.message || "The check failed."; return; }
             msg.textContent = st.state === "queued" ? "Waiting for a free engine slot (#" + (st.position || 1) + ")…" : "Running 3 independent searches on the same sampled worlds… " + Math.round(st.elapsed || 0) + " s";
             setTimeout(poll, 1500);
@@ -967,7 +1001,7 @@
       rc.sentence || "", h("br"), h("span", { class: "muted" }, rc.scope || ""));
   }
 
-  function verdictCard(c, reviewId) {
+  function verdictCard(c, reviewId, identitySha) {
     var cls = { "Misplay": "v-misplay", "Misread": "v-misread", "Defensible": "v-ok", "Within noise": "v-noise" }[c.verdict] || "v-noise";
     var box = h("div", { class: "verdict " + cls },
       h("h3", { tabindex: "-1" }, h("span", { class: "v-badge" }, h("span", { "aria-hidden": "true" }, VERDICT_GLYPH[c.verdict] + " "), c.verdict)),
@@ -978,7 +1012,8 @@
       c.third_option ? h("p", { class: "small" }, c.third_option) : null,
       readCheckBlock(c.read_check),
       h("p", { class: "footnote" }, (c.runs || 3) + " independent runs on the same sampled worlds · " + (c.worlds || 4) + " worlds × " + (c.iterations || 20000).toLocaleString("en") + " iterations each" + (c.seconds ? " · " + Math.round(c.seconds) + " s" : "") + ". ",
-        reviewId && !STATIC ? h("a", { href: "/api/review/" + encodeURIComponent(reviewId) + "/verdict/" + c.turn + "/" + c.k, target: "_blank", rel: "noopener" }, "Full output (JSON)") : null));
+        reviewId && identitySha && !STATIC ? h("a", { href: "/api/review/" + encodeURIComponent(reviewId) + "/verdict/" + c.turn + "/" + c.k +
+          "?identity_sha256=" + encodeURIComponent(identitySha), target: "_blank", rel: "noopener" }, "Full output (JSON)") : null));
     return box;
   }
   function runsPlot(c) {

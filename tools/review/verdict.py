@@ -25,18 +25,22 @@ Conditions (merge semantics per sampled world, research/27 §4.4):
 
 Search: for each seed s in (11, 12, 13): one base sample of 4 worlds (Foul Play's sampler, Python RNG seeded from
 (s, decision)); U and R are applied to copies of the same worlds (common random numbers on worlds only: poke-engine's
-MCTS seeds itself from the OS, so MCTS noise is independent across seeds and across U/R); 20,000 MCTS iterations
-per world; WP(option) = cal(absolute value A) (value.py; calibrator absolute_human by default).
+MCTS seeds itself from the OS, so MCTS noise is independent across seeds and across U/R). Product `one` uses 60,000
+MCTS iterations per world and margin 0.08; batch research defaults remain 20,000 iterations and margin 0.05.
+WP(option) = cal(absolute value A) (value.py; calibrator absolute_human by default).
 
 Statistic (signed paired contrast, §0.2 V2): D_K,s = WP_K,s(X) - WP_K,s(chosen).
-  K BAD: mean_s D >= m (0.05) and D > 0 for all 3 seeds;   K OK: mean_s D <= 0.02.
+  K BAD: mean_s D >= m (product `one`: 0.08; batch default: 0.05) and D > 0 for all 3 seeds;
+  K OK: mean_s D <= 0.02.
   Misplay = U BAD; Misread = U OK and R BAD; Defensible = U OK and R OK; Within noise = anything else.
   Info only: under U, a third option Y beating X by >= m with all seeds > 0.
 Wording: "3 independent runs on the same sampled worlds" (never "deterministic").
 
   verdict.py batch --cases vt1_candidates.jsonl --stated none --reference engine --seeds 11,12,13 \
       --iterations 20000 --workers 12 --out scratch_ds/verdict/vt1.json          (VT1, E7 step 2)
-  verdict.py one REPLAY --team TEAM.txt --side p1 --turn 14 --k 0 --x knockoff [--belief belief.json] [--out v.json]
+  verdict.py one REPLAY --team TEAM.txt --side p1 --turn 14 --k 0 --x knockoff \
+      --reference auto --seeds 11,12,13 --worlds 4 --iterations 60000 --margin 0.08 --cal absolute_human \
+      [--belief belief.json] [--out v.json]
   verdict.py rescore scratch_ds/verdict/vt1.json --margin 0.08                   (verdicts at another margin)
 """
 import argparse
@@ -52,6 +56,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 HARDREAD = HERE.parents[1]
 sys.path.insert(0, str(HERE))
+import verdict_identity as VI  # noqa: E402
 
 VERSION = 1
 SEEDS = (11, 12, 13)
@@ -520,7 +525,16 @@ def rescore(args):
     print(json.dumps(summarize(res, args.margin, M_OK, d["summary"].get("label", "batch")), indent=1))
 
 
+def _block_dataset_downloads():
+    # Confined to this one-decision subprocess; review settings are unchanged.
+    import requests
+    def missing_dataset(*_args, **_kwargs):
+        raise RuntimeError("Local set data is missing; decision check cannot download it.")
+    requests.get = missing_dataset
+
+
 def one(args):
+    _block_dataset_downloads()
     import contextlib
     import io
     import fpenv
@@ -538,25 +552,96 @@ def one(args):
     chosen = args.chosen or d.action
     if not chosen:
         sys.exit("the log hides this action; pass --chosen")
-    key = hashlib.sha256(json.dumps([lines, team, args.side, args.turn, args.k, chosen, args.x, belief,
-                                     args.reference, args.seeds, args.iterations, args.cal, VERSION]).encode()).hexdigest()[:24]
-    cp = CACHE_DIR / f"one-{key}.json"
+    runtime = _runtime_provenance()
+    settings = {"reference": args.reference, "seeds": [int(s) for s in args.seeds.split(",")],
+                "worlds": args.worlds, "iterations": args.iterations, "margin": args.margin,
+                "ok_margin": M_OK, "calibration": args.cal, "verdict_source_version": VERSION}
+    identity = VI.build_request_identity(
+        review_id=args.review_id or "standalone", replay_path=args.replay, team_path=args.team, side=args.side,
+        turn=args.turn, k=args.k, chosen=chosen, engine_best=args.x, belief=belief, settings=settings,
+        runtime_manifest=runtime)
+    digest = VI.identity_sha256(identity)
+    if args.identity:
+        try:
+            expected = json.loads(Path(args.identity).read_text())
+            expected_digest = VI.identity_sha256(expected)
+        except (OSError, ValueError, TypeError) as exc:
+            sys.exit(f"invalid expected verdict identity: {type(exc).__name__}")
+        if expected != identity or expected_digest != digest:
+            sys.exit("verdict engine provenance changed after the app request; retry the check")
+
+    # Keep the pre-C9 sampling key unchanged: provenance changes invalidate the
+    # cache, but do not alter the registered seeds or sampled worlds.
+    search_key = hashlib.sha256(json.dumps([lines, team, args.side, args.turn, args.k, chosen, args.x, belief,
+                                            args.reference, args.seeds, args.iterations, args.cal, VERSION]).encode()).hexdigest()[:24]
+    cp = CACHE_DIR / f"one-{digest}.json"
     if cp.exists() and not args.no_cache:
-        txt = cp.read_text()
+        try:
+            r = VI.load_verified_cache(cp, identity, digest)
+        except VI.StaleCacheError as exc:
+            sys.exit(f"stale verdict cache: {exc}")
     else:
         with contextlib.redirect_stdout(io.StringIO()):
             res = run_decision(d, info, chosen, args.x, belief, reference=args.reference,
-                               seeds=tuple(int(s) for s in args.seeds.split(",")), iterations=args.iterations,
-                               cal=B.load_cal(args.cal), case_key=key, m=args.margin)
-        txt = json.dumps(res, indent=1)
+                               seeds=tuple(settings["seeds"]), iterations=args.iterations, worlds=args.worlds,
+                               cal=B.load_cal(args.cal), case_key=search_key, m=args.margin)
+        if _runtime_provenance() != runtime:
+            sys.exit("verdict engine artifacts changed during the check; result withheld")
+        res["cache_identity"] = identity
+        res["cache_identity_sha256"] = digest
+        res["app_belief"] = belief
+        res["calibration"] = args.cal
+        res["calibration_sha256"] = identity["settings"]["calibration_sha256"]
+        res["models_sha256"] = identity["models_sha256"]
+        res["runtime_sha256"] = runtime["sha256"]
+        res = VI.seal_result(res)
         if not args.no_cache:
-            cp.parent.mkdir(parents=True, exist_ok=True)
-            cp.write_text(txt + "\n")
+            try:
+                VI.write_json_exclusive(cp, res)
+            except FileExistsError:
+                try:
+                    r = VI.load_verified_cache(cp, identity, digest)
+                except VI.StaleCacheError as exc:
+                    sys.exit(f"stale verdict cache: {exc}")
+            else:
+                r = res
+        else:
+            r = res
     if args.out:
-        Path(args.out).write_text(txt + "\n")
-    r = json.loads(txt)
+        VI.write_json_exclusive(args.out, r)
     print(json.dumps({k: r[k] for k in ("verdict", "copy", "delta_U", "delta_R", "reference", "contradictions",
-                                        "info_third_option", "seconds")}, indent=1))
+                                        "info_third_option", "seconds", "cache_identity_sha256")}, indent=1))
+
+
+def _runtime_provenance():
+    """Load the same search implementation used by `one`, then hash its actual artifacts."""
+    import fpenv
+    config_class = fpenv.configure()
+    import bridge  # noqa: F401
+    import evaluate  # noqa: F401
+    import reconstruct  # noqa: F401
+    import value  # noqa: F401
+    import poke_engine  # noqa: F401
+    from fp import hardread_belief as HB
+    from fp import data  # noqa: F401
+
+    names = ("pokemon_format", "smogon_stats", "search_time_ms", "parallelism", "team_preview_search_time_ms",
+             "team_preview_search_parallelism", "search_threads", "log_to_file", "username")
+    config = {name: getattr(config_class, name, None) for name in names}
+    config["configured"] = list(fpenv._configured or ())
+    config["belief_sampler"] = {
+        "mode": HB.MODE,
+        "enabled": bool(HB.enabled()),
+        "m": HB.M,
+        "budget_ms": HB.BUDGET_MS,
+        "lambda": HB.LAMBDA,
+        "fp_input": bool(HB.FP_INPUT),
+    }
+    model_artifacts = {}
+    if HB.enabled() and HB.CKPT:
+        model_artifacts["hardread_belief_checkpoint"] = HB.CKPT
+    return VI.runtime_artifact_manifest(HARDREAD, fpenv.FP_DIR, sys.modules, config,
+                                        model_artifacts=model_artifacts)
 
 
 def main():
@@ -586,17 +671,24 @@ def main():
     o.add_argument("--x", required=True, help="the review's engine-best option")
     o.add_argument("--chosen", default=None, help="default: the action read from the log")
     o.add_argument("--belief", default=None, help="belief JSON (schema in the module docstring)")
-    o.add_argument("--reference", default="auto", choices=["auto", "later", "engine"])
-    o.add_argument("--seeds", default="11,12,13")
-    o.add_argument("--iterations", type=int, default=ITERATIONS)
-    o.add_argument("--cal", default="absolute_human")
-    o.add_argument("--margin", type=float, default=M_BAD)
+    o.add_argument("--identity", default=None, help="expected app cache identity JSON")
+    o.add_argument("--review-id", default=None, help="review ID that scopes the app cache")
+    o.add_argument("--reference", default=VI.PRODUCT_SETTINGS["reference"], choices=["auto", "later", "engine"])
+    o.add_argument("--seeds", default=",".join(map(str, VI.PRODUCT_SETTINGS["seeds"])))
+    o.add_argument("--worlds", type=int, default=VI.PRODUCT_SETTINGS["worlds"])
+    o.add_argument("--iterations", type=int, default=VI.PRODUCT_SETTINGS["iterations"])
+    o.add_argument("--cal", default=VI.PRODUCT_SETTINGS["calibration"])
+    o.add_argument("--margin", type=float, default=VI.PRODUCT_SETTINGS["margin"])
     o.add_argument("--no-cache", action="store_true")
     o.add_argument("--out", default=None)
     rs = sub.add_parser("rescore", help="recompute verdict counts from a batch result at another margin")
     rs.add_argument("result")
     rs.add_argument("--margin", type=float, default=0.08)
+    sub.add_parser("fingerprint", help="print hashes of the loaded verdict runtime artifacts; performs no search")
     args = ap.parse_args()
+    if args.cmd == "fingerprint":
+        print(json.dumps(_runtime_provenance(), indent=1))
+        return
     {"batch": batch, "one": one, "rescore": rescore}[args.cmd](args)
 
 

@@ -36,14 +36,17 @@ from starlette.concurrency import run_in_threadpool
 APP = Path(__file__).resolve().parent
 HARDREAD = APP.parent
 sys.path.insert(0, str(APP))
+sys.path.insert(0, str(HARDREAD / "tools" / "review"))
 import pipeline as P  # noqa: E402
 import card as CARD  # noqa: E402
+import verdict_identity as VI  # noqa: E402
 
 STATE = Path(os.environ.get("HARDREAD_APP_STATE", HARDREAD / "scratch_ds" / "app"))
 CACHE = STATE / "cache"
 JOBS = STATE / "jobs"
 SHOWCASES = APP / "data" / "showcases"
 FP_PY = Path(os.environ.get("HARDREAD_FP_PYTHON", HARDREAD.parent / "environments" / "foulplay" / "bin" / "python"))
+VERDICT_SCRIPT = HARDREAD / "tools" / "review" / "verdict.py"
 # the shared local Glimmer server (owned by lanes Ag-LLM / Coord; this app never starts or stops it)
 LLM_URL = os.environ.get("HARDREAD_LLM_URL", "http://127.0.0.1:18131").rstrip("/")
 GLIMMER_URL = LLM_URL + "/v1/chat/completions"
@@ -226,7 +229,7 @@ class Jobs:
             j["message"] = message
             j["finished"] = time.time()
             self.by_key.pop(j["key"], None)
-        for f in ("replay.json", "input.json", "team.txt", "review.json", "belief.json", "verdicts.json"):
+        for f in ("replay.json", "input.json", "team.txt", "review.json", "belief.json", "identity.json", "verdicts.json"):
             try:
                 (j["dir"] / f).unlink()
             except OSError:
@@ -317,17 +320,49 @@ def load_parts(rid):
                                                                       "shared": bool(m.get("shared"))}
 
 
-def verdicts_of(rid):
-    """Latest raw verdict.py result per decision ("turn:k")."""
+def verdicts_of(rid, expected_identities=None):
+    """Read only verdict results whose full request identities were supplied by the caller.
+
+    An explanation request has no active stated-read identity, so its caller must
+    not pick one of several beliefs for the same offered decision by file mtime.
+    """
     d = cache_dir(rid)
     out = {}
-    if d is None or not (d / "verdicts").exists():
+    if d is None or not expected_identities or not (d / "verdicts").exists():
         return out
     for p in sorted((d / "verdicts").glob("*.json"), key=lambda p: p.stat().st_mtime):
         v = _jsonfile(p)
-        if v:
-            out[f"{v['turn']}:{v['k']}"] = v
+        if not isinstance(v, dict):
+            continue
+        identity, digest = v.get("cache_identity"), v.get("cache_identity_sha256")
+        try:
+            if expected_identities.get(f"{v['turn']}:{v['k']}") != digest:
+                continue
+            if not digest or p.name != VI.cache_filename(v["turn"], v["k"], digest):
+                continue
+            VI.validate_result(v, identity, digest, require_app_belief=True)
+        except (KeyError, TypeError, ValueError):
+            continue
+        out[f"{v['turn']}:{v['k']}"] = v
     return out
+
+
+def _engine_runtime_provenance():
+    """Ask the pinned verdict interpreter for hashes only; this command runs no search."""
+    try:
+        result = subprocess.run([str(FP_PY), str(VERDICT_SCRIPT), "fingerprint"], cwd=str(HARDREAD),
+                                capture_output=True, text=True, timeout=30, check=False)
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise ValueError("the verdict runtime provenance check did not complete") from exc
+    if result.returncode != 0:
+        raise ValueError("the verdict runtime provenance check failed")
+    try:
+        manifest = json.loads(result.stdout)
+    except ValueError as exc:
+        raise ValueError("the verdict runtime returned invalid provenance JSON") from exc
+    if not isinstance(manifest, dict) or manifest.get("schema") != VI.RUNTIME_SCHEMA:
+        raise ValueError("the verdict runtime returned an unsupported provenance manifest")
+    return manifest
 
 
 def explain_store(rid):
@@ -384,7 +419,9 @@ def load_view(rid):
                                         and (d / "team.txt").exists()),
                         "explain": EXPLAIN_MODE != "off",
                         "share": not extra.get("private")}
-    view["verdicts"] = {k: P.verdict_card(v, ctx, review) for k, v in verdicts_of(rid).items()}
+    # A view has no current stated-read identity, so no cached decision result
+    # can safely be presented as the answer to a read that has not been checked.
+    view["verdicts"] = {}
     cached = _jsonfile(explain_store(rid), {}) or {}
     saved_keys = _jsonfile(explain_key_store(rid), {}) or {}
     keys = _offered_keys(offered)
@@ -644,48 +681,117 @@ def create_app(concurrency=1, processes=4):
             turn, k = int(body.get("turn")), int(body.get("k", 0))
         except (TypeError, ValueError):
             return err(422, "Which decision?")
+        _, offered = P.build_view_with_offered(review, ctx)
+        if {"turn": turn, "k": k} not in _offered_keys(offered):
+            return err(422, "That decision is not available for checking in this review.")
         dec = next((x for x in review["decisions"] if x["turn"] == turn and x["k"] == k), None)
         if dec is None or not dec.get("action") or not dec.get("engine_best"):
             return err(422, "That decision cannot be checked (the log hides your move).")
         belief = P.clean_belief(body.get("belief") or {})
-        bkey = hashlib.sha256(json.dumps([rid, turn, k, belief], sort_keys=True).encode()).hexdigest()[:20]
-        vp = d / "verdicts" / f"{turn}_{k}_{bkey}.json"
+        settings = dict(VI.PRODUCT_SETTINGS)
+        settings["seeds"] = list(VI.PRODUCT_SETTINGS["seeds"])
+        try:
+            runtime = _engine_runtime_provenance()
+            identity = VI.build_request_identity(
+                review_id=rid, replay_path=d / "replay.json", team_path=d / "team.txt", side=ctx["side"],
+                turn=turn, k=k, chosen=dec["action"], engine_best=dec["engine_best"], belief=belief,
+                settings=settings, runtime_manifest=runtime)
+            identity_digest = VI.identity_sha256(identity)
+        except (KeyError, OSError, TypeError, ValueError) as exc:
+            return err(503, "The decision check could not verify its source files. Try again after checking the local engine.")
+        vp = d / "verdicts" / VI.cache_filename(turn, k, identity_digest)
         if vp.exists():
-            os.utime(vp)   # becomes the latest check for this decision
-            return {"ok": True, "cached": True, "key": f"{turn}:{k}"}
-        jid = jobs.existing("verdict:" + bkey)
+            try:
+                VI.load_verified_cache(vp, identity, identity_digest, require_app_belief=True)
+            except VI.StaleCacheError:
+                return err(409, "A saved check does not match this read or engine version. It was not used.")
+            return {"ok": True, "cached": True, "key": f"{turn}:{k}",
+                    "identity_sha256": identity_digest, "belief_sha256": identity["belief_sha256"]}
+        job_key = "verdict:" + identity_digest
+        jid = jobs.existing(job_key)
         if jid:
-            return {"ok": True, "job_id": jid}
+            return {"ok": True, "job_id": jid, "identity_sha256": identity_digest,
+                    "belief_sha256": identity["belief_sha256"]}
         ok, _ = jobs.allow(client_of(request), "verdict")
         if not ok:
             return err(429, f"You have reached {RATES['verdict']} decision checks this hour.")
         x = dec["engine_best"]
 
         def cmd(jd, turn=turn, k=k, x=x):
-            return [str(FP_PY), str(HARDREAD / "tools" / "review" / "verdict.py"), "one", str(d / "replay.json"),
+            return [str(FP_PY), str(VERDICT_SCRIPT), "one", str(d / "replay.json"),
                     "--team", str(d / "team.txt"), "--side", ctx["side"], "--turn", str(turn), "--k", str(k),
-                    "--x", x, "--belief", str(jd / "belief.json"), "--out", str(jd / "verdict.json")]
+                    "--x", x, "--belief", str(jd / "belief.json"), "--review-id", rid,
+                    "--reference", str(settings["reference"]),
+                    "--seeds", ",".join(map(str, settings["seeds"])),
+                    "--worlds", str(settings["worlds"]),
+                    "--iterations", str(settings["iterations"]),
+                    "--margin", str(settings["margin"]), "--cal", str(settings["calibration"]),
+                    "--identity", str(jd / "identity.json"),
+                    "--out", str(jd / "verdict.json")]
 
-        def done(j, vp=vp, belief=belief):
+        def done(j, vp=vp, identity=identity, identity_digest=identity_digest):
             v = json.loads((j["dir"] / "verdict.json").read_text())
-            v["app_belief"] = belief       # the full read as entered (incl. the expected action, for the read check)
-            vp.parent.mkdir(parents=True, exist_ok=True)
-            _write_json(vp, v)
-            return f"{v['turn']}:{v['k']}"
-        jid = jobs.submit("verdict", "verdict:" + bkey, {"belief.json": json.dumps(belief)}, cmd, done)
+            VI.validate_result(v, identity, identity_digest, require_app_belief=True)
+            try:
+                VI.write_json_exclusive(vp, v)
+            except FileExistsError:
+                VI.load_verified_cache(vp, identity, identity_digest, require_app_belief=True)
+            return {"identity_sha256": identity_digest, "decision": f"{v['turn']}:{v['k']}"}
+        jid = jobs.submit("verdict", job_key,
+                          {"belief.json": json.dumps(belief, sort_keys=True),
+                           "identity.json": json.dumps(identity, sort_keys=True)}, cmd, done)
         if jid is None:
             return err(503, "The queue is full right now. Try again in a few minutes.")
-        return {"ok": True, "job_id": jid}
+        return {"ok": True, "job_id": jid, "identity_sha256": identity_digest,
+                "belief_sha256": identity["belief_sha256"]}
 
     @app.get("/api/review/{rid}/verdict/{turn}/{k}")
-    def verdict_receipt(rid: str, turn: int, k: int):
-        """The raw verdict.py output behind a check (receipts)."""
-        if load_parts(rid) is None:
+    def verdict_receipt(rid: str, turn: int, k: int, identity_sha256: str = None):
+        """Read one exact, provenance-bound stated-read receipt."""
+        parts = load_parts(rid)
+        d = cache_dir(rid)
+        if parts is None:
             return err(404, "This review does not exist or has expired.")
-        v = verdicts_of(rid).get(f"{turn}:{k}")
-        if v is None:
-            return err(404, "No check for this decision yet.")
-        return Response(json.dumps(v, indent=1), media_type="application/json")
+        if not identity_sha256 or len(identity_sha256) != 64:
+            return err(400, "This receipt needs the request identity. Run the decision check again.")
+        if d is None or not (d / "team.txt").exists():
+            return err(422, "A decision receipt requires the review's own exported team.")
+        review, ctx, _ = parts
+        _, offered = P.build_view_with_offered(review, ctx)
+        if {"turn": turn, "k": k} not in _offered_keys(offered):
+            return err(422, "That decision is not available for checking in this review.")
+        try:
+            path = d / "verdicts" / VI.cache_filename(turn, k, identity_sha256)
+        except ValueError:
+            return err(400, "This receipt needs a valid request identity.")
+        try:
+            raw = json.loads(path.read_text())
+            identity = raw.get("cache_identity") if isinstance(raw, dict) else None
+            if not isinstance(identity, dict) or identity.get("review_id") != rid:
+                raise VI.StaleCacheError("review identity does not match")
+            if identity.get("inputs", {}).get("replay_sha256") != VI.sha256_file(d / "replay.json") or \
+                    identity.get("inputs", {}).get("team_sha256") != VI.sha256_file(d / "team.txt"):
+                raise VI.StaleCacheError("review input hashes changed")
+            decision = next((x for x in review.get("decisions", [])
+                             if x.get("turn") == turn and x.get("k", 0) == k), None)
+            if (decision is None or identity.get("decision") != {
+                    "side": ctx.get("side"), "turn": turn, "k": k, "chosen": decision.get("action"),
+                    "engine_best": decision.get("engine_best")}):
+                raise VI.StaleCacheError("review decision changed")
+            VI.validate_result(raw, identity, identity_sha256, require_app_belief=True)
+            settings = dict(VI.PRODUCT_SETTINGS)
+            settings["seeds"] = list(VI.PRODUCT_SETTINGS["seeds"])
+            current_identity = VI.build_request_identity(
+                review_id=rid, replay_path=d / "replay.json", team_path=d / "team.txt", side=ctx["side"],
+                turn=turn, k=k, chosen=decision["action"], engine_best=decision["engine_best"],
+                belief=raw["app_belief"], settings=settings, runtime_manifest=_engine_runtime_provenance())
+            if current_identity != identity or VI.identity_sha256(current_identity) != identity_sha256:
+                raise VI.StaleCacheError("receipt does not match the current product settings and engine")
+        except (OSError, ValueError, TypeError, KeyError) as exc:
+            return err(409, "This saved receipt does not match the current decision and stated read. The result was withheld.")
+        return {"ok": True, "identity_sha256": identity_sha256,
+                "belief_sha256": identity["belief_sha256"], "raw": raw,
+                "card": P.verdict_card(raw, ctx, review)}
 
     # ---- explanation (tools/agent/explain.py, async)
     @app.post("/api/explain")
