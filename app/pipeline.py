@@ -339,6 +339,30 @@ def _base_names():
     return _BASE_NAMES
 
 
+_MOVES = None
+FIXED_DAMAGE = {"seismictoss", "nightshade", "superfang", "ruination", "naturesmadness", "finalgambit", "endeavor",
+                "counter", "mirrorcoat", "metalburst", "comeuppance", "bide", "psywave", "dragonrage", "sonicboom"}
+
+
+def is_damaging(action):
+    """True if the option is a damaging move whose damage depends on stats (so on EVs and nature)."""
+    global _MOVES
+    if not action or str(action).startswith("switch "):
+        return False
+    if _MOVES is None:
+        try:
+            _MOVES = json.loads((HARDREAD / "foul-play" / "fp" / "data" / "moves.json").read_text())
+        except (OSError, ValueError):
+            _MOVES = {}
+    mid = _norm(str(action)[:-5] if str(action).endswith("-tera") else action)
+    m = _MOVES.get(mid) or {}
+    return m.get("category") in ("physical", "special") and (m.get("basePower") or 0) > 0 and mid not in FIXED_DAMAGE
+
+
+DRAFT_SETS_TEXT = "your sets are assumed (Smogon's most common set consistent with what the replay showed)"
+EV_CAVEAT = "May depend on your exact EVs: add your team export to check."
+
+
 def name_table(lines):
     """Display names for move and species ids seen in the log ('knockoff' -> 'Knock Off'); see pretty_action."""
     t = {}
@@ -419,7 +443,11 @@ def build_view(review, ctx):
                    "opponent_action": pretty_action(t.get("opponent_action"), names)})
     dis = []
     for d in disagreements(review, ctx.get("draft_rows") if ctx.get("mode") == "draft" else None, ctx.get("active")):
+        draft = ctx.get("mode", "draft") == "draft"
         dis.append({"turn": d["turn"], "k": d["k"], "kind": d["kind"],
+                    # Draft mode: damage ranges come from assumed spreads, so a damaging option's value may hinge
+                    # on EVs (research/28 follow-up from Ag-Sci: gen9ou-2703487331 T17 flips with an attacking spread)
+                    "ev_caveat": bool(draft and (is_damaging(d["action"]) or is_damaging(d["engine_best"]))),
                     "chosen": pretty_action(d["action"], names), "best": pretty_action(d["engine_best"], names),
                     "chosen_id": d["action"], "best_id": d["engine_best"],
                     "gap_pts": int(round(100 * d["decision_cost"])), "gap": d["decision_cost"],
@@ -433,6 +461,8 @@ def build_view(review, ctx):
     view = {
         "version": 1,
         "mode": ctx.get("mode", "draft"),
+        "sets_note": DRAFT_SETS_TEXT if ctx.get("mode", "draft") == "draft" else None,
+        "ev_caveat_text": EV_CAVEAT,
         "side": review["meta"]["side"],
         "result": s.get("result") or ("tie" if ctx.get("winner") == "tie" else None),
         "turns": ctx.get("turns"),

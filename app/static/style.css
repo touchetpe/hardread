@@ -413,3 +413,7 @@ dl.prov dt { color: var(--ink-3); }
 dl.prov dd { margin: 0; color: var(--ink); overflow-wrap: anywhere; }
 dl.prov dd.mono { font-family: var(--mono); font-size: 12.5px; }
 @media (max-width: 560px) { dl.prov { grid-template-columns: 1fr; } }
+
+.sets-note { margin: -6px 0 16px; padding: 9px 12px; border-radius: 10px; background: var(--warn-bg); color: var(--warn-ink); font-size: 13.5px; }
+.dis-list .sets-note { margin: 0; }
+.ev-caveat { margin: 10px 0 0; padding: 7px 10px; border-radius: 8px; background: var(--warn-bg); color: var(--warn-ink); font-size: 13px; font-weight: 600; }

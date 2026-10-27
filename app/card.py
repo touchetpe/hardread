@@ -77,7 +77,7 @@ def svg(v):
         sub.append("ended by forfeit")
     elif v.get("end_reason") == "ko":
         sub.append("ended by KO")
-    sub.append("sets from the team export" if v.get("mode") == "export" else "sets drafted from the replay")
+    sub.append("sets from the team export" if v.get("mode") == "export" else "sets assumed (most common sets)")
     out.append(f'<text x="80" y="220" font-size="22" fill="{C["ink3"]}">{esc(" · ".join(sub))}</text>')
     # bridge
     if b.get("available"):

@@ -227,7 +227,7 @@
         h("span", { class: "chip" }, d.turns + " turns"),
         d.end_reason ? h("span", { class: "chip" }, endText(d.end_reason)) : null,
         d.private ? h("span", { class: "chip" }, "private replay · kept 24 h") : null,
-        d.team_species && d.team_species.length ? h("span", { class: "chip" }, "team export: " + d.team_species.length + " Pokémon") : h("span", { class: "chip" }, "sets drafted from the replay"));
+        d.team_species && d.team_species.length ? h("span", { class: "chip" }, "team export: " + d.team_species.length + " Pokémon") : h("span", { class: "chip" }, "no export: your sets will be assumed"));
       var opts = h("div", { class: "side-options" });
       ["p1", "p2"].forEach(function (sd) {
         var id = "side-" + sd;
@@ -258,7 +258,7 @@
 
     var showcaseSec = h("section", { "aria-labelledby": "sc-title", style: "margin-top:34px" },
       h("h2", { id: "sc-title", class: "section-title" }, "Try a showcase"),
-      h("p", { class: "section-sub" }, "Ladder games from public replays across rating bands, each reviewed from one player's side. Names removed; sets drafted from the replay."));
+      h("p", { class: "section-sub" }, "Ladder games from public replays across rating bands, each reviewed from one player's side. Names removed; the reviewed player's sets are assumed (Smogon's most common set consistent with the replay)."));
     var scGrid = h("div", { class: "showcases" }, h("p", { class: "muted" }, "Loading showcases…"));
     showcaseSec.appendChild(scGrid);
     getShowcases().then(function (d) {
@@ -381,14 +381,17 @@
       h("span", { class: "chip " + (res === "win" ? "result-win" : res === "loss" ? "result-loss" : "") }, res === "win" ? "✓ Win" : res === "loss" ? "✗ Loss" : "Tie"),
       v.end_reason ? h("span", { class: "chip" }, endText(v.end_reason)) : null,
       h("span", { class: "chip" }, (sharedPage || v.showcase ? "Reviewed side: " : "You: ") + (v.side === "p1" ? "Player 1" : "Player 2")),
-      h("span", { class: "chip", title: "Sets drafted from the replay: what you revealed plus the most common set for the rest" },
-        v.mode === "export" ? "your team export" : "sets drafted from the replay"),
+      h("span", { class: "chip", title: v.mode === "export" ? "Sets from your team export" : "Your sets are assumed: Smogon's most common set consistent with what the replay showed" },
+        v.mode === "export" ? "your team export" : "your sets are assumed"),
       v.private ? h("span", { class: "chip" }, "private · kept 24 h") : null);
     var shareBox = h("div", { class: "share-box", hidden: true });
     var shareBtn = (!STATIC && v.features && v.features.share) ? h("button", { type: "button", class: "btn btn-ghost btn-sm",
       "aria-expanded": "false", onclick: function () { toggleShare(id, v, shareBtn, shareBox); } }, "Share") : null;
+    var setsNote = v.sets_note ? h("p", { class: "sets-note" }, h("span", { "aria-hidden": "true" }, "ⓘ "),
+      (sharedPage || v.showcase ? "The reviewed player's sets are assumed (Smogon's most common set consistent with what the replay showed)."
+        : "Your sets are assumed (Smogon's most common set consistent with what the replay showed). Add your team export for exact numbers and to check decisions.")) : null;
     var head = h("div", null, h("a", { class: "back", href: location.pathname.indexOf("/r/") === 0 ? "/" : "#/" }, "← Review " + (location.pathname.indexOf("/r/") === 0 ? "your own game" : "another game")),
-      h("div", { class: "review-head" }, h("h1", null, title), chips, shareBtn ? h("div", { class: "head-actions" }, shareBtn) : null), shareBox);
+      h("div", { class: "review-head" }, h("h1", null, title), chips, shareBtn ? h("div", { class: "head-actions" }, shareBtn) : null), setsNote, shareBox);
 
     var bridgeCard = h("section", { class: "card", "aria-labelledby": "bridge-title" },
       h("h2", { id: "bridge-title" }, "Start → Luck → Choices → Result"),
@@ -643,6 +646,9 @@
       return h("div", { class: "empty" }, "No clear disagreement while the game was open: wherever the result was still in doubt, the engine agreed with you or preferred another option by less than 5 points.");
     }
     var box = h("div", { class: "dis-list" });
+    if (v.sets_note) box.appendChild(h("p", { class: "sets-note" }, h("span", { "aria-hidden": "true" }, "ⓘ "),
+      (v.showcase || location.pathname.indexOf("/r/") === 0 ? "The reviewed player's sets" : "Your sets") +
+      " are assumed (Smogon's most common set consistent with what the replay showed), so damage ranges, and with them some of these preferences, may differ with the real sets."));
     list.forEach(function (d) {
       var gap = d.gap_pts;
       var bw = function (p) { return Math.max(2, Math.round(100 * p)) + "%"; };
@@ -659,9 +665,10 @@
         h("p", { class: "claim" }, "The engine prefers ", h("b", null, gerund(d.best)), " over ", h("b", null, gerund(d.chosen)), " by ", h("b", { class: "num" }, gap + " points"), " (search noise ≈ ±3)."),
         bars,
         opp ? h("p", { class: "opp" }, "The engine expected the opponent to pick: " + opp + ".") : null,
+        d.ev_caveat ? h("p", { class: "ev-caveat" }, h("span", { "aria-hidden": "true" }, "⚠ "), v.ev_caveat_text || "May depend on your exact EVs: add your team export to check.") : null,
         readBlock(id, v, d)));
     });
-    var note = v.mode === "draft" ? h("p", { class: "footnote" }, "Your sets were drafted from the replay, so options that rely on a move you never revealed are left out." +
+    var note = v.mode === "draft" ? h("p", { class: "footnote" }, "Options that rely on a move that was never revealed are left out." +
       (v.showcase ? "" : " To check one of these decisions against what you were thinking, review the game again with your team export.")) : null;
     return h("div", null, box, note);
   }
