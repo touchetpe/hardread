@@ -777,3 +777,22 @@ The corrected rescore of the unchanged initial 184-case, 20,000-iteration batch 
 Root independently rederived the result from all 184 raw rows and verified unchanged input identities; fresh Sol accepted the complete FAIL. Output SHA-256: `36d7bd958a54398fbf4f189107ecec3e3b2a3df0679b402163eaddf00d4ec5d9`. The earlier zero-case serialization artifact remains preserved and excluded. Source/input provenance and the initial .05 FAIL remain as recorded above; the 13-case pilot contributes nothing to n. Evidence: `scratch_ds/codex/c7/rescore-repair/20261027T172025Z-corrected-m008/` and `scratch_ds/codex/c7/sol-m008-gate-review.md`.
 
 The next permitted stage is a separately checked 60,000-iteration run of the same 184 cases, seeds 11/12/13, four worlds, margin .08 and 12 workers from the pinned worktree. It has not started at this record. No decisive product or demo claim is supported.
+
+
+## 2026-10-27 18:13 UTC — VT1 registered 60k/.08 fallback: PASS
+
+The same fixed 184 offered decisions completed at 60,000 iterations, margin .08, four worlds and seeds 11/12/13 (`stated=none`, `reference=engine`, `absolute_human`, 12 Mac workers). Pinned HardRead `4bf7aeb` and fork `c04b38e` were clean at launch; independent Git anchors let main remain editable. The run started 17:49:57 UTC and ended 17:54:44.419 UTC, exit 0, **286.55 seconds**. No case was dropped or replaced, and there were **zero errors**.
+
+Counts: **18 Misplay, 0 Misread, 27 Defensible, 139 Within noise**. False decisive is **18/184 = 9.7826%**, Wilson 95% **[6.2778%,14.9324%]**. This **PASSES** the registered rate ≤10%, Wilson upper ≤18%, n≥100 rule. No p-value applies. VT3 remains 11/11. The earlier .05 and .08 failures were recorded before this permitted fallback; the 13-case pilot is excluded. No wording fallback is triggered.
+
+Root independently applied the exact pinned pure rule to all 184 rows; fresh Sol ACCEPT is `scratch_ds/codex/c7/sol-60k-gate-review.md`. Summary SHA `a0908c2298ab8ac4209490412bfd1a43c83abc8d1c4d561c3cd2b303645c552b`; sidecar SHA `494822b8751b855c28a4fd2deed94808bbe5578baf56dce5b6262330f3e4c12d`. Evidence: `scratch_ds/codex/c7/vt1-60k-pending/20261027T174226Z/`, including `root-exact-rule-check.private.json`. A stale redundant manifest argv hash is preserved as a provenance warning: the exact argv array, launch preflight and both durable process records agree. E9 began after VT1 exited; there is no overlap.
+
+This validates this registered configuration and offered population. The app must use 60k/.08 before applying this result to product verdicts. It does not establish perfect accuracy, the complete app flow, or explainer quality.
+
+## 2026-10-27 18:13 UTC — External GPU training wave: execution verified, P5 protocol deviations
+
+A separate coordinator submitted `hrsft-20261027-v1e1-bfef` and `hrsft-20261027-v1e2-bfef`, six nodes each, plus `hrstu-20261027-v2-bfef` on one node. At 18:05 UTC all three jobs and thirteen nodes were Running. The two Glimmer jobs passed preflight, detected H100 NVL GPUs and began training stages at 17:53:25 and 17:53:39 UTC. This is execution evidence only; no partial accuracy metric was inspected.
+
+**P5 acceptance is not met as submitted.** Training stages began before the audited data-manifest commit `244f772` at 17:56:16 UTC, and no pre-submission Sol wave check occurred. Both use the correct 132,000 training / 2,666 validation rows, but their evaluation file is the v1 default, not the fixed v0 400-row population. Any eventual comparison with .395/.470 requires the exact fixed v0 rows, separately checked. Do not interpret the earlier log's fixed-evaluation wording as actual snapshot provenance. No duplicate SFT was submitted or running job canceled by this root team.
+
+The posthoc exact-name deadline monitor for these three jobs is armed and verified; it mitigates deadline risk but cannot repair protocol chronology. Private evidence: `scratch_ds/codex/p5-20261027/preflight-trainstart-audit.private.json`, `external-sft-audit-sol.private.md` and `scratch_ds/codex/urgent-20261027/deadline-watch/`. Final stage results, actual node-hours and all scientific gate readouts remain pending.
