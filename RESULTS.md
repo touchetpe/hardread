@@ -938,3 +938,20 @@ Exactjob `hrlab-20261027-r2-n5cw-6581c705fb` is Completed; authoritative Azure p
 Candidate YAML/command/uniqueoutput/source identities and all2236codeinventoryhashes match. This clears only the probeGO, not the six-slotlaunch or later teacher-data acceptance. Futurewave still requires reviewedcard/source, freshwhole-blockseedaudit/reservations, completecapacity/name/outputchecks andarmedexactwatchers. Failed38/40probe remains recorded. Wholeblock[10260000,10260199]staysconsumed permanently.
 
 V1externalreport mistakenlydatedtheterminaltimestampOct28; itis preserved unchanged. Versionedv2SHA`bb37019005a9e9470838298347ee8a6210815591efeefab2c2980d1a8815edd6` corrects ONLYtheUTCdate, boundtoauthoritativeexactjobmetadataSHA`4ccd4620a4d0918099dcaa648d675a31024b028eecfc4ad320a03a98d98543fa`. Archive/countersunchanged. FreshindependentSolreviewSHA`759711ab9888e7cf19771781ca5b7e790e236caf1d6ec79c193bfc51c5919b05` accepts bothrawstructuralgateandcorrectedprovenance. No statisticalCI/p-value is applicable tothiscomplete mechanicalgate.
+
+## 2026-10-27 23:25 UTC — Prospective N5 six-slot seed reservations, before any wave create
+
+Final corrective probe independently PASSES its all40gate (reviewSHA759711ab9888e7cf19771781ca5b7e790e236caf1d6ec79c193bfc51c5919b05). Fresh exhaustive seed-union auditV2SHAdaedf67b5ffe6e2fab06358132e0ebeee67e43e650bbf319f1e8a68e9edbb92c verifies149attemptdirectories/298jobfiles unchanged and all51currentinputhashes. RESULTS changes are exact append-only selected-v2seed2000nonfarm reporting and already-reserved10260000probe reporting. Allsixproposedclosedblocks have0actual-reservation/nonfarm-point/pairwiseintersections and0unknowns. Supersededfour-slotproposaloverlaps are explicitlywithdrawn/unexecuted/unreserved, not hidden.
+
+The following ENTIREclosed200-seed blocks are now RESERVED PERMANENTLY for their exactjobs, includingunused/failed/partialattempts; neverreuse them. The correctiveblock[10260000,10260199]remains separatelyconsumed andexcluded. This commits reservations only: no jobcreate, watcherarm orcloudcapacityclaim.
+
+| Exact job | Closed seed block | State |
+|---|---|---|
+| `hrlab-20261027-r2-wfill01-a72c51e4` | [10220000,10220199] | RESERVED; not created |
+| `hrlab-20261027-r2-wfill02-a72c51e4` | [10230000,10230199] | RESERVED; not created |
+| `hrlab-20261027-r2-wfill03-a72c51e4` | [10240000,10240199] | RESERVED; not created |
+| `hrlab-20261027-r2-wfill04-a72c51e4` | [10250000,10250199] | RESERVED; not created |
+| `hrlab-20261027-r2-wfill05-a72c51e4` | [10270000,10270199] | RESERVED; not created |
+| `hrlab-20261027-r2-wfill06-a72c51e4` | [10280000,10280199] | RESERVED; not created |
+
+Wave source/card acceptance remains conditional on freshcompletecapacity/exactname-outputabsence/armedwatcher/deadline and per-jobsourceidentity checks. Atmost6one-nodejobs, max36node-hours; eachuses10side-swappedpairings/20games perchunk,max200chunks,C1t1/hr_train/v3/sample64/concurrency5/timeout1800. No startafter02UTC; terminaldeadline08:30UTC/cancel08:15UTC. Onlyavailable reviewedslotswillbecreated; reservedunusedslotsarenotclaimedasrunning. Beforeeachcreate refresh currentattempt/seedledger andchargeanysuccessfulcreateimmediately; nointerimwinreadout.
