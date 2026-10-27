@@ -768,3 +768,12 @@ Evidence: `scratch_ds/codex/c7/vt1-batch-plan/20261027T161652Z/real-run-pinned-2
 The registered `rescore --margin 0.08` command exited 0 but returned `n=0, errors=184`. This is **invalid**, not a quantitative PASS or FAIL: the original 184-row sidecar has zero errors. The compact batch projection stores `error:null` on successful cases, while `summarize` rejected every record containing the key. All original source/input/result hashes were unchanged; no search was repeated and no case dropped. Invalid output SHA-256: `375ce94241486287213baae5708ff6aed40a7853e48bc66f491a583f739b50da` (preserved).
 
 The minimal reviewed fix accepts absent or null `error` and continues to reject every non-null value, including empty strings. Two pure regression tests pass, including 184 synthetic cases round-tripped through the real rescore function; full VT3 remains 11/11. Root independently checked both suites and fresh Sol accepted the one-line analysis fix before a corrected real readout. Rules, thresholds, cases, margins and MCTS are unchanged. Evidence: `scratch_ds/codex/c7/rescore-repair/` and the original run's `rescore-m008-20261027T170643795885Z/`. The valid .08 readout and any 60k fallback remain pending at this commit.
+
+
+## 2026-10-27 17:40 UTC — VT1 registered margin .08: valid FAIL
+
+The corrected rescore of the unchanged initial 184-case, 20,000-iteration batch exited 0 using scorer commit `083bde7`. No new search or model call occurred. At margin .08, the complete population has **39 Misplay, 0 Misread, 3 Defensible and 142 Within noise**, with **n=184, errors=0**. False decisive is **39/184 = 21.1957%**, Wilson 95% **[15.9106%, 27.6589%]**. This **FAILS** both registered bounds (rate ≤10%, upper bound ≤18%). No p-value applies.
+
+Root independently rederived the result from all 184 raw rows and verified unchanged input identities; fresh Sol accepted the complete FAIL. Output SHA-256: `36d7bd958a54398fbf4f189107ecec3e3b2a3df0679b402163eaddf00d4ec5d9`. The earlier zero-case serialization artifact remains preserved and excluded. Source/input provenance and the initial .05 FAIL remain as recorded above; the 13-case pilot contributes nothing to n. Evidence: `scratch_ds/codex/c7/rescore-repair/20261027T172025Z-corrected-m008/` and `scratch_ds/codex/c7/sol-m008-gate-review.md`.
+
+The next permitted stage is a separately checked 60,000-iteration run of the same 184 cases, seeds 11/12/13, four worlds, margin .08 and 12 workers from the pinned worktree. It has not started at this record. No decisive product or demo claim is supported.
