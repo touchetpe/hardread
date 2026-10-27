@@ -33,7 +33,7 @@ from lexicon import (BOTH_PLAYERS_RE, CERTAIN_RE, DIGIT_RE, HEDGE_RE, LEXICON_VE
 from names import find_entities, to_id  # noqa: E402
 from tools import field_kind, pts_subkind  # noqa: E402
 
-VERIFIER_VERSION = "agent-verifier-v4 (" + LEXICON_VERSION + ")"
+VERIFIER_VERSION = "agent-verifier-v5 (" + LEXICON_VERSION + ")"
 MAX_SENTENCES = 4
 MAX_CHARS = 300
 

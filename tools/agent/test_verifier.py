@@ -333,6 +333,14 @@ class TestVerifierFail(Base):
             ok, rules, rep = self.rules(S((text, {"best": f"{d}.engine_best", "g": f"{d}.gap_pts"})))
             self.assertIn(8, rules, text)
 
+    def test_r8_result_attributed_to_your_choices(self):
+        # v4 pilot item 0 regression: choices are both players', so the result is never "driven by your choices"
+        self.assertIn(8, self.rules(S(("With net luck at {l}, the result was driven by your choices rather than "
+                                       "chance.", {"l": "#1.luck_pts"})))[1])
+        ok, rules, rep = self.rules(S(("The engine did not flag any clear disagreements with your choices in this "
+                                       "game.", {})))
+        self.assertTrue(ok, rep)  # describing disagreements with your choices is fine
+
     def test_r7_certainty_with_low_probability(self):
         m = self.luck[0]["id"]
         self.assertIn(7, self.rules(S(("The critical hit was certain, despite its {p} chance.",

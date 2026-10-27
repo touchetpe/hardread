@@ -28,6 +28,7 @@ sys.path.insert(0, str(HERE))
 from names import action_name, dex, move_name, species_name, to_id  # noqa: E402
 
 PARSER_VERSION = "parse-note-v4"
+PARSER_MAX_TOKENS = 2048  # 1024 ran out in reasoning on 1 of 11 smoke notes (fell back to keywords)
 
 ITEM_ALIASES = {
     "scarf": "choicescarf", "specs": "choicespecs", "band": "choiceband", "lefties": "leftovers",
@@ -376,7 +377,7 @@ def glimmer_parse(note, own, opp, client, context=None):
     user = (f"Your team: {', '.join(own)}.\nOpponent's team: {', '.join(opp)}.\n" +
             (f"Context: {context}\n" if context else "") + f"Note: \"{note}\"")
     resp = client.chat([{"role": "system", "content": PARSER_SYSTEM}, {"role": "user", "content": user}],
-                       tools=[tool], tool_choice="required", max_tokens=1024)
+                       tools=[tool], tool_choice="required", max_tokens=PARSER_MAX_TOKENS)
     call = next((c for c in resp["tool_calls"] if c["name"] == "submit_belief"), None)
     meta = {k: resp[k] for k in ("wall_s", "prompt_tokens", "completion_tokens", "finish_reason")}
     if call is None or call["arguments"] is None:
@@ -672,7 +673,7 @@ def main():
     ap.add_argument("--out", default="-")
     a = ap.parse_args()
     from llm import GlimmerClient
-    client = GlimmerClient(a.url, 1024, 0.0, "low")
+    client = GlimmerClient(a.url, PARSER_MAX_TOKENS, 0.0, "low")
     root = HERE.parents[1]
     if a.smoke:
         return smoke(client, a.out if a.out != "-" else "scratch_ds/agent/parser_smoke.json", root)

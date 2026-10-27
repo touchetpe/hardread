@@ -20,7 +20,7 @@ The claim: every number shown is copied from a cited engine result. The model ne
 | `evallock.py` | `EVAL_LOCK` window: recorded runs own the shared :18131 server; the app checks the file and uses templates or queues meanwhile (Coord decision). |
 | `audit_a1.py` | Misleading-sentence audit: blinded sheet (60 sentences, seed 20261027; owner subset 15, seed 15; key kept in a separate file) and scoring (rate, Wilson CI, categories a–f, owner–agent disagreements). |
 | `eval_a0.py` | A0 runner (no engine: replay text only, free text) + candidate numeric claims for the rubric step. |
-| `test_verifier.py` | 48 unit tests: verifier (adversarial), renderer, tools, templates. |
+| `test_verifier.py` | 49 unit tests: verifier (adversarial), renderer, tools, templates. |
 | `test_parse_note.py` | 24 unit tests: grounding, attribution (own moves never credited to the opponent), aliases, own/unknown species, no numbers, chips → belief, read check. |
 | `../../EVAL_PROTOCOL_AGENT.md` | E11 protocol (committed before any eval record). |
 
@@ -59,7 +59,7 @@ System `python3` (3.9) is enough: nothing imports Foul Play.
 6. Verdict words (misplay, misread, defensible, within noise, mistake, error, wrong, correct, optimal…) and so their negations never appear in free text; a `verdict` field must come from `get_verdict`.
 7. With a probability below one half (or a win chance below 50%) in the sentence: no certainty words ("certain", "always", "definitely"…), and "was/had/were/will/would" only alongside a hedge ("chance", "likely", "only", "might"…).
 
-8. Never-say wording (research/28 §B): no "cost" framing, no coach/trainer/analyzer/sports framing, no summed-disagreement language ("in total", "altogether", "added up"), no "deterministic", "fine-tuned", "verified", "SOTA"/"strongest". And `choices_pts` must be described as both players' choices (rule 2).
+8. Never-say wording (research/28 §B): no attribution of the result to the player's own choices ("driven by your choices"; the bridge's choices are both players'), no "cost" framing, no coach/trainer/analyzer/sports framing, no summed-disagreement language ("in total", "altogether", "added up"), no "deterministic", "fine-tuned", "verified", "SOTA"/"strongest". And `choices_pts` must be described as both players' choices (rule 2).
 
 ## Known limits
 - `get_luck_events` reports the turn's realised-outcome probability and swing, not per-event probabilities (`review.py` does not store them).
@@ -74,4 +74,16 @@ System `python3` (3.9) is enough: nothing imports Foul Play.
 - v3 (2026-10-27 ≈06:10 UTC, after Ag-App's integration, before any record): **verifier rule 8** (never-say list; Ag-App's showcase 4 had passed "choices cost 9 points") and rule 2 requires "both players" wording for `choices_pts`; "cost" removed from the polarity lexicon (agent-verifier-v3, agent-lex-v3); prompt explain-prompt-v2 states the wording rules; tool notes carry no number words (pilot item 3 had copied "five" from a note). **Parser attribution** (parse-note-v3; Ag-App: "…so Crunch was safe" became "Ceruledge has Crunch"): a move or item is kept only if its own clause refers to that opponent with a cue word and it is not the player's own ("I used", "my", or a move on the player's side of the review unless the note binds it tightly, "it had X"); applies to the keyword baseline and to Glimmer's chips. Pilot under v1/v2: raw 3/5, after repair 5/5; re-verified under v3: raw 2/5 (superseded by the v3 pilot).
 - v4 (2026-10-27 ≈06:30 UTC): `get_verdict` reads verdict.py's result shape (X, delta_U/R, mean_delta_U/R, reference); a "better by / runs / under your read" phrase class for verdict margins (agent-lex-v4); disagreements = the app's list when passed (`offered`), else `select_offered.offered_from_review` (one rule for UI, verdict tests and explainer); eval_a1 records the `tools/agent` commit at start and a dirty flag.
 - v4 verifier + parse-note-v4 (2026-10-27 ≈06:05 UTC, Ag-App follow-ups and the v3 pilot): rule-2 trigger binding is clause-aware (v3 pilot item 1 had a false failure on "Luck was net {l} and choices… {c}"); the parser's own-move pattern no longer fires when the opponent is the subject ("I thought Ceruledge had Heavy-Duty Boots" kept the item before: no), every rejected candidate of both paths is listed in `dropped` with its reason (the keyword path used to skip silently), and `read_check` returns `status: "no_opponent_choice"` when the opponent had no real choice (only no-move placeholders, or a single option at ≥ 99.9%: a replacement after a faint) instead of a misleading check.
+- v5 (2026-10-27 ≈06:25 UTC, after the v4 pilot): rule 8 also rejects attributing the result to the player's own choices (v4 pilot item 0, "the result was driven by your choices rather than chance", had passed); parser `max_tokens` 2048 (1024 ran out in reasoning on 1 of 11 smoke notes).
+
+## Measured so far (all on the owner's Mac, base Glimmer Q4_K_M; pilots are not records)
+| What | Result | File |
+|---|---|---|
+| S1.6 tool-loop smoke | 5/5 loops, 5/5 valid JSON; p50 181 s, p95 192 s per answer; decode 7.4 tok/s | `scratch_ds/agent/smoke_toolloop.json` |
+| S2.4 parser smoke (parse-note-v4) | 11/11 schema-valid, 0 invented numbers, 1 keyword fallback (token cap, now raised), p50 41 s per note; switch targets correct | `scratch_ds/agent/parser_smoke.json` |
+| A1 pilot (5 items, verifier v4, prompt v2) | raw 2/5, after repair 4/5, template 1/5; p50 120 s, p95 278 s (shared server, upper bound) | `scratch_ds/agent/a1_dryrun.json` |
+| same, re-verified under v5 | raw 2/5; after repair 3 or 4 of 5; informal self-audit: 1 of 8 shown Glimmer sentences misleading (now rejected by rule 8) | `scratch_ds/agent/a1_dryrun_posthoc_v5.json` |
+| Unit tests | verifier/renderer/tools/templates 49/49; parser 24/24 | `scratch_ds/agent/verifier_tests.json` |
+
+Main raw failure: `choices_pts` worded as "choices points" without "both players" (3 of 5 raw drafts). Candidate fix to measure in the next pilot: rename the field (e.g. `both_players_choices_pts`) so copying the field name produces the right wording.
 

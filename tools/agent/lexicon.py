@@ -5,7 +5,7 @@ verifier's strictness is part of the eval protocol (EVAL_PROTOCOL_AGENT.md), so 
 """
 import re
 
-LEXICON_VERSION = "agent-lex-v4"
+LEXICON_VERSION = "agent-lex-v5"
 
 # ---- rule 2: phrase classes. Each class: trigger regex -> allowed (kind, pts-subkind or None) of a slot.
 PHRASE_CLASSES = [
@@ -43,6 +43,13 @@ NEVER_SAY = [
     ("coach/analyzer framing", r"\bcoach\w*|\btrainer\w*|\btutor\w*|\banaly[sz]er\w*|\bsports?\b"),
     ("summed disagreements", r"\bin\s+total\b|\btotal(?:ed|led|s)?\b|\baltogether\b|\bsum(?:med|s)?\b|\bsum\s+of\b"
                              r"|\badded\s+up\b|\badds\s+up\b|\bcumulative\w*"),
+    # the bridge's choices are both players': the result is never attributed to the player's own choices
+    ("result attributed to your choices",
+     r"\b(?:driven|decided|caused|determined|explained|won|lost|settled)\s+(?:mostly\s+|mainly\s+|largely\s+)?"
+     r"(?:by|through|on)\s+your\s+(?:own\s+)?(?:choices|decisions|play|moves|mistakes)\b"
+     r"|\b(?:due|thanks|owing)\s+to\s+your\s+(?:own\s+)?(?:choices|decisions|play|moves|mistakes)\b"
+     r"|\byour\s+(?:own\s+)?(?:choices|decisions|play|moves)\s+(?:won|lost|decided|drove|caused|determined|"
+     r"settled)\b"),
     ("forbidden claim", r"\bdeterministic\w*|\bfine[- ]?tun\w*|\bverifi(?:ed|able)\b|\bSOTA\b|\bstate[- ]of[- ]the[- ]art\b"
                         r"|\bstrongest\b"),
 ]
