@@ -545,3 +545,13 @@ These rules are fixed now. The dev-A screens end at 08:00 UTC (argmax, value, do
 - **A/A 2 (E4):** follows in waves: `--treat HARDREAD_LEVER_SELECT=fp` (A3a item 2), seed bases 3,000,000 + 10,000·j.
 - **Capacity:** hr* Running + Queued = 25 after this wave (F1 3 + belief 3 + 19 new). The cluster had 12 idle nodes of 18 at 10:02.
 - **Infrastructure:** these are the first submissions through the refactored `azure/submit.sh` (`5e37173`, identifiers from `handoff/env.sh`). All 19 job creates returned "Starting", and the generated `job.yml` resolves compute and environment correctly.
+
+## 2026-10-27 ≈10:15 UTC: F1 final — `value` does NOT replicate on fresh dev-A seeds (information run, research/28 E5)
+- **Run:** `hrlev-20261027-f1value-n1…n15-c9d0`, all 15 Completed at 10:07 UTC; 75 chunks / 1,500 games / 750 pairings, all fetched; `rerun_chunks` empty, no chunk gaps. JSON: `scratch_ds/lev_final/f1_value_final.json`; failure map: `f1_value_failures.json`.
+- **Markers:** valid. Treatment 1,494/1,496 logs carry lever lines (the 2 without are turn-1 crashes, within the 1% allowance); vanilla 0; fallbacks 0.
+- **Result (pre-registered failure rule):** treatment (`value`) win rate **48.73 ± 2.17 [46.57, 50.90], p = 0.25**, 1,500 games. Undecided: 4 vanilla crashes (2 Keldeo-Resolute, 1 ZeroDivisionError, 1 Rust panic), counted as treatment wins.
+- **Against the screen** (54.18 ± 2.17 on 1,699 games, seeds 810000/820000): difference −5.45 ± 3.07 points (z ≈ −3.5).
+  - Selection among ≈ 9 screened levers predicts some shrinkage, but probably not this much [J].
+  - No sign of within-run heterogeneity: screen nodes 52.7% / 55.6%; F1 jobs 41–56% around 48.6%, chunk SD at the binomial level.
+- **Code check:** the screen ran fork `df65fd8`, F1 `c04b38e`. The diff only adds the student-blend and belief levers (both off unless their env vars are set) and passes `battle` to `select_move`. The `value` branch is unchanged, the team-pool tarball is byte-identical (md5 `ca3f536e…`), and `run_match.py` / `farm_chunks.sh` are identical. The node setup adds a numpy install to the bot venv, which applies to both sides. No mechanical cause found.
+- **Reading:** the screen's +4 points was most likely a lucky draw plus selection. On the 3,199 dev-A games (screen + F1) the evidence for `value` is weak, and F1 alone is consistent with no effect. G2 (dev set B, running) remains the pre-registered gate; `value` is the only candidate and is frozen whatever G2 gives (the sealed run always runs). P(Ending A) should be revised down [J; Coord/judge]. Optional diagnostic (not planned, needs a decision): an argmax or vanilla-vs-vanilla run on the F1 seeds, to check whether those pairings differ.
