@@ -4,3 +4,10 @@ showdown/runtime/logs/
 __pycache__/
 azure/pools/
 scratch_ds/
+# run records, local runtime and private data (handoff review F15, 2026-10-27): never commit these
+azure/attempts/
+azure/LAST_*
+runs-*.out
+showdown/
+data/samples/
+data/owner/

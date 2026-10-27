@@ -351,3 +351,73 @@ Concurrency was conservative, so C1t1 and C2 may gain ≈20–40% when tuned (no
   - Belief-lever screens (`hrlev-20261027-bel*`) started or are queued.
   - So far no lever is clearly above +2 points; the student-blend and belief screens are too young to read.
 - **Early A/A at C1t1** (`hraa-20261026-c1t1-n{1,2,3}-d106`): seat A **51.19 ± 4.36** over 418 games (2 timeouts). Consistent with no seat bias so far; it runs to 08:00 UTC.
+
+## 2026-10-27 ≈02:00 UTC: handoff review fixes (clarifications, corrections, failure attribution; no new experiment)
+- **Pre-registration amendment A3** (before any pre-registered A/A or sealed game):
+  - A/A decision rule: point estimate within 50 ± 2.2 AND two-sided p ≥ 0.05, n unchanged. The old wording passed a correct harness only ≈16% of the time per A/A.
+  - "Vanilla" and A/A 2 as actually run.
+  - Failure attribution.
+  - Sealed layout, seeds and rerun rule.
+  - Under the old literal rule the exploratory F1 A/A (`hraa-20261026-310d28`, 49.35 ± 2.04 = [47.31, 51.39]) **fails**: its interval is not inside [47.8, 52.2]. Under A3 it passes. The 2026-10-26 entry above checked only the point estimate.
+- **S-A headline, clarified** (same numbers as the ≈00:00 UTC entry; no new run). Learned v1 has item NLL 1.182 against Foul Play's raw 64-draw belief at 1.800. That Δ of −0.618 [−0.682, −0.557] is the pre-registered §5 comparison, but it partly comes from `fp_belief` putting zero mass on the true item in 9% of rows. The strongest non-learned baselines are much closer:
+  - the usage prior alone: 1.301 (Δ −0.119 for v1);
+  - `fp_belief` mixed with 20% usage prior: 1.370 (Δ −0.188).
+  - Item top-1: 0.601 (v1) vs 0.576 (usage) vs 0.562 (`fp_belief`).
+  - No paired CI of v1 vs the usage prior has been computed yet. That is the next S-A item.
+- **Smoke-adapter serving eval, now logged** (`hrsft-20261026-smoke01-dbe8`, `eval_serve_lora.json`): 200/200 legal, p50/p95 1.413/1.466 s, prompt tokens p50 1,147. It was marked "pending" above.
+- **Glimmer v0 training-set sizes:**
+  - v0-safe trained on a **20,000-row** file (18,001 action + 1,999 reads; sha `a43d83ee…`) and stopped at checkpoint-700.
+  - v0-ddp and v0b trained on 55,556 rows (50,000 + 5,556; sha `9c3a6427…`).
+  - All three evaluate on 400 rows from 23 validation games.
+- **v0b** (`hrsft-20261026-v0b-2205`) ended Failed at its 3 h train cap: started 22:46 UTC, cap 01:46 UTC, checkpoints 1000/1200/1400. The SFT agent submitted the eval-only `hrsft-20261027-evv0b1400-af65` on checkpoint-1400. `hrsft-20261027-evddp1400-c5c9` is running.
+- **Failure attribution** (`tools/analysis/attribute_failures.py`, new) on every chunk on the Mac at 01:54 UTC:
+  - 14 undecided games among 8,015 game records (A/A, lever screens, VoI, label and hr_val farms).
+  - All 14 are crashes of the challenging bot (side A): 12 × Foul Play `ValueError: Could not find keldeoresolute in team_dict` at turn 1, 2 × `ZeroDivisionError` in `select_move_from_mcts_results`.
+  - A crash of the accepting bot (side B) already ends as a decided game: Showdown forfeits it (e.g. `lev-value-n1-c006` g0007). So both cases count as a loss for the crashing bot, as pre-registered.
+  - No infrastructure failure was found.
+- **Corrections to the 00:50 UTC entry:**
+  - The double-half screen pooled the cancelled `hrlev-20261026-dbl-n1-9231` (2 chunks) with its replacement `…-dbl-n1-r9231`. Both use seed 810000, so the same 40 pairings were counted twice. Without them, and with the pre-registered failure rule: 48.75 ± 5.62 on 240 games at 01:54 UTC.
+  - Label-farm volume: at 01:49 UTC the blob held 157 chunks (≈3,925 games). The Mac had 111 chunks = 2,775 games (2,774 extracted, 233,129 decisions ≈ 84 per game). The handoff's "276 chunks" counted files, not chunks.
+- **Provisional at 01:54 UTC** (pre-registered failure rule; still running; not for decisions):
+
+| Run | Estimate | Games |
+|---|---|---|
+| VoI p = 1 / 0.5 / 0.25 (oracle side) | 69.29 ± 3.58 / 62.68 ± 3.69 / 54.0 ± 3.76 (gate still passes) | 559 / 559 / 598 |
+| Lever argmax / value | 49.64 ± 3.11 / 52.38 ± 3.02 | 840 / 840 |
+| Lever student-blend λ 0.15 / 0.3 / 0.5 | 49.29 ± 7.33 / 44.00 ± 9.55 / 51.67 ± 8.71 | 140 / 100 / 120 |
+| Lever belief resample λ 1 | 50.00 ± 9.28 | 80 |
+| Early C1t1 A/A, seat A | 49.71 ± 3.46 (A3 rule: pass) | 680 |
+
+## 2026-10-27 ≈02:00 UTC: VoI final (600 games per level) and official G-24h (fails on win rate)
+- **Value of information, final.** `hrvoi-20261026-p{100,050,025}-a5fb` all Completed: 15 chunks × 40 games = 600 games per level, 300 side-swapped pairings on `hr_val`, C1t1, oracle seat alternating. Analysis: `tools/analysis/voi.py` (undecided games excluded) and `tools/analysis/attribute_failures.py --mode oracle` (pre-registered failure rule).
+
+| Oracle p | voi.py (excl. undecided) | Failure rule applied |
+|---|---|---|
+| 1 | **68.67 ± 3.43** (598 games) | 68.33 ± 3.43 (600) |
+| 0.5 | **62.50 ± 3.59** (598), lower bound 58.91 | 62.33 ± 3.58 (599; 1 game with both bots crashed, bounds 62.17–62.33) |
+| 0.25 | 54.00 ± 3.76 (598) | 53.83 ± 3.75 (600) |
+
+  - Paired differences (same 300 pairings): p 1 − 0.5 = 6.17 ± 4.54; 1 − 0.25 = 14.67 ± 4.96; 0.5 − 0.25 = 8.50 ± 5.20.
+  - **Gate PASS (final):** p = 1 ≥ 58%; the p = 0.5 lower bound is 58.91 > 50.
+  - Knowing the opponent's sets is worth ≈+19 points at C1t1. The provisional +21 at 519 games per level (00:50 entry) regressed toward this.
+  - Crashes: 5 challenger-side crashes (Keldeo-Resolute ×3, ZeroDivisionError ×1, `Unknown terrain magicroom` ×1). One game had both bots crash on `Unknown terrain magicroom`.
+- **Official G-24h** (`hrarena-20261027-g24h-v0safe-07d3`, Completed). v0-safe adapter (checkpoint-700, 20k-row training file) through llama.cpp + LoRA vs abyssal, 100 side-swapped pairings from `gen9/hr_hl_dev`, seed 2000, 4 games in parallel.
+  - **Win 42/200 = 21.0%** (failures as losses; 42/199 = 21.1% of completed, Wilson [16.0, 27.3]).
+  - Illegal 0 / 6,122 decisions; latency p50 / p95 3.12 / 3.49 s; 1 timeout.
+  - **Gate FAILS on win rate** (needs ≥ 35%). It passes on games, legality and latency.
+  - Better than the smoke adapter on the same teams (14.6%), still below base Glimmer with reasoning (31%, with 31% illegal moves).
+  - **Per the plan:** run the arena on the better eval-only adapters before D1 22:00 Paris. `hrsft-20261027-evddp1400-c5c9` has teacher top-1 0.44 and `hrsft-20261027-evv0b1400-af65` 0.43, against 0.395 for v0-safe; both were still in serve_eval at 01:59 UTC. If none reaches 35%, the pre-decided fallback applies: the student pilots Spar, and Glimmer reads, explains and parses notes.
+
+## 2026-10-27 ≈02:30 UTC: Glimmer v0 checkpoint-1400 evaluations (eval-only) and the v0-ddp resume
+Jobs were submitted by the SFT agent from its uncommitted `azure/sft/*` fixes (train budget from `--job-timeout`, DDP rank exit, `--resume-from`, `--eval-only`; 11/11 CPU tests). Numbers are from each job's `eval_teacher.json` / `eval_serve_lora.json`, on the same 400 held-out rows (23 validation games) as v0-safe.
+
+| Adapter | Teacher top-1 | Top-3 | CE vs search policy | Served legal (chat) | Agreement via llama.cpp | p50 / p95 |
+|---|---|---|---|---|---|---|
+| v0-ddp checkpoint-1400 (`hrsft-20261027-evddp1400-c5c9`) | **0.440** | 0.76 | 1.729 | 400/400 | 0.4325 | 1.415 / 1.485 s |
+| v0b checkpoint-1400 (`hrsft-20261027-evv0b1400-af65`) | 0.430 | 0.76 | 1.722 | 400/400 | 0.435 | 1.417 / 1.486 s |
+| v0-safe checkpoint-700 (for reference) | 0.395 | 0.72 | 1.79 | 400/400 | 0.395 | 1.41 / 1.49 s |
+
+- v0-ddp vs v0b is a statistical tie at n = 400 (±≈2.5 points); both beat v0-safe.
+- Adapter GGUFs: `pokemon-rl-research/hardread/<job>/adapter-bf16.gguf`.
+- **Resume:** `hrsft-20261027-v0ddpres-fd53` (3 nodes; v0-ddp from checkpoint-1400 with the same 55,556 rows and loss; job timeout 14,400 s) started 02:13 UTC. Train budget to 05:23 UTC; the epoch should end ≈04:05–04:15 UTC, then eval.
+- The G-24h retry (one run before 21:00 UTC) should use the best of these adapters.
