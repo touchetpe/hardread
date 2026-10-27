@@ -50,6 +50,7 @@ GLIMMER_URL = LLM_URL + "/v1/chat/completions"
 EVAL_LOCK = HARDREAD / "scratch_ds" / "agent" / "EVAL_LOCK"   # present = a recorded evaluation is running: no calls
 LLM_GATE = threading.Lock()   # at most one model call in flight from this app (the server runs --parallel 1)
 EXPLAIN_MODE = os.environ.get("HARDREAD_EXPLAIN_MODE", "auto")   # auto | loop | prefetch | template | off
+EXPLANATION_POLICY_VERSION = "offered-scope-v2"
 VERDICTS_ON = os.environ.get("HARDREAD_DISABLE_VERDICT", "") != "1"
 
 RATES = {"review": int(os.environ.get("HARDREAD_RATE_REVIEWS", "5")),
@@ -333,12 +334,50 @@ def explain_store(rid):
     return (cache_dir(rid) / "explain.json") if cache_dir(rid) else (SHOWCASES / f"{rid}.explain.json")
 
 
+def explain_key_store(rid):
+    d = cache_dir(rid)
+    return d / "explain-offered-keys.json" if d else STATE / "explain-offered-keys" / f"{rid}.json"
+
+
+def _offered_keys(offered):
+    return [{"turn": d["turn"], "k": d.get("k", 0)} for d in offered]
+
+
+def _explanation_offered(review, ctx, provided_keys):
+    """Validate the browser's displayed keys and retain the exact raw list used by the view."""
+    view, offered = P.build_view_with_offered(review, ctx)
+    keys = _offered_keys(offered)
+    if not isinstance(provided_keys, list) or provided_keys != keys:
+        raise ValueError("visible disagreement keys are stale")
+    return view, offered, keys
+
+
+def _save_explain_keys(rid, qid, keys):
+    path = explain_key_store(rid)
+    current = _jsonfile(path, {}) or {}
+    current[qid] = {"offered_keys": keys, "policy_version": EXPLANATION_POLICY_VERSION}
+    path.parent.mkdir(parents=True, exist_ok=True)
+    _write_json(path, current)
+
+
+def _explanation_cache_current(explanation, identity, offered_keys):
+    expected = {"offered_keys": offered_keys, "policy_version": EXPLANATION_POLICY_VERSION}
+    return (isinstance(explanation, dict) and explanation.get("policy_version") == EXPLANATION_POLICY_VERSION
+            and identity == expected)
+
+
+def _visible_verdicts(offered, verdicts):
+    """Keep cached decision checks inside the same offered-key boundary as explanation tools."""
+    keys = {f"{d['turn']}:{d.get('k', 0)}" for d in offered if isinstance(d, dict) and "turn" in d}
+    return {key: value for key, value in (verdicts or {}).items() if key in keys}
+
+
 def load_view(rid):
     parts = load_parts(rid)
     if parts is None:
         return None
     review, ctx, extra = parts
-    view = P.build_view(review, ctx)
+    view, offered = P.build_view_with_offered(review, ctx)
     view.update(extra, id=rid)
     d = cache_dir(rid)
     view["features"] = {"verdict": bool(VERDICTS_ON and ctx.get("mode") == "export" and d is not None
@@ -346,7 +385,11 @@ def load_view(rid):
                         "explain": EXPLAIN_MODE != "off",
                         "share": not extra.get("private")}
     view["verdicts"] = {k: P.verdict_card(v, ctx, review) for k, v in verdicts_of(rid).items()}
-    view["explanations"] = _jsonfile(explain_store(rid), {}) or {}
+    cached = _jsonfile(explain_store(rid), {}) or {}
+    saved_keys = _jsonfile(explain_key_store(rid), {}) or {}
+    keys = _offered_keys(offered)
+    view["explanations"] = {q: ex for q, ex in cached.items()
+                             if _explanation_cache_current(ex, saved_keys.get(q), keys)}
     view["questions"] = QUESTIONS
     return view
 
@@ -659,12 +702,22 @@ def create_app(concurrency=1, processes=4):
         parts = load_parts(rid)
         if parts is None:
             return err(404, "This review does not exist or has expired.")
+        review, ctx, _ = parts
+        try:
+            view, offered, offered_keys = _explanation_offered(review, ctx, body.get("offered_keys"))
+        except ValueError:
+            return err(409, "The visible disagreement list changed; refresh this review before asking for an explanation.")
         store = explain_store(rid)
+        key_store = explain_key_store(rid)
         have = _jsonfile(store, {}) or {}
-        if qid in have:
+        saved_keys = _jsonfile(key_store, {}) or {}
+        if qid in have and _explanation_cache_current(have[qid], saved_keys.get(qid), offered_keys):
             return {"ok": True, "cached": True}
-        key = f"explain:{rid}:{qid}"
-        template = await run_in_threadpool(_template_explanation, parts[0], QUESTIONS[qid], verdicts_of(rid))
+        identity = {"offered_keys": offered_keys, "policy_version": EXPLANATION_POLICY_VERSION}
+        key_digest = hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()[:16]
+        key = f"explain:{rid}:{qid}:{EXPLANATION_POLICY_VERSION}:{key_digest}"
+        visible_verdicts = _visible_verdicts(offered, verdicts_of(rid))
+        template = await run_in_threadpool(_template_explanation, review, QUESTIONS[qid], visible_verdicts, offered)
         jid = jobs.existing(key)
         if jid:
             return {"ok": True, "job_id": jid, "template": template}
@@ -679,25 +732,30 @@ def create_app(concurrency=1, processes=4):
             mode = "loop" if await run_in_threadpool(glimmer_up) else "template"
         if mode == "template" and template is not None:   # nothing to wait for
             cur = _jsonfile(store, {}) or {}
-            cur[qid] = template
+            cur[qid] = dict(template, policy_version=EXPLANATION_POLICY_VERSION)
             _write_json(store, cur)
+            _save_explain_keys(rid, qid, offered_keys)
             return {"ok": True, "cached": True}
 
         def cmd(jd, mode=mode):
             return [sys.executable, str(APP / "explain_worker.py"), str(jd), "--mode", mode, "--url", GLIMMER_URL,
                     "--lock", str(EVAL_LOCK)]
 
-        def done(j, store=store, qid=qid, review=parts[0], rid=rid):
+        def done(j, store=store, qid=qid, review=review, offered=offered, offered_keys=offered_keys,
+                 visible_verdicts=visible_verdicts):
             res = json.loads((j["dir"] / "explain.json").read_text())
             if res.get("pending_eval_lock"):   # stopped by an evaluation lock: not cached, a later visit retries
                 return "pending"
-            res = wording_guard(res, review, QUESTIONS[qid], verdicts_of(rid))
+            res = wording_guard(res, review, QUESTIONS[qid], visible_verdicts, offered)
+            res["policy_version"] = EXPLANATION_POLICY_VERSION
             cur = _jsonfile(store, {}) or {}
             cur[qid] = res
             _write_json(store, cur)
+            _save_explain_keys(rid, qid, offered_keys)
             return qid
-        files = {"review.json": json.dumps(parts[0]), "question.txt": QUESTIONS[qid],
-                 "verdicts.json": json.dumps(verdicts_of(rid))}
+        files = {"review.json": json.dumps(review), "question.txt": QUESTIONS[qid],
+                 "verdicts.json": json.dumps(visible_verdicts), "offered.json": json.dumps(offered),
+                 "offered_keys.json": json.dumps(offered_keys)}
         jid = jobs.submit("explain", key, files, cmd, done)
         if jid is None:
             return err(503, "The queue is full right now.")
@@ -778,22 +836,22 @@ NEVER_SAY = re.compile(r"\b(cost|costs|costed|costing|mistakes?|misplay(?:s|ed)?
                        r"coach(?:es|ing)?|trainer|analy[sz]er|throw(?:s|n)?)\b", re.I)
 
 
-def wording_guard(res, review, question, verdicts):
+def wording_guard(res, review, question, verdicts, offered=None):
     text = ((res.get("rendered") or {}).get("text")) or ""
     if res.get("final") == "template" or not NEVER_SAY.search(text):
         return res
-    tpl = _template_explanation(review, question, verdicts) or {}
+    tpl = _template_explanation(review, question, verdicts, offered) or {}
     out = dict(tpl, final="template", policy_rejected=True, requested_mode=res.get("requested_mode"),
                rejected={"final": res.get("final"), "text": text, "matched": NEVER_SAY.findall(text)})
     return out
 
 
-def _template_explanation(review, question, verdicts):
+def _template_explanation(review, question, verdicts, offered=None):
     """The deterministic template answer (instant; shown while Glimmer writes, and as its fallback)."""
     try:
         ex = _agent("explain")
         t0 = time.time()
-        res = ex.run(review, question, mode="template", verdicts=verdicts or None)
+        res = ex.run(review, question, mode="template", verdicts=verdicts or None, offered=offered)
         return {"question": question, "requested_mode": "template", "final": "template", "rendered": res.get("rendered"),
                 "latency_s": round(time.time() - t0, 3), "trace": res.get("trace"), "created": time.time()}
     except Exception as e:  # noqa: BLE001

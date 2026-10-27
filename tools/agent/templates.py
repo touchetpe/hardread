@@ -114,8 +114,11 @@ def build(session, question):
         if ms:
             sents = s_disagreement(ms[0])
         else:
-            sents = [{"text": "In balanced positions, the engine did not prefer another option by a clear margin "
-                              "in this game.", "slots": {}}]
+            empty_text = ("This review shows no disagreements that met its display rules."
+                          if session.offered is not None else
+                          "In balanced positions, the engine did not prefer another option by a clear margin "
+                          "in this game.")
+            sents = [{"text": empty_text, "slots": {}}]
     elif kind == "biggest_luck":
         ms = _moments(session, "luck")
         sents = s_luck_moment(ms[0]) if ms else [{"text": "No single turn had a clear luck swing in this game.",

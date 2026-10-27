@@ -354,6 +354,92 @@ class TestVerifierFail(Base):
         self.assertIn(7, rules)
 
 
+
+class TestScopedDecisionBoundary(unittest.TestCase):
+    def test_scoped_get_turn_and_verdict_hide_unoffered_decisions(self):
+        visible = [REVIEW["decisions"][2]]  # turn 4 only; turn 2 is hidden
+        verdicts = dict(VERDICTS)
+        verdicts["4:0"] = {"verdict": "Within noise", "X": "rapidspin", "chosen": "headlongrush",
+                           "reference": "engine", "delta_U": [0.01]}
+        session = ToolSession(REVIEW, verdicts=verdicts, offered=visible)
+        hidden = session.call("get_turn", {"turn": 2})
+        for field in ("gap_pts", "engine_best", "options", "opp_policy"):
+            self.assertNotIn(field, hidden)
+        self.assertEqual((hidden["turn"], hidden["your_action"], hidden["luck_pts"]), (2, "Swords Dance", -15))
+        self.assertNotIn("Knock Off", session.model_view(hidden))
+        self.assertNotIn("engine_best", session.calls[-1]["output"])
+        rejected = verify(S(("The engine preferred {best} by {gap}.",
+                            {"best": f"{hidden['id']}.engine_best", "gap": f"{hidden['id']}.gap_pts"})), session)
+        self.assertFalse(rejected["pass"])
+
+        hidden_verdict = session.call("get_verdict", {"turn": 2, "k": 0})
+        self.assertEqual(set(hidden_verdict), {"id", "note"})
+        self.assertNotIn("verdict", session.model_view(hidden_verdict))
+        self.assertNotIn("Within noise", session.model_view(hidden_verdict))
+
+        allowed = session.call("get_turn", {"turn": 4, "k": 0})
+        self.assertEqual((allowed["gap_pts"], allowed["engine_best"]), (3, "Rapid Spin"))
+        allowed_verdict = session.call("get_verdict", {"turn": 4, "k": 0})
+        self.assertEqual(allowed_verdict["verdict"], "Within noise")
+
+    def test_scoped_get_turn_uses_exact_k_and_fails_closed_on_ambiguity(self):
+        review = json.loads(json.dumps(REVIEW))
+        other = json.loads(json.dumps(review["decisions"][1]))
+        other.update(k=1, action="recover", engine_best="triattack", decision_cost=0.08,
+                     top_alternatives=[{"action": "icebeam", "win_prob": 0.62}],
+                     opponent_policy_top=[["rapidspin", 0.6]])
+        review["decisions"].append(other)
+        session = ToolSession(review, verdicts={"2:0": VERDICTS["2:0"],
+                                                "2:1": {"verdict": "clear improvement", "X": "triattack",
+                                                        "chosen": "recover", "delta_U": [0.08]}},
+                              offered=[other])
+        ambiguous = session.call("get_turn", {"turn": 2})
+        self.assertNotIn("gap_pts", ambiguous)
+        self.assertNotIn("engine_best", ambiguous)
+        self.assertNotIn("options", ambiguous)
+        exact = session.call("get_turn", {"turn": 2, "k": 1})
+        self.assertEqual((exact["k"], exact["your_action"], exact["engine_best"], exact["gap_pts"]),
+                         (1, "Recover", "Tri Attack", 8))
+        self.assertNotIn("Knock Off", session.model_view(exact))
+        self.assertEqual(session.call("get_verdict", {"turn": 2, "k": 0}).keys(), {"id", "note"})
+        self.assertEqual(session.call("get_verdict", {"turn": 2, "k": 1})["verdict"], "clear improvement")
+
+    def test_scoped_empty_template_and_failed_answer_are_filter_limited(self):
+        empty = ToolSession(REVIEW, verdicts=VERDICTS, offered=[])
+        direct = templates.build(empty, "Where did the engine disagree most with my choices?")
+        rendered = render(direct, empty)["text"]
+        self.assertEqual(rendered, "This review shows no disagreements that met its display rules.")
+        self.assertTrue(verify(direct, empty)["pass"])
+        self.assertNotRegex(rendered, r"(?i)agreed|did not prefer|never rated|another option")
+        turn = empty.call("get_turn", {"turn": 2})
+        self.assertNotIn("gap_pts", turn)
+        self.assertNotIn("engine_best", turn)
+        self.assertEqual(empty.call("get_verdict", {"turn": 2, "k": 0}).keys(), {"id", "note"})
+
+        import explain
+        class InvalidAnswerClient:
+            def chat(self, *_args, **_kwargs):
+                return {"finish_reason": "tool_calls", "wall_s": 0, "prompt_tokens": 0, "completion_tokens": 0,
+                        "cached_tokens": 0, "decode_tps": 0, "reasoning": "", "message": {"content": "", "tool_calls": []},
+                        "tool_calls": [{
+                            "id": "fixture", "name": "submit_explanation",
+                            "arguments": {"sentences": [{"text": "The engine preferred {best} by {gap}.",
+                                         "slots": {"best": "#99.engine_best", "gap": "#99.gap_pts"}}]},
+                            "parse_error": None}]}
+        fallback = explain.run(REVIEW, "Where did the engine disagree most with my choices?",
+                               client=InvalidAnswerClient(), offered=[], mode="loop")
+        self.assertEqual(fallback["final"], "template")
+        self.assertEqual(fallback["rendered"]["text"], rendered)
+        self.assertTrue(all("gap_pts" not in json.dumps(c["output"]) and
+                            "engine_best" not in json.dumps(c["output"]) for c in fallback["trace"]))
+
+    def test_legacy_unscoped_turn_and_verdict_stay_broad(self):
+        session = ToolSession(REVIEW, verdicts=VERDICTS, offered=None)
+        turn = session.call("get_turn", {"turn": 2})
+        self.assertEqual((turn["gap_pts"], turn["engine_best"]), (9, "Knock Off"))
+        verdict = session.call("get_verdict", {"turn": 2, "k": 0})
+        self.assertEqual(verdict["verdict"], "Within noise")
+
 def main():
     out = None
     if "--json" in sys.argv:

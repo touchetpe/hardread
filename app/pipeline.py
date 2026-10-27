@@ -427,7 +427,13 @@ def _assumed(action, d, revealed, active):
 
 
 def build_view(review, ctx):
-    """ctx: mode ('draft'|'export'), side, end_reason, turns, names (display table), draft_rows, active, private."""
+    """Public view; the offered decision list is derived once by the shared builder."""
+    return build_view_with_offered(review, ctx)[0]
+
+
+def build_view_with_offered(review, ctx):
+    """Build the UI view and return the exact raw decisions used for its disagreement cards."""
+    # ctx: mode ('draft'|'export'), side, end_reason, turns, names, draft_rows, active, private.
     names = ctx.get("names") or {}
     s = review["summary"]
     br = bridge_numbers(review, ctx.get("end_reason"))
@@ -441,8 +447,9 @@ def build_view(review, ctx):
                    "realised_prob": t.get("luck_realised_prob"),
                    "action": pretty_action(t.get("action"), names),
                    "opponent_action": pretty_action(t.get("opponent_action"), names)})
+    offered = disagreements(review, ctx.get("draft_rows") if ctx.get("mode") == "draft" else None, ctx.get("active"))
     dis = []
-    for d in disagreements(review, ctx.get("draft_rows") if ctx.get("mode") == "draft" else None, ctx.get("active")):
+    for d in offered:
         draft = ctx.get("mode", "draft") == "draft"
         dis.append({"turn": d["turn"], "k": d["k"], "kind": d["kind"],
                     # Draft mode: damage ranges come from assumed spreads, so a damaging option's value may hinge
@@ -480,7 +487,7 @@ def build_view(review, ctx):
         "counts": {"decisions": s.get("decisions"), "hidden": s.get("decisions_with_hidden_action")},
     }
     view["summary_text"] = summary_text(view)
-    return view
+    return view, offered
 
 
 EVENT_LABEL = {"crit": "critical hit", "miss_by": "miss", "cant": "could not move",
@@ -650,17 +657,7 @@ def verdict_card(v, ctx, review=None):
 
 
 def read_check(review, turn, k, belief):
-    """The v1 read check (your expected opponent action vs the engine's opponent policy and what they played),
-    from tools/agent/parse_note.read_check when available. Every number is copied from the review."""
-    if not belief or not belief.get("expects_action") or review is None:
-        return None
-    dec = next((x for x in review.get("decisions") or [] if x.get("turn") == turn and x.get("k", 0) == k), None)
-    pol = (dec or {}).get("opponent_policy_top") or []
-    if pol and all(str(a) == "No Move" for a, _ in pol):   # a replacement after a faint: they had nothing to choose
-        return {"turn": turn, "k": k, "expected": belief.get("expects_action"), "engine_top": [], "played": None,
-                "sentence": "At this decision you were sending in a replacement and your opponent had no move to "
-                            "choose, so there is no read of their move to check here.",
-                "scope": "We check your read of their move against the engine; we don't yet replay the turn under it."}
+    """Delegate the data-only read check to the parser so one source defines its status."""
     try:
         sys.path.insert(0, str(HARDREAD / "tools" / "agent"))
         import parse_note as PN

@@ -643,7 +643,10 @@
   function disagreementsList(v, id) {
     var list = v.disagreements || [];
     if (!list.length) {
-      return h("div", { class: "empty" }, "No clear disagreement while the game was open: wherever the result was still in doubt, the engine agreed with you or preferred another option by less than 5 points.");
+      var emptyText = v.mode === "draft"
+        ? "No disagreements are shown for this Draft review. The display leaves out choices that depend on assumed sets and only shows eligible decisions while the game was open."
+        : "No disagreements met the display filter for this review.";
+      return h("div", { class: "empty" }, emptyText);
     }
     var box = h("div", { class: "dis-list" });
     if (v.sets_note) box.appendChild(h("p", { class: "sets-note" }, h("span", { "aria-hidden": "true" }, "ⓘ "),
@@ -773,7 +776,8 @@
       if (have) { draw(have); return; }
       if (STATIC) { clear(body); body.appendChild(h("p", { class: "muted" }, "Not included in this static copy.")); return; }
       waiting("Muse Glimmer is reading the review…");
-      api("/api/explain", { review_id: id, question: q }).then(function (d) {
+      var offeredKeys = (v.disagreements || []).map(function (d) { return { turn: d.turn, k: d.k }; });
+      api("/api/explain", { review_id: id, question: q, offered_keys: offeredKeys }).then(function (d) {
         if (!d.ok) { clear(body); body.appendChild(h("p", { class: "muted" }, d.error || "No explanation available.")); return; }
         if (d.cached) { refresh(q); return; }
         if (d.template) { draw(d.template, true); }
@@ -957,6 +961,12 @@
   }
 
   var VERDICT_GLYPH = { "Misplay": "▼", "Misread": "◐", "Defensible": "✓", "Within noise": "≈" };
+  function readCheckBlock(rc) {
+    if (!rc || (rc.status !== "checked" && rc.status !== "no_opponent_choice")) return null;
+    return h("p", { class: "small read-check", "data-read-check-status": rc.status },
+      rc.sentence || "", h("br"), h("span", { class: "muted" }, rc.scope || ""));
+  }
+
   function verdictCard(c, reviewId) {
     var cls = { "Misplay": "v-misplay", "Misread": "v-misread", "Defensible": "v-ok", "Within noise": "v-noise" }[c.verdict] || "v-noise";
     var box = h("div", { class: "verdict " + cls },
@@ -966,7 +976,7 @@
       c.stated && c.stated.length ? h("p", { class: "small muted" }, "Your read: " + c.stated.join("; ") + ".") : h("p", { class: "small muted" }, "Your read: no details (the engine's own guess at their sets)."),
       (c.contradictions || []).map(function (t) { return h("p", { class: "small notice-inline" }, t + ". That detail was left out."); }),
       c.third_option ? h("p", { class: "small" }, c.third_option) : null,
-      c.read_check ? h("p", { class: "small" }, c.read_check.sentence, h("br"), h("span", { class: "muted" }, c.read_check.scope)) : null,
+      readCheckBlock(c.read_check),
       h("p", { class: "footnote" }, (c.runs || 3) + " independent runs on the same sampled worlds · " + (c.worlds || 4) + " worlds × " + (c.iterations || 20000).toLocaleString("en") + " iterations each" + (c.seconds ? " · " + Math.round(c.seconds) + " s" : "") + ". ",
         reviewId && !STATIC ? h("a", { href: "/api/review/" + encodeURIComponent(reviewId) + "/verdict/" + c.turn + "/" + c.k, target: "_blank", rel: "noopener" }, "Full output (JSON)") : null));
     return box;

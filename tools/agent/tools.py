@@ -123,9 +123,9 @@ TOOL_SCHEMAS = [
             "k": {"type": "integer", "minimum": 1, "maximum": MAX_K}}, "required": ["kind"]}}},
     {"type": "function", "function": {
         "name": "get_turn",
-        "description": "One turn: both actions, win chance before/after, luck, the engine's top options and its "
-                       "estimate of the opponent's move.",
-        "parameters": {"type": "object", "properties": {"turn": {"type": "integer", "minimum": 0}},
+        "description": "One turn: both actions, win chance before/after, and luck. In an app-scoped session, "
+                       "decision details are available only for an exact displayed disagreement key.",
+        "parameters": {"type": "object", "properties": {"turn": {"type": "integer", "minimum": 0}, "k": {"type": "integer", "minimum": 0}},
                        "required": ["turn"]}}},
     {"type": "function", "function": {
         "name": "get_luck_events",
@@ -135,7 +135,8 @@ TOOL_SCHEMAS = [
                        "required": ["turn"]}}},
     {"type": "function", "function": {
         "name": "get_verdict",
-        "description": "The cached verdict card for a decision, only if the user ran one. Never computes anything.",
+        "description": "The cached verdict card for a decision, only if the user ran one. In app-scoped sessions, "
+                       "only exact displayed disagreement keys are available. Never computes anything.",
         "parameters": {"type": "object", "properties": {"turn": {"type": "integer", "minimum": 0},
                                                         "k": {"type": "integer", "minimum": 0}},
                        "required": ["turn"]}}},
@@ -274,6 +275,24 @@ class ToolSession:
         ds = [d for d in self.decisions if d.get("turn") == t and d.get("kind") in ("move", "teampreview")]
         return ds[0] if ds else None
 
+    @staticmethod
+    def _decision_key(d):
+        return d.get("turn"), d.get("k", 0)
+
+    def _decision_for_turn(self, turn, k=None):
+        """Return only a decision that is in the app's exact offered capability."""
+        if self.offered is None:
+            if k is None:
+                return self._move_decision(turn)  # preserve the legacy direct-caller behavior
+            return next((d for d in self.decisions if self._decision_key(d) == (turn, k)), None)
+        offered = [d for d in self.disagreements() if d.get("turn") == turn]
+        if k is not None:
+            return next((d for d in offered if self._decision_key(d) == (turn, k)), None)
+        all_at_turn = [d for d in self.decisions if d.get("turn") == turn]
+        if len(all_at_turn) == 1 and len(offered) == 1:
+            return offered[0]
+        return None
+
     def _events(self, t):
         ev = (self.turns.get(t) or {}).get("luck_events") or {}
         out = []
@@ -359,47 +378,72 @@ class ToolSession:
                     "_raw": {"your_action": t.get("action"), "opp_action": t.get("opponent_action")}}))
         else:
             for d in self.disagreements()[:k]:
-                moments.append(self._rec({
-                    "turn": d["turn"], "gap_pts": _pts(d["decision_cost"]), "engine_best": action_name(d["engine_best"]),
+                fields = {
+                    "turn": d["turn"], "gap_pts": _pts(d["decision_cost"]),
+                    "engine_best": action_name(d["engine_best"]),
                     "chosen": action_name(d["action"]), "wp_before_pct": _pct(d["win_prob"]),
                     "engine_best_wp_pct": _pct(d.get("engine_best_win_prob")),
                     "chosen_wp_pct": _pct(d.get("chosen_win_prob")),
-                    "_raw": {"engine_best": d["engine_best"], "chosen": d["action"]}}))
+                    "_raw": {"engine_best": d["engine_best"], "chosen": d["action"]}}
+                if self.offered is not None:
+                    fields["k"] = d.get("k", 0)
+                moments.append(self._rec(fields))
         out = {"kind": kind, "moments": moments}
         if not moments:
             # notes carry no numbers or number words: the model copies them into free text (pilot item 3)
             out["note"] = ("no turn had a measurable luck swing" if kind == "luck" else
-                           "no decision passed the filter: in balanced positions the engine never rated another "
-                           "option clearly higher")
+                           ("No disagreement met the display filter for this review." if self.offered is not None else
+                            "no decision passed the filter: in balanced positions the engine never rated another "
+                            "option clearly higher"))
         return out
 
-    def get_turn(self, turn):
+    def get_turn(self, turn, k=None):
         try:
             turn = int(turn)
         except (TypeError, ValueError):
             return {"error": "turn must be an integer"}
+        if k is not None:
+            try:
+                k = int(k)
+            except (TypeError, ValueError):
+                return {"error": "k must be an integer"}
         t = self.turns.get(turn)
-        d = self._move_decision(turn)
+        d = self._decision_for_turn(turn, k)
         if t is None and d is None:
             return {"error": f"no turn {turn} in this review (turns {min(self.turns or [0])}-{max(self.turns or [0])})"}
         t = t or {}
-        opts = [self._rec({"action": action_name(o["action"]), "wp_pct": _pct(o.get("win_prob")),
-                           "_raw": {"action": o["action"]}}) for o in ((d or {}).get("top_alternatives") or [])[:3]]
-        pol = [self._rec({"action": action_name(a), "prob": p, "_raw": {"action": a}})
-               for a, p in ((d or {}).get("opponent_policy_top") or [])[:3]]
-        rec = self._rec({
-            "turn": turn, "your_action": action_name(t.get("action") or (d or {}).get("action")),
+        chosen = (t.get("action") or (d or {}).get("action")) if self.offered is None else \
+                 ((d or {}).get("action") or t.get("action"))
+        if self.offered is None:
+            gap = t.get("decision_cost") if t else (d or {}).get("decision_cost")
+            best = t.get("engine_best") or (d or {}).get("engine_best")
+        else:
+            gap = (d or {}).get("decision_cost")
+            best = (d or {}).get("engine_best")
+        fields = {
+            "turn": turn, "your_action": action_name(chosen),
             "opp_action": action_name(t.get("opponent_action")),
             "wp_before_pct": _pct(self._wp_before(turn)), "wp_after_pct": _pct(self._wp_after(turn)),
             "luck_pts": _pts(t.get("luck")), "realised_prob": t.get("luck_realised_prob"),
             "swing_pts": _pts(t.get("chance_swing_vs_counterfactual")),
-            "gap_pts": _pts(t.get("decision_cost") if t else (d or {}).get("decision_cost")),
-            "engine_best": action_name(t.get("engine_best") or (d or {}).get("engine_best")),
             "events": [x for x, _ in self._events(turn)],
-            "options": opts, "opp_policy": pol,
-            "_raw": {"your_action": t.get("action") or (d or {}).get("action"), "opp_action": t.get("opponent_action"),
-                     "engine_best": t.get("engine_best") or (d or {}).get("engine_best")}})
-        return rec
+            "_raw": {"your_action": chosen, "opp_action": t.get("opponent_action")},
+        }
+        if d is not None:
+            opts = [self._rec({"action": action_name(o["action"]), "wp_pct": _pct(o.get("win_prob")),
+                               "_raw": {"action": o["action"]}}) for o in ((d or {}).get("top_alternatives") or [])[:3]]
+            pol = [self._rec({"action": action_name(a), "prob": p, "_raw": {"action": a}})
+                   for a, p in ((d or {}).get("opponent_policy_top") or [])[:3]]
+            fields.update({
+                "gap_pts": _pts(gap), "engine_best": action_name(best), "options": opts, "opp_policy": pol,
+            })
+            if self.offered is not None:
+                fields["k"] = d.get("k", 0)
+            fields["_raw"]["engine_best"] = best
+        elif self.offered is None:
+            fields.update({"gap_pts": _pts(gap), "engine_best": action_name(best)})
+            fields["_raw"]["engine_best"] = best
+        return self._rec(fields)
 
     def get_luck_events(self, turn):
         try:
@@ -418,6 +462,12 @@ class ToolSession:
 
     def get_verdict(self, turn, k=0):
         """The cached verdict.py result for (turn, k) (tools/review/verdict.py, Ag-Sci); never computes one."""
+        try:
+            turn, k = int(turn), int(k)
+        except (TypeError, ValueError):
+            return self._rec({"note": "no visible decision is available for this request"})
+        if self.offered is not None and (turn, k) not in {self._decision_key(d) for d in self.disagreements()}:
+            return self._rec({"note": "no visible decision is available for this request"})
         key = f"{turn}:{k}"
         v = self.verdicts.get(key)
         if not v or not v.get("verdict"):

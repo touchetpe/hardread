@@ -30,6 +30,18 @@ def main():
     review = json.loads((d / "review.json").read_text())
     question = (d / "question.txt").read_text().strip()
     verdicts = json.loads((d / "verdicts.json").read_text()) if (d / "verdicts.json").exists() else None
+    offered_path, keys_path = d / "offered.json", d / "offered_keys.json"
+    if not offered_path.is_file() or not keys_path.is_file():
+        raise ValueError("explanation job is missing its offered-list identity")
+    offered = json.loads(offered_path.read_text())
+    offered_keys = json.loads(keys_path.read_text())
+    if not isinstance(offered, list) or not isinstance(offered_keys, list):
+        raise ValueError("explanation job offered-list identity is malformed")
+    if any(not isinstance(x, dict) or "turn" not in x for x in offered):
+        raise ValueError("explanation job offered-list decisions are malformed")
+    actual_keys = [{"turn": x["turn"], "k": x.get("k", 0)} for x in offered]
+    if actual_keys != offered_keys:
+        raise ValueError("explanation job offered-list keys do not match its decisions")
     client = None
     state = {"locked_out": False}
     if a.mode != "template":
@@ -52,7 +64,7 @@ def main():
             return raw_chat(*args, **kw)
         client.chat = chat
     t0 = time.time()
-    res = explain.run(review, question, client=client, mode=a.mode, verdicts=verdicts or None)
+    res = explain.run(review, question, client=client, mode=a.mode, verdicts=verdicts or None, offered=offered)
     out = {"question": question, "requested_mode": a.mode, "final": res.get("final"),
            "rendered": res.get("rendered"), "raw_pass": res.get("raw_pass"),
            "after_repair_pass": res.get("after_repair_pass"), "latency_s": round(time.time() - t0, 1),
