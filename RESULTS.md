@@ -591,7 +591,7 @@ Diagnosis only, at Coord's request. No candidate or registered rule changes. Scr
   - F1 alone (no credit for the screen) gives ≈ 5%.
   - G2 (1,000 games on dev B, running) will move this a lot.
 
-## 2026-10-27 ≈11:05 UTC: held-out leak check — `hr_hl_dev` ∩ `hr_val` confirmed (228 teams), no impact on any held-out claim; sealed set clean
+## 2026-10-27 ≈10:50 UTC: held-out leak check — `hr_hl_dev` ∩ `hr_val` confirmed (228 teams), no impact on any held-out claim; sealed set clean
 Diagnosis at Coord's request (Ag-Play's report). Method: overlap by file name, by packed-team SHA-256 and by roster (sorted 6-species set). The inputs were only names, species lists and hashes: `data/teams/validated/hl_05_26-gen9ou.jsonl`, the split v1 file, the pools tarball's member names, and the sealed manifest's names. No sealed or reserved team file was opened.
 
 | Pair | Same file | Same packed team | Same roster |
