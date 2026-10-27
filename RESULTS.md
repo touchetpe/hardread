@@ -590,3 +590,45 @@ Diagnosis only, at Coord's request. No candidate or registered rule changes. Scr
   - Sealed SE ≈ 0.45, so significance needs an estimate ≥ ≈ +0.9: P ≈ 0.19–0.25.
   - F1 alone (no credit for the screen) gives ≈ 5%.
   - G2 (1,000 games on dev B, running) will move this a lot.
+
+## 2026-10-27 ≈11:05 UTC: held-out leak check — `hr_hl_dev` ∩ `hr_val` confirmed (228 teams), no impact on any held-out claim; sealed set clean
+Diagnosis at Coord's request (Ag-Play's report). Method: overlap by file name, by packed-team SHA-256 and by roster (sorted 6-species set). The inputs were only names, species lists and hashes: `data/teams/validated/hl_05_26-gen9ou.jsonl`, the split v1 file, the pools tarball's member names, and the sealed manifest's names. No sealed or reserved team file was opened.
+
+| Pair | Same file | Same packed team | Same roster |
+|---|---|---|---|
+| `hr_hl_dev` (2,000 teams / 1,154 rosters) ∩ `hr_val` (2,778 / 596) | **228** | 228 | **131** |
+| `hr_hl_dev` ∩ `hr_train` (26,850 / 5,369) | 1,772 | 1,772 | 1,023 |
+| `hr_hl_dev` ∩ reserved (14,136 / 2,556) | 0 | 0 | 0 |
+| `hr_hl_dev` ∩ `hr_sealed` (1,000 / 1,000) | 0 | 0 | 0 |
+| `hr_train` ∩ `hr_val` | 0 | 0 | 0 |
+| `hr_train` or `hr_val` ∩ reserved / `hr_sealed` | 0 | 0 | 0 |
+
+- **Cause:** `hr_hl_dev` was drawn before kickoff (fork `d37606b`, Oct 26) from the non-reserved (dev) rosters. `hr_val` was split later from the same dev rosters (`pools-v1.json`, seed 20261027), so `hr_hl_dev` spans both `hr_train` and `hr_val`. It never touched the reserved rosters: the split v1 held them out first.
+- **Runs that used `hr_hl_dev`** (from every `azure/attempts/*/job.yml`):
+  - the exploratory F1 A/A `hraa-20261026-310d28`;
+  - the arena runs (rehearsal `g24hpre`, official G-24h, the G-24h retry, the student-pilot arena, `hrarena-20261026-00cc`).
+  - None is a training run.
+- **Training sets, checked:** no training set contains a `hr_hl_dev` game.
+  - Label farm `hrlab-*` and volume farm `hrvol-*`: `--team-pool gen9/hr_train`.
+  - Glimmer v0 SFT: 1,350 label-farm games, all `hr_train`, checked per game.
+  - Student v1 (`hrstu-20261026-v1-8187`): lab + vol inputs (both `hr_train`); `hr_val` is cross-pool test only.
+  - Belief v0/v1: vol/lab chunks (`hr_train`) plus Metamon human data under the A2 roster filter. `hr_val` (`hrval-*`) is used only as a test set.
+  - The only `hr_hl_dev`-derived dataset found is `scratch_ds/sample*` (12 games), which fed only early belief smoke models (`sample_v0`), not v0/v1.
+- **Impact:**
+  - **S-A** (pre-registered §5, "held-out rosters"): **no leak**. The models never saw an `hr_val` roster (`hr_train` ∩ `hr_val` = 0 by roster), and the claim stands.
+  - **Student 55.3% on unseen rosters:** **no leak**, same reason.
+  - **G2:** **no impact**. `value` has no learned part, and no lever parameter was tuned on `hr_hl_dev`: the levers were added post-kickoff (fork `df65fd8`) and screened on `hr_train` only.
+  - **Sealed set:** **clean**, disjoint from every pool by file, hash and roster.
+  - **Caveat for the arena numbers** (G-24h 21.0% / retry 44.0%, student 80%): they use 100 pairings = 195 distinct `hr_hl_dev` teams.
+    - 171 of those teams are `hr_train` teams and 24 are `hr_val` teams.
+    - 18 of the 195 appear in Glimmer v0's SFT training games, and 71 somewhere in the label farm.
+    - Say "dev teams (partly seen in training)", never "unseen teams". The claims are about strength vs abyssal, not team generalisation.
+- **Housekeeping (no rerun needed):** `hr_hl_dev` should not be used for any future held-out claim. The 228 overlapping teams could be dropped from `hr_hl_dev`, or the pool documented as "dev, overlaps hr_train/hr_val". That is Coord's call.
+
+## 2026-10-27 ≈10:50 UTC: track A3a first-chunk acceptance (research/28 S1.11) — G2 PASS, A/A 1 PASS (no win rates computed)
+- **G2** `hrg2-20261027-value-j00…j09-d241`:
+  - 10/10 first chunks; **200/200 decided**; `treat_side` recorded for all 200.
+  - `--check-treat-markers` **valid: true**: treatment 200/200 logs with markers (7,739 lines), vanilla 0, fallbacks 0.
+- **A/A 1** `hraa1-20261027-j00…j08-c0d6`:
+  - 9/9 first chunks; **179/180 decided (99.4%)**; no `--treat` (no `treat_side`), as specified.
+- No estimate was computed for G2 or the A/As. The checking script printed only counters.
