@@ -531,3 +531,17 @@ These rules are fixed now. The dev-A screens end at 08:00 UTC (argmax, value, do
 - `attribute_failures.py --check-treat-markers` on the 15 first chunks: **valid: true**. Treatment 299/299 bot logs have lever markers (12,408 lines); vanilla 0 marker lines; 0 fallback warnings on either side.
 - No win rate is reported before completion (information run; it is read at the end, ≥ 1,500 games).
 - The `azure/fetch.sh` refactored at `5e37173` (identifiers from `handoff/env.sh`) listed and downloaded these chunks without error.
+
+## 2026-10-27 ≈10:06 UTC: track A3a — G2 and A/A 1 wave 1 submitted (research/28 S1.11 [A3a], E2–E3)
+- **Authority:** OD-2 (A3a, both parts) approved by the owner and committed to `PREREGISTRATION.md` (commit `0f03c12`, 09:59:50 UTC), as confirmed by Coord. The first G2/A/A job was created at 10:03:49 UTC, after that commit. No G2, pre-registered A/A or sealed game existed before it.
+- **G2 (E2):** `hrg2-20261027-value-j00…j09-d241` (10 jobs), created 10:03–10:05 UTC.
+  - `--team-pool gen9/hr_val` (dev set B), C1t1 both sides, `--treat HARDREAD_LEVER_SELECT=value --treat-seat alternate`.
+  - 5 chunks × 10 side-swapped pairings per job = 1,000 games; seed bases 4,000,000 + 10,000·j.
+  - Only candidate: `value` (A3a item 3).
+  - Read only when all 50 chunks are in. Pass = ≥ 1,000 games, markers valid, `pre_registered` win rate ≥ 52.0.
+- **A/A 1 (E3):** `hraa1-20261027-j00…j08-c0d6` (9 of 20 jobs), created 10:05–10:06 UTC.
+  - Vanilla vs vanilla, no `--treat`, `hr_train`, seed bases 2,000,000 + 10,000·j.
+  - Jobs j09–j19 follow in waves (the same hex `c0d6`, the same layout).
+- **A/A 2 (E4):** follows in waves: `--treat HARDREAD_LEVER_SELECT=fp` (A3a item 2), seed bases 3,000,000 + 10,000·j.
+- **Capacity:** hr* Running + Queued = 25 after this wave (F1 3 + belief 3 + 19 new). The cluster had 12 idle nodes of 18 at 10:02.
+- **Infrastructure:** these are the first submissions through the refactored `azure/submit.sh` (`5e37173`, identifiers from `handoff/env.sh`). All 19 job creates returned "Starting", and the generated `job.yml` resolves compute and environment correctly.
