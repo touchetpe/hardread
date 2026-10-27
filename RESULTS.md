@@ -555,3 +555,38 @@ These rules are fixed now. The dev-A screens end at 08:00 UTC (argmax, value, do
   - No sign of within-run heterogeneity: screen nodes 52.7% / 55.6%; F1 jobs 41–56% around 48.6%, chunk SD at the binomial level.
 - **Code check:** the screen ran fork `df65fd8`, F1 `c04b38e`. The diff only adds the student-blend and belief levers (both off unless their env vars are set) and passes `battle` to `select_move`. The `value` branch is unchanged, the team-pool tarball is byte-identical (md5 `ca3f536e…`), and `run_match.py` / `farm_chunks.sh` are identical. The node setup adds a numpy install to the bot venv, which applies to both sides. No mechanical cause found.
 - **Reading:** the screen's +4 points was most likely a lucky draw plus selection. On the 3,199 dev-A games (screen + F1) the evidence for `value` is weak, and F1 alone is consistent with no effect. G2 (dev set B, running) remains the pre-registered gate; `value` is the only candidate and is frozen whatever G2 gives (the sealed run always runs). P(Ending A) should be revised down [J; Coord/judge]. Optional diagnostic (not planned, needs a decision): an argmax or vanilla-vs-vanilla run on the F1 seeds, to check whether those pairings differ.
+
+## 2026-10-27 ≈10:25 UTC: addendum to "F1 final" — screen vs F1 gap, load diagnosis (no mechanical cause found); Ending-A estimate [J]
+Diagnosis only, at Coord's request. No candidate or registered rule changes. Script: an inline parse of every bot log in the chunks; the mean is taken over game-sides.
+
+| Run (chunks) | Treatment MCTS iterations per world per decision | Vanilla iterations per world | Treatment win % (decided games) |
+|---|---|---|---|
+| Screen `value`, all (85) | 1,183,763 | 1,190,616 | 54.1 (1,694) |
+| Screen `value`, chunks c < 20 / c ≥ 20 | 1,183,258 / 1,184,213 | 1,193,565 / 1,187,992 | 52.6 (799) / 55.4 (895) |
+| Screen argmax, all (86) | 1,179,480 | 1,180,912 | 50.1 (1,717) |
+| Screen argmax, c < 20 / c ≥ 20 | 1,185,557 / 1,174,191 | 1,191,972 / 1,171,286 | 49.2 / 50.9 |
+| Screen double-half, all | 647,197 (2× worlds at half time, as designed) | 1,171,642 | 47.8 (659) |
+| Screen student-blend λ 0.15, all | 921,068 | 882,721 | 53.1 (439) |
+| **F1 `value`, all (75)** | **1,185,574** | **1,195,214** | 48.6 (1,496) |
+| F1 `value`, c < 3 / c ≥ 3 | 1,195,218 / 1,171,060 | 1,209,634 / 1,173,512 | 49.9 (899) / 46.6 (597) |
+
+- **Node load / search depth:** under the 2,000 ms C1t1 budget, the screen and F1 searched the same depth on both sides (≈1.18–1.20 M iterations per world; treatment vs vanilla within 1%). There is no sign of CPU contention in either run.
+  - The student-blend jobs ran ≈25% fewer iterations on both sides, and their win rates are excluded anyway.
+  - Double-half's treatment shows 0.65 M per world: twice the worlds at half the time, as designed.
+- **Early vs late chunks:**
+  - Screen `value`: 52.6 → 55.4.
+  - Argmax (same pairings): 49.2 → 50.9.
+  - F1: 49.9 → 46.6.
+  - No common time trend, and nothing that would point to a drift in the harness.
+- **Crash rates** (vanilla crashes counted as treatment wins):
+  - screen `value`: 4 vanilla + 1 treatment per 1,699 games;
+  - screen argmax: 3 vanilla per 1,720;
+  - F1: 4 vanilla per 1,500.
+  - Rates are similar; the effect on the estimates is ≤ 0.3 points.
+- **Code and data:** as in the F1 entry. The `value` code path is unchanged, the team pools are byte-identical, and `run_match.py`/`farm_chunks.sh` are identical.
+- **Conclusion:** no mechanical cause found. The z ≈ −3.5 gap is best read as a lucky screen (selected as the best of ≈ 9 levers) plus noise. That is a 1-in-several-hundred event under pure noise [J], so it stays flagged. The A/As are the harness check.
+- **Ending-A estimate [J]: ≈ 15% (range 5–25%).**
+  - Shrinkage model: the screen is discounted by the expected maximum of ≈ 9 noise draws (≈ 1.7 points); F1 is taken at face value (−1.27 ± 1.11 SE). Prior on true lever effects N(0, τ²) with τ 0.7–1.0. Posterior for `value` ≈ +0.3 ± 0.6 points.
+  - Sealed SE ≈ 0.45, so significance needs an estimate ≥ ≈ +0.9: P ≈ 0.19–0.25.
+  - F1 alone (no credit for the screen) gives ≈ 5%.
+  - G2 (1,000 games on dev B, running) will move this a lot.
