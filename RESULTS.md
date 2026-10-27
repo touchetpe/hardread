@@ -657,3 +657,14 @@ Diagnosis at Coord's request (Ag-Play's report). Method: overlap by file name, b
   - A paired CI vs usage on the enlarged set is not computed yet (one benchmark call with `--ref usage`, as for the primary).
 - **Leak check** (entry ≈10:50 UTC): the `hr_val` test rosters never appear in any training set.
 - The `sa_human` benchmark (held-out human games) was still running at the handover; see PROGRESS.
+
+## 2026-10-27 ≈11:45 UTC: S-A held-out human benchmark (secondary)
+
+- **Status:** Secondary held-out human evidence only; it is not the primary or pre-registered S-A test and was not used for finalist selection.
+- **Population and denominator:** 2026 human games, rating ≥1500, revealed labels only: 15,674 games, 81,008 decisions, 88,087 decision × alive-opponent-Pokémon examples, 3,494 rosters. Item NLL is scored on 22,026 item-labeled rows (ε = 1e-4); 95% CIs use 2,000 game bootstrap resamples.
+- **Usage prior:** item NLL 1.390 [1.370, 1.409] on 22,026 rows.
+- **v1 human pre-train → farm fine-tune:** item NLL 1.175 [1.155, 1.193] on the same rows; paired Δ vs usage −0.216 [−0.224, −0.207].
+- **p-value:** Not computed or reported; the benchmark artifact reports bootstrap CIs.
+- This is separate from the primary 440-game `hr_val` result and the enlarged 1,579-game `hr_val` secondary above; it does not replace either result or alter the frozen `value` finalist.
+- **Provenance:** The local refresh completed at 11:45 UTC (`FETCH=1 bash tools/belief/run_v1.sh`, exit 0; `scratch_ds/belief/logs/run_v1_refresh_20261027.log`). The benchmark uses `scratch_ds/belief/human/human.test1.jsonl.gz`, `scratch_ds/belief/human/h.usage.jsonl.gz`, and `scratch_ds/belief/v1/pred_f1.0_farmhuman_ft_human.jsonl.gz`; the model checkpoint is `scratch_ds/belief/v1/model_f1.0_farmhuman_ft.pt`. The tracked training, prep, and benchmark scripts were last changed in commit `e8465e1c0b997f0559d98fccc1d11655719cb309`. The run log does not record the full Git HEAD at invocation; local scratch data, checkpoint, and prediction artifacts have no Git commit. Their SHA-256 values and the source comparison are saved under `scratch_ds/codex/c2-human/`. No Azure benchmark job was used.
+- **Result sources:** `scratch_ds/belief/results_v1/sa_human.md` and `scratch_ds/belief/results_v1/sa_human.json`. The Markdown and JSON headline values and denominators were mechanically reconciled; raw source excerpt and comparison output are in `scratch_ds/codex/c2-human/`.
