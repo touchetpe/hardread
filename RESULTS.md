@@ -428,3 +428,14 @@ Jobs were submitted by the SFT agent from its uncommitted `azure/sft/*` fixes (t
 - **Games per band** (`rating_band`): <1300 3,738; 1300–1499 3,775; 1500–1699 6,074; 1700–1899 3,766; 1900+ 183; unrated 140.
 - **Stopped early:** the replay host went down at 04:01 UTC (Cloudflare 522 for over an hour). The crawl is checkpointed; resume with `crawl_broad.py run --interval 2`.
 - **Outputs:** `scratch_ds/human_broad/` (tables plus `summary_by_band.*`), `data/replays/gen9ou-broad/raw/` (manifest with per-shard SHA-256).
+
+## 2026-10-27 ≈04:40 UTC: Glimmer v0-ddp resume, full epoch (`hrsft-20261027-v0ddpres-fd53`, 3-node DDP; S1.2)
+- **Run:** resumed from checkpoint-1400; finished the epoch (2,315 steps, 55,556 rows: 50k action + 5.6k reads, weighted loss). All stages ok: train, eval_teacher, convert_lora_gguf, serve_eval. The job did not fail this time; the DDP-exit fix worked.
+- **Teacher-forced, 400 held-out decisions:**
+  - top-1 vs Foul Play **0.470**; top-2 0.66; top-3 0.8075;
+  - top-1 vs search argmax 0.4725;
+  - CE vs search policy 1.688.
+  - For comparison: v0-ddp ckpt-1400 0.440, v0b ckpt-1400 0.430, v0-safe ckpt-700 0.395, base 0.2525.
+- **Served (llama.cpp + LoRA, Q4_K_M base):** 400/400 legal (raw path 0 malformed); agreement 0.4775; p50 / p95 1.41 / 1.49 s.
+- **Adapter:** `azureml://datastores/workspaceblobstore/paths/pokemon-rl-research/hardread/hrsft-20261027-v0ddpres-fd53/adapter-bf16.gguf`, sha256 `4c0989e9191ebd75d37b6526d2e2eb2e63cfbdde995ad15c055a9a4fb6af5435`.
+- **Use:** the adapter for the single G-24h retry (research/28 E1).
