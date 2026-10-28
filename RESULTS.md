@@ -1259,3 +1259,22 @@ Exact job `hrsft-20261028-s1-e2last-fixed400-dcf05ed8` Completed; watcher observ
 Independent analysis ACCEPT SHA `e441f7490574fb91b01b2163d0d500b6bde159bc8952482e754e22c91fe13abe`:400 unique ordered action IDs, registered LF-join digest `dcf05ed82eaf7b487df1741f27c091c581aa65aa1af6869fb1153bd44225c545`, fixed eval SHA `3b0ba8fa2e2db60b9149d4ac03f1ae5bcbcb152745c4fa8fe1bf54fcc5e06276`, evaluator SHA `60abc879…3137`, all14 staged source hashes and4 checkpoint/tokenizer hashes match. Both preflight/eval_teacher stages pass; raw rows independently reproduce summary. Mechanical receipt SHA `f6841f3e0d04a70e8059c66d242020f6575a075b8360e34718e17738dec1a345`; only3 small allowlisted result artifacts(227723bytes) acquired under standing own-job approval.
 
 Teacher-forced top1 and policy-argmax agreement are distinct. Mean legal token-probability mass0.999933358431 is not serving-action legality: generation was disabled(n=0), no serving/arena result follows. Same fixed-v0 hard-token references remain e150.00%,XL655.75%,bold18.25%,historical fullv047.0%. These hard-label numbers are not battle wins or the2428-row validation engine-target agreement. No test-driven reselection.
+
+
+<a id="d1-template-ui-20261028"></a>
+
+## 2026-10-28 15:23:23 UTC — D1 accepted for three selected template UI flows
+
+Independent original D1 §3 readout **ACCEPT**, review SHA256 `9cfbd4b56a46cd8d21a5f0d3510de69cc88602d7efdcda609df0ec097e568b21`. Scope: three selected engineering demonstration flows under CODEX_PROMPT_6 §3 and addendum8 template fallback; not a blind quality rate, unseen-game claim, A1/Agentic ship PASS or repair of the old fixed cohort's 2/3 result. Prospective execution CARD main `c3bb0ac`; reviewed source `7dcfeaa` active in owned local app69204.
+
+All three exact public-log/P2-team/frozen-note paths reach paste → bridge → offered disagreement → note → chips → three-run verdict → Q3 template and clickable source list, with zero selected app crashes. Frozen targets11:0,4:0,5:1 remain unchanged. Verdict settings: seeds11–13,4 worlds,60000iterations,margin0.08. Case01/03 generic expected-switch copy reports only top-three membership and explicitly says aggregate any-switch probability is unavailable; no derived aggregate probability or upper bound. Case05 is confidence-only with no testable opponent read. No counterfactual replay claim.
+
+Evidence manifest SHA256 `039a9549d855eb0f8d88fedf190faefa40bc9756b66c9b6031334445534d2b1c` binds42PNG +42paired metadata at actual375/1366px, zero horizontal overflow. Three exact UI-linked verdict GETs are200 with matching review/target/identity. Independent pure-input normalization reproduces all cached pseudonymized replay.JSON and trimmed-team bytes and receipt hashes; raw public-log and JSON hashes are different domains. All24 clicked Q3 citations use the first offered key,12 numeric citations match direct receipts,0 non-offered citations and0 Q1/Q3 never-say matches.
+
+| Selected case | Offered turn:key | Q3 direct numeric facts (turn / gap points / best WP% / chosen WP%) |
+|---|---|---|
+|case01|11:0|11 /9 /50 /41|
+|case03|4:0|4 /13 /50 /37|
+|case05|5:1|5 /8 /38 /30|
+
+Original case03 step03 full-page screenshots obscure the note first line under fixed navigation; these remain unchanged and cannot alone prove the paste. The accepted camera-only supplement SHA256 `797caa1d9d105226d458463ae101e9874acf073c380be139c6e57809e4991dc6` supplies two readable375/1366frames with exact frozen input, contemporaneous AX/DOM value and note fully below the header. Only scroll/focus/camera followed this literal paste, no parse/model/engine/verdict rerun. The earlier mutable-helper mixed/overwritten image attempts are excluded, with a retained deviation receipt. Old empty-offer failures, fixed synthetic2/3, selected API parser recovery and pre-fix semantic failure remain historical. This is a scoped product demonstration success using templates; original A1 flags/owner checks and new A1v2 are separate.
