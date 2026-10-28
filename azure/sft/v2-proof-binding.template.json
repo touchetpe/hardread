@@ -1,0 +1,16 @@
+{
+  "schema": "hardread.glimmer-v2.consumer-proof/v1",
+  "manifest_sha256": "REVIEWED_CURRENT_MANIFEST_SHA256",
+  "parent_full_manifest_sha256": "REVIEWED_FULL_MANIFEST_SHA256",
+  "parent_train_sha256": "REVIEWED_FULL_TRAIN_SHA256",
+  "source_index_sha256": "REVIEWED_SOURCE_INDEX_SHA256",
+  "spec_sha256": "REVIEWED_SOURCE_SPEC_SHA256",
+  "tokenizer_sha256": "REVIEWED_TOKENIZER_SHA256",
+  "template_sha256": "REVIEWED_TEMPLATE_SHA256",
+  "serializer_sha256": "REVIEWED_SERIALIZER_SOURCE_SHA256",
+  "serializer_version": "REVIEWED_SERIALIZER_VERSION",
+  "val_sha256": "REVIEWED_FROZEN_VALIDATION_SHA256",
+  "eval_sha256": "REVIEWED_FROZEN_EVALUATION_SHA256",
+  "overlap_receipt_sha256": "REVIEWED_ZERO_OVERLAP_RECEIPT_SHA256",
+  "admission_review_sha256": "REVIEWED_INDEPENDENT_ADMISSION_REVIEW_SHA256"
+}

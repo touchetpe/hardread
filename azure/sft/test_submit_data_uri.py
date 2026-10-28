@@ -17,7 +17,7 @@ class SubmitDataTests(unittest.TestCase):
   for name in ('az','python'):
    p=self.bin/name;p.write_text('#!/bin/bash\nprintf "%s\\n" "$*" > "$SYNTHETIC_CALLED"\nexit 0\n');p.chmod(0o755)
   self.env=dict(os.environ,PATH=str(self.bin)+os.pathsep+os.environ['PATH'],DRY_RUN='1',HR_AZ_SUBSCRIPTION='synthetic',HR_AZ_RG='synthetic',HR_AZ_WS='synthetic',HR_AZ_CLUSTER='synthetic',SYNTHETIC_CALLED=str(Path(self.tmp.name)/'called'))
-  for key in ('DATA_URI','CKPT_URI','CKPT_ARG','NODES'):self.env.pop(key,None)
+  for key in ('DATA_URI','CKPT_URI','CKPT_ARG','NODES','V2_PROOF_FILE'):self.env.pop(key,None)
  def tearDown(self):self.tmp.cleanup()
  def stage(self,name,**env):
   return subprocess.run(['bash',str(self.root/'azure/sft/submit_sft.sh'),name,str(self.data),'300','synthetic','--max-steps','1'],cwd=self.root,env=dict(self.env,**env),text=True,capture_output=True)
@@ -44,6 +44,28 @@ class SubmitDataTests(unittest.TestCase):
   for name,line in zip(FILES,pins):self.assertEqual(line,hashlib.sha256((self.data/name).read_bytes()).hexdigest()+'  '+name)
   self.assertEqual(subprocess.run(['shasum','-a','256','-c',str(a/'code-manifest.sha256')],cwd=a/'code',capture_output=True).returncode,0)
   self.assertFalse(Path(self.env['SYNTHETIC_CALLED']).exists())
+ def test_v2_proof_is_staged_and_pinned_without_dataset_bytes(self):
+  proof=Path(self.tmp.name)/'proof.json';proof.write_text('{"schema":"synthetic"}')
+  (self.root/'azure/sft/validate_v2_data.py').write_text('import sys\nassert "--data" in sys.argv and "--proof" in sys.argv and "--serializer" in sys.argv\nprint("synthetic")\n')
+  r=self.stage('hrsft-v2-proof',DATA_URI=URI,V2_PROOF_FILE=str(proof));self.assertEqual(r.returncode,0,r.stderr)
+  a=self.root/'azure/attempts/hrsft-v2-proof';job=yaml.safe_load((a/'job.yml').read_text())
+  proof_sha=hashlib.sha256(proof.read_bytes()).hexdigest()
+  self.assertIn('--proof-binding v2-proof.json --proof-binding-sha256 '+proof_sha,job['command'])
+  self.assertEqual((a/'code/v2-proof.json').read_bytes(),proof.read_bytes());self.assertFalse((a/'code/data').exists())
+  for f in (a/'code').rglob('*'):
+   if f.is_file():
+    for name in FILES:self.assertNotIn((self.data/name).read_bytes(),f.read_bytes())
+  self.assertEqual(job['inputs']['sft_data']['mode'],'ro_mount')
+  self.assertEqual(subprocess.run(['shasum','-a','256','-c',str(a/'code-manifest.sha256')],cwd=a/'code',capture_output=True).returncode,0)
+  self.assertFalse(Path(self.env['SYNTHETIC_CALLED']).exists())
+ def test_failed_v2_readback_prevents_staging(self):
+  proof=Path(self.tmp.name)/'proof.json';proof.write_text('{"schema":"synthetic"}')
+  (self.root/'azure/sft/validate_v2_data.py').write_text('raise SystemExit(2)\n')
+  r=self.stage('hrsft-v2-rejected',DATA_URI=URI,V2_PROOF_FILE=str(proof))
+  self.assertNotEqual(r.returncode,0);self.assertFalse((self.root/'azure/attempts/hrsft-v2-rejected').exists())
+ def test_direct_proof_override_rejected(self):
+  r=subprocess.run(['bash',str(self.root/'azure/sft/submit_sft.sh'),'hrsft-override',str(self.data),'300','synthetic','--proof-binding','override'],cwd=self.root,env=self.env,text=True,capture_output=True)
+  self.assertNotEqual(r.returncode,0);self.assertFalse((self.root/'azure/attempts/hrsft-override').exists())
  def test_mount_resume_and_twelve_node_yaml_are_preserved(self):
   r=self.stage('hrsft-mount-resume',DATA_URI=URI,CKPT_URI='azureml://synthetic/checkpoint/',CKPT_ARG='--resume-from',NODES='12');self.assertEqual(r.returncode,0,r.stderr)
   job=yaml.safe_load((self.root/'azure/attempts/hrsft-mount-resume/job.yml').read_text())

@@ -31,6 +31,9 @@ Stages (each timed, logged under --out, failures recorded and later optional sta
 from __future__ import annotations
 
 import argparse
+import ast
+import gzip
+import re
 import hashlib
 import json
 import os
@@ -114,6 +117,136 @@ def sha256(p: Path) -> str:
     return h.hexdigest()
 
 
+# Frozen source build val/eval bytes, independently reproduced before publication.
+V2_FROZEN = {
+    'val.jsonl.gz': 'aed05c91f3140fbffb4b37b429baa4d456a8ba75e0da85888c4c0c3081cb384e',
+    'eval.jsonl.gz': '7ea29968fe36c61bd7283f8f72b770a5eeb0074d4829f04cd2fa2550160abb10',
+}
+V2_FULL = 'hardread.glimmer-v2.train-manifest/v1'
+V2_SMOKE = 'hardread.glimmer-v2.smoke-manifest/v1'
+V2_PROOF = 'hardread.glimmer-v2.consumer-proof/v1'
+V2_DOMAINS = {'canonical_game','team_name','roster_digest','decision_id','example_id',
+              'p5_nonzero_process_rc','p5_incomplete_game'}
+DATA_FILES = ('train.jsonl.gz','val.jsonl.gz','eval.jsonl.gz')
+
+def strict_json(raw):
+    def object_pairs(pairs):
+        result={}
+        for key,value in pairs:
+            if key in result: raise ValueError('duplicate JSON key')
+            result[key]=value
+        return result
+    def invalid_constant(value): raise ValueError('nonfinite JSON number')
+    return json.loads(raw,object_pairs_hook=object_pairs,parse_constant=invalid_constant)
+
+def _hex64(value):
+    return isinstance(value,str) and re.fullmatch(r'[0-9a-f]{64}',value) is not None
+
+def _natural(value, *, positive=False):
+    return type(value) is int and value >= (1 if positive else 0)
+
+def _serializer_version(path):
+    """Read the literal version only after the source file's hash has matched."""
+    tree=ast.parse(Path(path).read_text(encoding='utf-8'))
+    values=[]
+    for node in tree.body:
+        if isinstance(node,ast.Assign) and any(isinstance(t,ast.Name) and t.id=='SERIALIZER_VERSION' for t in node.targets):
+            values.append(ast.literal_eval(node.value))
+    if len(values)!=1 or not isinstance(values[0],str) or not values[0]:
+        raise ValueError('serializer version declaration differs')
+    return values[0]
+
+def scan_v2_train(path, expected):
+    """Bounded streaming readback of IDs and task counts; no prompts in receipt."""
+    counts={'action':0,'reads':0}; seen=set(); order=hashlib.sha256()
+    with gzip.open(path,'rb') as stream:
+        for line in stream:
+            if len(line)>8*1024*1024 or len(seen)>=expected:
+                raise ValueError('train rows exceed bound')
+            try: row=strict_json(line)
+            except (ValueError,UnicodeError) as e: raise ValueError('train row malformed') from e
+            if not isinstance(row,dict): raise ValueError('train row malformed')
+            uid=row.get('example_id');task=row.get('task')
+            if not isinstance(uid,str) or not uid or '\n' in uid or '\r' in uid or uid in seen or task not in counts or not uid.endswith('/'+task):
+                raise ValueError('train identity or task differs')
+            seen.add(uid); counts[task]+=1;order.update(uid.encode('utf-8')+b'\n')
+    if len(seen)!=expected: raise ValueError('train count differs')
+    return counts,order.hexdigest()
+
+def validate_sft_manifest(man, data_dir, gc, proof=None, *, serializer_path=None, frozen=V2_FROZEN):
+    """Validate only explicitly recognized schemas; v2 requires reviewed proof."""
+    if not isinstance(man,dict): raise ValueError('manifest must be an object')
+    schema=man.get('schema')
+    if schema=='hardread-sft-data/v1':
+        if man['tokenizer_sha256']!=gc.tokenizer_sha256 or man['chat_template_sha256']!=gc.template_sha256:
+            raise ValueError('legacy tokenizer/template differs')
+        return {'data_counts':man['counts'],'serializer_version':man['serializer_version']}
+    if schema not in (V2_FULL,V2_SMOKE): raise ValueError('unrecognized manifest schema')
+    # Conflicting legacy aliases cannot be used to shadow the actual v2 pins.
+    if 'chat_template_sha256' in man or 'serializer_version' in man: raise ValueError('ambiguous legacy alias')
+    required={'schema','manifest_sha256','parent_full_manifest_sha256','parent_train_sha256',
+              'source_index_sha256','spec_sha256','tokenizer_sha256','template_sha256','serializer_sha256','serializer_version',
+              'val_sha256','eval_sha256','overlap_receipt_sha256','admission_review_sha256'}
+    if schema==V2_SMOKE: required.add('smoke_ordered_ids_sha256')
+    if not isinstance(proof,dict) or set(proof)!=required or proof.get('schema')!=V2_PROOF:
+        raise ValueError('reviewed v2 proof missing or malformed')
+    for key in required-{'schema','serializer_version'}:
+        if not _hex64(proof[key]): raise ValueError('invalid reviewed proof hash')
+    if not isinstance(proof['serializer_version'],str) or not proof['serializer_version']:
+        raise ValueError('serializer proof missing')
+    if serializer_path is None or Path(serializer_path).is_symlink() or sha256(Path(serializer_path))!=proof['serializer_sha256'] or _serializer_version(serializer_path)!=proof['serializer_version']:
+        raise ValueError('serializer code provenance differs')
+    data_dir=Path(data_dir);manifest_path=data_dir/'manifest.json'
+    if manifest_path.is_symlink() or not manifest_path.is_file() or sha256(manifest_path)!=proof['manifest_sha256'] or strict_json(manifest_path.read_bytes())!=man:
+        raise ValueError('manifest bytes differ from reviewed proof')
+    for name in ('tokenizer_sha256','template_sha256','source_index_sha256','spec_sha256'):
+        if not _hex64(man.get(name)): raise ValueError('manifest source pin malformed')
+    if man['tokenizer_sha256']!=proof['tokenizer_sha256'] or man['template_sha256']!=proof['template_sha256'] or man['tokenizer_sha256']!=gc.tokenizer_sha256 or man['template_sha256']!=gc.template_sha256:
+        raise ValueError('v2 tokenizer/template differs')
+    if man['source_index_sha256']!=proof['source_index_sha256'] or man['spec_sha256']!=proof['spec_sha256']:
+        raise ValueError('v2 source index or specification differs')
+    population_keys=('train_games','train_rosters') if schema==V2_FULL else ('parent_train_games','parent_train_rosters')
+    if any(not _natural(man.get(k),positive=True) for k in population_keys):
+        raise ValueError('v2 parent game/roster counts differ')
+    if schema==V2_SMOKE and ('train_games' in man or 'train_rosters' in man):
+        raise ValueError('smoke must not claim full-population counts as subset counts')
+    counts=man.get('counts')
+    if not isinstance(counts,dict) or any(not _natural(counts.get(k)) for k in ('action_post_tokenization','reads_post_tokenization')):
+        raise ValueError('v2 task counts malformed')
+    if any(k in counts for k in ('train_rows','train_by_task')): raise ValueError('ambiguous legacy count aliases')
+    total=counts['action_post_tokenization']+counts['reads_post_tokenization']
+    if total<=0 or (schema==V2_SMOKE and total!=2000): raise ValueError('v2 row count differs')
+    overlap=man.get('overlap_counts')
+    if not isinstance(overlap,dict) or set(overlap)!=V2_DOMAINS or any(type(v) is not int or v!=0 for v in overlap.values()):
+        raise ValueError('v2 overlap proof differs')
+    files=man.get('files')
+    if not isinstance(files,dict) or set(files)!=set(DATA_FILES): raise ValueError('v2 file inventory differs')
+    if set(frozen)!=set(V2_FROZEN) or any(not _hex64(v) for v in frozen.values()): raise ValueError('frozen file pins missing')
+    for name in DATA_FILES:
+        entry=files[name];path=data_dir/name
+        if not isinstance(entry,dict) or set(entry)!={'sha256','bytes'} or not _hex64(entry['sha256']) or not _natural(entry['bytes'],positive=True):
+            raise ValueError('v2 file descriptor malformed')
+        if path.is_symlink() or not path.is_file() or path.stat().st_size!=entry['bytes'] or sha256(path)!=entry['sha256']:
+            raise ValueError('mounted data differs from manifest')
+        if name in frozen and (entry['sha256']!=frozen[name] or entry['sha256']!=proof['val_sha256' if name=='val.jsonl.gz' else 'eval_sha256']):
+            raise ValueError('frozen evaluation bytes differ')
+    if schema==V2_FULL:
+        if proof['parent_full_manifest_sha256']!=proof['manifest_sha256'] or proof['parent_train_sha256']!=files['train.jsonl.gz']['sha256']:
+            raise ValueError('full parent lineage differs')
+    else:
+        for key in ('parent_full_manifest_sha256','parent_train_sha256','overlap_receipt_sha256','smoke_ordered_ids_sha256'):
+            if man.get(key)!=proof[key]: raise ValueError('smoke lineage differs')
+    actual,ordered=scan_v2_train(data_dir/'train.jsonl.gz',total)
+    if actual!={'action':counts['action_post_tokenization'],'reads':counts['reads_post_tokenization']}:
+        raise ValueError('mounted task counts differ')
+    if schema==V2_SMOKE and ordered!=proof['smoke_ordered_ids_sha256']:
+        raise ValueError('smoke ordered IDs differ')
+    # Detect replacement during the streaming readback.
+    if sha256(data_dir/'train.jsonl.gz')!=files['train.jsonl.gz']['sha256'] or sha256(manifest_path)!=proof['manifest_sha256']:
+        raise ValueError('v2 input changed during validation')
+    return {'data_counts':counts,'serializer_version':proof['serializer_version'],
+            'serializer_source_sha256':proof['serializer_sha256'],'manifest_schema':schema}
+
 # ----------------------------------------------------------------------------- stages
 
 @stage("preflight")
@@ -121,9 +254,14 @@ def preflight(args):
     sys.path.insert(0, str(TOOLS))
     from glimmer_chat import GlimmerChat
     gc = GlimmerChat(args.snapshot)  # raises unless tokenizer/template match the pinned revision
-    man = json.loads((Path(args.data) / "manifest.json").read_text())
-    if man["tokenizer_sha256"] != gc.tokenizer_sha256 or man["chat_template_sha256"] != gc.template_sha256:
-        raise RuntimeError("data was tokenized with a different tokenizer/template than the snapshot's")
+    man = strict_json((Path(args.data) / "manifest.json").read_text())
+    proof=None
+    if args.proof_binding or args.proof_binding_sha256:
+        if not args.proof_binding or Path(args.proof_binding).is_symlink() or not _hex64(args.proof_binding_sha256) or sha256(Path(args.proof_binding))!=args.proof_binding_sha256:
+            raise ValueError('proof binding bytes differ')
+        proof=strict_json(Path(args.proof_binding).read_text())
+        if sha256(Path(args.proof_binding))!=args.proof_binding_sha256: raise ValueError('proof binding changed during read')
+    verified=validate_sft_manifest(man,args.data,gc,proof,serializer_path=TOOLS/'serialize.py')
     try:
         smi = subprocess.run(["nvidia-smi", "--query-gpu=name,memory.total,driver_version", "--format=csv,noheader"],
                              capture_output=True, text=True).stdout.strip()
@@ -136,8 +274,7 @@ def preflight(args):
             vers[m] = __import__(m).__version__
         except Exception as e:  # noqa: BLE001
             vers[m] = f"unavailable: {e}"
-    return {"gpu": smi, "disk": du, "versions": vers, "data_counts": man["counts"],
-            "serializer_version": man["serializer_version"]}
+    return {"gpu": smi, "disk": du, "versions": vers, **verified}
 
 
 def prefetch(work: Path, shm: Path, res: dict):
@@ -422,6 +559,8 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--snapshot", required=True)
     ap.add_argument("--data", required=True)
+    ap.add_argument("--proof-binding", default=None)
+    ap.add_argument("--proof-binding-sha256", default=None)
     ap.add_argument("--out", required=True)
     ap.add_argument("--max-steps", type=int, default=None)
     ap.add_argument("--epochs", type=int, default=None)

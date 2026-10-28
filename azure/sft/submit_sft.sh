@@ -12,6 +12,9 @@
 #   run_sft.py always receives --job-timeout <timeout_s> so its training budget fits inside the job.
 set -euo pipefail
 NAME="$1"; DATA="$2"; TIMEOUT="$3"; DESC="$4"; shift 4
+for arg in "$@"; do
+  [[ "$arg" != --proof-binding && "$arg" != --proof-binding=* && "$arg" != --proof-binding-sha256 && "$arg" != --proof-binding-sha256=* ]] || { echo "use V2_PROOF_FILE to stage the reviewed proof" >&2; exit 2; }
+done
 NODES="${NODES:-1}"
 [[ "$NAME" == hrsft-* ]] || { echo "job name must start with hrsft-"; exit 2; }
 MAX_TIMEOUT="${MAX_TIMEOUT:-10800}"  # raise explicitly (e.g. MAX_TIMEOUT=21600) for v0 runs
@@ -36,17 +39,46 @@ if [[ ${DATA_URI+x} ]]; then
 fi
 ENV_ID=/subscriptions/${HR_AZ_SUBSCRIPTION}/resourceGroups/$RG/providers/Microsoft.MachineLearningServices/workspaces/$WS/environments/pokemon-h100-axolotl-cuda13-training/versions/20261026-9f7aa9a5704c
 SNAP=azureml://datastores/workspaceblobstore/paths/pokemon-rl-research/h100/model-snapshots/acquire-20261026-01/
+if [[ ${V2_PROOF_FILE+x} ]]; then
+  [[ -f "$V2_PROOF_FILE" && ! -L "$V2_PROOF_FILE" ]] || { echo "v2 proof file missing or symlink" >&2; exit 2; }
+  V2_PRE_PROOF_SHA="$(shasum -a 256 "$V2_PROOF_FILE" | awk '{print $1}')"
+  V2_PRE_RUNNER_SHA="$(shasum -a 256 "$HERE/run_sft.py" | awk '{print $1}')"
+  V2_PRE_VALIDATOR_SHA="$(shasum -a 256 "$HERE/validate_v2_data.py" | awk '{print $1}')"
+  V2_PRE_SERIALIZER_SHA="$(shasum -a 256 "$HR/tools/sft/serialize.py" | awk '{print $1}')"
+  V2_PRE_FILES="$(cd "$DATA" && shasum -a 256 train.jsonl.gz val.jsonl.gz eval.jsonl.gz manifest.json)"
+  V2_VALIDATION="$(python3 "$HERE/validate_v2_data.py" --data "$DATA" --proof "$V2_PROOF_FILE" --serializer "$HR/tools/sft/serialize.py")"
+  [[ "$(shasum -a 256 "$V2_PROOF_FILE" | awk '{print $1}')" == "$V2_PRE_PROOF_SHA" ]] || { echo "v2 proof changed during validation" >&2; exit 2; }
+  [[ "$(cd "$DATA" && shasum -a 256 train.jsonl.gz val.jsonl.gz eval.jsonl.gz manifest.json)" == "$V2_PRE_FILES" ]] || { echo "v2 data changed during validation" >&2; exit 2; }
+fi
 A="$AZ/attempts/$NAME"
 [ -e "$A" ] && { echo "attempt dir exists: $A"; exit 2; }
 mkdir -p "$A/code/azure/sft" "$A/code/tools/sft"
 cp "$HERE"/{run_sft.py,eval_sft.py,sft_plugin.py,qlora_sft.yaml} "$A/code/azure/sft/"
 cp "$HR/tools/sft"/{serialize.py,glimmer_chat.py,build_sft.py,dex.json} "$A/code/tools/sft/"
+PROOF_CMD=""
+if [[ ${V2_PROOF_FILE+x} ]]; then
+  [[ -f "$V2_PROOF_FILE" && ! -L "$V2_PROOF_FILE" ]] || { echo "v2 proof file missing or symlink" >&2; exit 2; }
+  cp "$V2_PROOF_FILE" "$A/code/v2-proof.json"
+  cp "$HERE/validate_v2_data.py" "$A/code/azure/sft/validate_v2_data.py"
+  PROOF_SHA="$(shasum -a 256 "$A/code/v2-proof.json" | awk '{print $1}')"
+  [[ "$PROOF_SHA" == "$V2_PRE_PROOF_SHA" ]] || { echo "staged v2 proof differs" >&2; exit 2; }
+  [[ "$(shasum -a 256 "$A/code/azure/sft/run_sft.py" | awk '{print $1}')" == "$V2_PRE_RUNNER_SHA" && "$(shasum -a 256 "$A/code/azure/sft/validate_v2_data.py" | awk '{print $1}')" == "$V2_PRE_VALIDATOR_SHA" && "$(shasum -a 256 "$A/code/tools/sft/serialize.py" | awk '{print $1}')" == "$V2_PRE_SERIALIZER_SHA" ]] || { echo "v2 code changed during staging" >&2; exit 2; }
+  printf '%s\n' "$V2_VALIDATION" > "$A/v2-validation.json"
+  PROOF_CMD="--proof-binding v2-proof.json --proof-binding-sha256 $PROOF_SHA"
+fi
 if [[ ${DATA_URI+x} ]]; then
   cp "$HERE/verify_sft_data.sh" "$A/code/azure/sft/"
   (cd "$DATA" && shasum -a 256 train.jsonl.gz val.jsonl.gz eval.jsonl.gz manifest.json) > "$A/code/data.sha256"
 else
   mkdir -p "$A/code/data"
   cp "$DATA"/{train.jsonl.gz,val.jsonl.gz,eval.jsonl.gz,manifest.json} "$A/code/data/"
+fi
+if [[ ${V2_PROOF_FILE+x} ]]; then
+  if [[ ${DATA_URI+x} ]]; then
+    [[ "$(cat "$A/code/data.sha256")" == "$V2_PRE_FILES" ]] || { echo "v2 staged data pins differ" >&2; exit 2; }
+  else
+    [[ "$(cd "$A/code/data" && shasum -a 256 train.jsonl.gz val.jsonl.gz eval.jsonl.gz manifest.json)" == "$V2_PRE_FILES" ]] || { echo "v2 copied data differs" >&2; exit 2; }
+  fi
 fi
 (cd "$HR" && git rev-parse HEAD > "$A/code/HARDREAD_COMMIT" 2>/dev/null || true)
 (cd "$A/code" && find . -type f | sort | xargs shasum -a 256 > "$A/code-manifest.sha256")
@@ -70,7 +102,7 @@ display_name: $NAME
 experiment_name: hardread-sft
 description: "$DESC"
 code: "$A/code"
-command: $RUNNER --snapshot \${{inputs.model_snapshot}} $DATA_CMD --out \${{outputs.artifacts}} --job-timeout $TIMEOUT $CKPT_CMD $*
+command: $RUNNER --snapshot \${{inputs.model_snapshot}} $DATA_CMD --out \${{outputs.artifacts}} --job-timeout $TIMEOUT $CKPT_CMD $PROOF_CMD $*
 compute: azureml:${HR_AZ_CLUSTER}
 environment: azureml:$ENV_ID
 environment_variables:
