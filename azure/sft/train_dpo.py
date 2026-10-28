@@ -141,35 +141,66 @@ def load_xl6(base_path, adapter_path, *, trainable, device):
             p.requires_grad_(False)
     return model
 
-def score_arm(model, arm, device):
-    import torch
-    if not isinstance(arm, dict) or set(arm) != {'input_ids', 'labels'}:
-        raise DPOError('invalid arm')
-    ids=arm['input_ids']; labels=arm['labels']
-    if not isinstance(ids,list) or not isinstance(labels,list) or len(ids)!=len(labels) or not 1 < len(ids) <= 2048:
-        raise DPOError('invalid arm tokens')
-    inputs=torch.tensor([ids],dtype=torch.long,device=device)
-    targets=torch.tensor([labels],dtype=torch.long,device=device)
-    return response_logps(model(input_ids=inputs, attention_mask=torch.ones_like(inputs), use_cache=False).logits, targets)[0]
+def _vocab_size(model):
+    # DDP is inspected for configuration only; all forwards use the supplied wrapper.
+    owner=getattr(model,'module',model);config=getattr(owner,'config',None)
+    text=getattr(config,'text_config',None)
+    vocab=getattr(text,'vocab_size',None) if text is not None else getattr(config,'vocab_size',None)
+    if type(vocab) is not int or vocab<=0:raise DPOError('model vocabulary unavailable')
+    return vocab
 
-def score_pair(model, pair, device, pad_id):
-    """Use one DDP forward for both arms, with attention and response masks."""
+def _pair_tensors(pair,device,pad_id):
     import torch
     arms=[pair.get('chosen'),pair.get('rejected')]
-    if any(not isinstance(x,dict) or set(x)!={'input_ids','labels'} for x in arms):
-        raise DPOError('invalid pair arms')
+    if any(not isinstance(x,dict) or set(x)!={'input_ids','labels'} for x in arms):raise DPOError('invalid pair arms')
+    if any(not isinstance(a['input_ids'],list) or not isinstance(a['labels'],list) for a in arms):raise DPOError('invalid pair tokens')
+    if type(pad_id) is not int or pad_id<0 or any(any(type(v) is not int or v<0 for v in a['input_ids']) or any(type(v) is not int for v in a['labels']) for a in arms):raise DPOError('invalid pair token types')
     lengths=[len(a['input_ids']) for a in arms]
-    if any(not 1 < n <= 2048 or len(a['labels']) != n for a,n in zip(arms,lengths)):
-        raise DPOError('invalid pair tokens')
-    width=max(lengths); ids=[]; labels=[]; masks=[]
+    if any(not 1<n<=2048 or len(a['labels'])!=n for a,n in zip(arms,lengths)):raise DPOError('invalid pair tokens')
+    width=max(lengths);ids=[];labels=[];masks=[]
     for arm,n in zip(arms,lengths):
-        ids.append(arm['input_ids']+[pad_id]*(width-n))
-        labels.append(arm['labels']+[-100]*(width-n))
-        masks.append([1]*n+[0]*(width-n))
-    ids=torch.tensor(ids,dtype=torch.long,device=device)
-    labels=torch.tensor(labels,dtype=torch.long,device=device)
-    mask=torch.tensor(masks,dtype=torch.long,device=device)
-    scores=response_logps(model(input_ids=ids,attention_mask=mask,use_cache=False).logits,labels)
+        ids.append(arm['input_ids']+[pad_id]*(width-n));labels.append(arm['labels']+[-100]*(width-n));masks.append([1]*n+[0]*(width-n))
+    return (torch.tensor(ids,dtype=torch.long,device=device),torch.tensor(labels,dtype=torch.long,device=device),torch.tensor(masks,dtype=torch.long,device=device))
+
+def _response_positions(labels,vocab):
+    import torch
+    if labels.ndim!=2 or labels.shape[1]<2:raise DPOError('invalid label shape')
+    if bool(labels[:,0].ne(-100).any()):raise DPOError('first token cannot be supervised')
+    target=labels[:,1:];mask=target.ne(-100)
+    if not bool(mask.any(dim=1).all()):raise DPOError('empty response')
+    if bool(((target<0)&mask).any()) or bool((target[mask]>=vocab).any()):raise DPOError('invalid response token')
+    return mask.any(dim=0).nonzero(as_tuple=False).flatten()
+
+def _selected_response_logps(model,ids,labels,attention):
+    import torch
+    vocab=_vocab_size(model);positions=_response_positions(labels,vocab)
+    # Unsupported keywords and internal model failures propagate unchanged; no fallback.
+    out=model(input_ids=ids,attention_mask=attention,use_cache=False,logits_to_keep=positions)
+    logits=getattr(out,'logits',None)
+    if not isinstance(logits,torch.Tensor) or logits.ndim!=3 or tuple(logits.shape)!=(ids.shape[0],positions.numel(),vocab) or logits.device!=ids.device or not logits.is_floating_point():raise DPOError('native indexed logits output differs')
+    target=labels[:,positions+1];mask=target.ne(-100);safe=target.masked_fill(~mask,0)
+    vals=torch.log_softmax(logits.float(),dim=-1).gather(-1,safe.unsqueeze(-1)).squeeze(-1)
+    return (vals*mask).sum(dim=-1)
+
+def score_arm(model,arm,device):
+    import torch
+    if not isinstance(arm,dict) or set(arm)!={'input_ids','labels'} or not isinstance(arm['input_ids'],list) or not isinstance(arm['labels'],list) or len(arm['input_ids'])!=len(arm['labels']) or not 1<len(arm['input_ids'])<=2048:raise DPOError('invalid arm tokens')
+    ids=torch.tensor([arm['input_ids']],dtype=torch.long,device=device);labels=torch.tensor([arm['labels']],dtype=torch.long,device=device)
+    return _selected_response_logps(model,ids,labels,torch.ones_like(ids))[0]
+
+def score_pair(model,pair,device,pad_id):
+    """One wrapper forward, retaining only unioned response-predicting positions."""
+    ids,labels,attention=_pair_tensors(pair,device,pad_id)
+    scores=_selected_response_logps(model,ids,labels,attention)
+    return scores[0],scores[1]
+
+def _score_pair_dense_oracle(model,pair,device,pad_id):
+    """Full-vocabulary, all-position oracle; never used by the training path."""
+    ids,labels,attention=_pair_tensors(pair,device,pad_id)
+    vocab=_vocab_size(model);_response_positions(labels,vocab)
+    logits=model(input_ids=ids,attention_mask=attention,use_cache=False).logits
+    if logits.ndim!=3 or tuple(logits.shape)!=(2,ids.shape[1],vocab) or logits.device!=ids.device or not logits.is_floating_point():raise DPOError('dense oracle output differs')
+    scores=response_logps(logits,labels)
     return scores[0],scores[1]
 
 def reference_partition(model, pairs, rank, device, pad_id=0):

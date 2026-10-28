@@ -104,6 +104,55 @@ def capture_runtime_receipt(output,cfg,config_sha,binding):
     return receipt,digest
 
 
+def response_parity_probe(policy,pairs,reference,device,pad_id,check):
+    """Pre-update dense/selected parity, with temporary AdamW state, no tensor output."""
+    import torch
+    import gc
+    named=[(n,p) for n,p in policy.named_parameters() if p.requires_grad]
+    if not named or any('lora_' not in n for n,_ in named):raise T.DPOError('parity trainable inventory differs')
+    params=[p for _,p in named];base=[p.detach().cpu().clone() for p in params]
+    original=T.trainable_fingerprint(policy);started=time.monotonic();results=[]
+    def restore():
+        with torch.no_grad():
+            for p,v in zip(params,base):p.copy_(v.to(device=p.device,dtype=p.dtype))
+        for p in params:p.grad=None
+    try:
+        for pair in pairs:
+            check();records=[]
+            for scorer in (T._score_pair_dense_oracle,T.score_pair):
+                check();restore();opt=torch.optim.AdamW(params,lr=T.LEARNING_RATE)
+                ch,rj=scorer(policy,pair,device,pad_id);ref=reference[pair['pair_id']]
+                loss=T.dpo_loss(ch,rj,torch.tensor(ref['chosen'],device=device),torch.tensor(ref['rejected'],device=device))
+                if not all(bool(torch.isfinite(x)) for x in (ch,rj,loss)):raise T.DPOError('parity score nonfinite')
+                loss.backward()
+                if any(p.grad is None or not bool(torch.isfinite(p.grad).all()) for p in params):raise T.DPOError('parity gradient inventory invalid')
+                grads=[p.grad.detach().float().cpu().clone() for p in params]
+                if not any(bool(torch.count_nonzero(g)) for g in grads):raise T.DPOError('parity gradient zero')
+                check();opt.step();updated=[p.detach().float().cpu().clone() for p in params]
+                records.append(([float(ch.detach().cpu()),float(rj.detach().cpu())],float(loss.detach().cpu()),grads,updated))
+                del opt,ch,rj,loss;gc.collect()
+            dense,selected=records
+            lpd=max(abs(x-y) for x,y in zip(dense[0],selected[0]));ld=abs(dense[1]-selected[1])
+            ga=torch.cat([x.reshape(-1).double() for x in dense[2]]);gb=torch.cat([x.reshape(-1).double() for x in selected[2]])
+            na=float(torch.linalg.vector_norm(ga));nb=float(torch.linalg.vector_norm(gb))
+            if not na or not nb:raise T.DPOError('parity gradient norm zero')
+            cosine=float(torch.dot(ga,gb)/(na*nb));rel=float(torch.linalg.vector_norm(ga-gb)/na)
+            da=torch.cat([(x-y.float()).reshape(-1).double() for x,y in zip(dense[3],base)])
+            db=torch.cat([(x-y.float()).reshape(-1).double() for x,y in zip(selected[3],base)])
+            delta_norm=float(torch.linalg.vector_norm(da))
+            if not delta_norm:raise T.DPOError('parity optimizer update zero')
+            step_rel=float(torch.linalg.vector_norm(da-db)/delta_norm)
+            if not all(math.isfinite(x) for x in (lpd,ld,cosine,rel,step_rel)) or lpd>0.01 or ld>0.001 or cosine<0.9999 or rel>0.01 or step_rel>0.01:raise T.DPOError('dense/selected parity differs')
+            ids,labels,_=T._pair_tensors(pair,device,pad_id);pos=T._response_positions(labels,T._vocab_size(policy))
+            results.append({'pair_id_sha256':hashlib.sha256(pair['pair_id'].encode()).hexdigest(),'full_positions':ids.shape[1],'selected_positions':pos.numel(),'arm_logp_max_abs_error':lpd,'loss_abs_error':ld,'gradient_cosine':cosine,'gradient_relative_l2_error':rel,'adamw_update_relative_l2_error':step_rel})
+            del records,ga,gb,da,db
+        restore()
+        if T.trainable_fingerprint(policy)!=original:raise T.DPOError('parity restoration differs')
+        return {'status':'passed','native_indexed_logits':True,'parameter_inventory_sha256':T.fingerprint([n for n,_ in named]),'samples':results,'elapsed_seconds':time.monotonic()-started}
+    finally:
+        restore()
+
+
 def run(args):
     if not args.execute or __import__('os').environ.get('HARDREAD_DPO_QUALIFY')!='1':raise T.DPOError('qualification disabled pending explicit admission')
     import gc
@@ -151,6 +200,10 @@ def run(args):
     params=[p for p in policy.parameters() if p.requires_grad]
     if not params or any('lora_' not in name for name,p in policy.named_parameters() if p.requires_grad):raise T.DPOError('unexpected trainable parameters')
     optimizer=torch.optim.AdamW(params,lr=T.LEARNING_RATE);policy.train();T.disable_dropout(policy)
+    length=lambda p:(len(p['chosen']['input_ids'])+len(p['rejected']['input_ids']),p['pair_id'])
+    shortest=min(shard,key=length);longest=max(shard,key=length)
+    parity=response_parity_probe(policy,[shortest,longest],cached,0,cfg['pad_id'],check)
+    check()
     def backward(pair,scale):
         check();t=time.monotonic();ch,rj=T.score_pair(policy,pair,0,cfg['pad_id']);v=cached[pair['pair_id']]
         loss=T.dpo_loss(ch,rj,torch.tensor(v['chosen'],device=0),torch.tensor(v['rejected'],device=0))
@@ -179,7 +232,7 @@ def run(args):
         if time.monotonic()+max(30.0,step_seconds)>=deadline:break
         backward(pair,1.0);optimizer.zero_grad(set_to_none=True)
     check();peaks={'peak_allocated_bytes':max(global_alloc,int(torch.cuda.max_memory_allocated(0))),'peak_reserved_bytes':max(global_reserved,int(torch.cuda.max_memory_reserved(0)))}
-    report={'schema':'hardread.dpo.single-h100-observation/v1','status':'observed','qualification_scope':'single_h100','binding':binding,'config_sha256':args.config_sha256,'approval_sha256':args.approval_sha256,'pair_count':len(pairs),'sample_ids_sha256':T.fingerprint(ids),'sample_ids':ids,'histogram':hist,'reference_longest_pair_peak':longest_peak,'policy_coverage':coverage,'longest_policy_pair_peak':next(x for x in coverage if x['pair_id']==longest_id),'reference_cache_sha256':cache_sha,'reference_load_seconds':ref_load,'policy_load_seconds':policy_load,'optimizer_step_seconds':step_seconds,'per_bucket_seconds':times,'device_name':torch.cuda.get_device_name(0),'device_free_before_bytes':int(free),'device_total_bytes':int(total),**peaks,'gradient_update_completed':True,'elapsed_seconds':time.monotonic()-started,'python':platform.python_version(),'versions':runtime['versions'],'runtime_inventory_sha256':runtime_sha}
+    report={'schema':'hardread.dpo.single-h100-observation/v1','status':'observed','qualification_scope':'single_h100','binding':binding,'config_sha256':args.config_sha256,'approval_sha256':args.approval_sha256,'pair_count':len(pairs),'sample_ids_sha256':T.fingerprint(ids),'sample_ids':ids,'histogram':hist,'reference_longest_pair_peak':longest_peak,'policy_coverage':coverage,'longest_policy_pair_peak':next(x for x in coverage if x['pair_id']==longest_id),'reference_cache_sha256':cache_sha,'reference_load_seconds':ref_load,'policy_load_seconds':policy_load,'optimizer_step_seconds':step_seconds,'per_bucket_seconds':times,'device_name':torch.cuda.get_device_name(0),'device_free_before_bytes':int(free),'device_total_bytes':int(total),**peaks,'gradient_update_completed':True,'elapsed_seconds':time.monotonic()-started,'python':platform.python_version(),'versions':runtime['versions'],'runtime_inventory_sha256':runtime_sha,'response_position_parity':parity}
     if report['elapsed_seconds']>cfg['max_seconds']:raise T.DPOError('qualification deadline exceeded')
     T.exclusive_bytes(output/'observation.json',T.canonical(report)+b'\n')
     del policy,optimizer;return {'status':'observed','observation_sha256':T.file_sha(output/'observation.json')}
