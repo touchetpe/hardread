@@ -20,6 +20,15 @@ def build_command(*,runner,snapshot,data,out,epochs,world_size,manifest,train_sh
             or type(manifest.get('verified_items')) is not int or manifest['verified_items']<1500
             or any(not isinstance(manifest.get(key),str) or len(manifest[key])!=64 for key in ('a1_sha256','a0_sha256'))):
         raise TrainingError('full population, verifier threshold and final A1/A0 hashes required')
+    from t1_full_targets import BOTH_GATE_SCHEMA,BOTH_GATE_RULE
+    gate=manifest.get('both_check_gate')
+    if (not isinstance(gate,dict) or set(gate)!={'schema','rule','required','distinct_both_pass_items','selected_item_candidate_pairs_sha256','pass'}
+            or gate.get('schema')!=BOTH_GATE_SCHEMA or gate.get('rule')!=BOTH_GATE_RULE
+            or type(gate.get('required')) is not int or gate['required']!=1500
+            or type(gate.get('distinct_both_pass_items')) is not int or gate['distinct_both_pass_items']<1500
+            or gate.get('pass') is not True or not isinstance(gate.get('selected_item_candidate_pairs_sha256'),str)
+            or len(gate['selected_item_candidate_pairs_sha256'])!=64):
+        raise TrainingError('valid final both-check gate required')
     if manifest.get('train_sha256')!=train_sha256 or manifest.get('val_sha256')!=val_sha256:
         raise TrainingError('train or dev data binding differs')
     for file,expected in ((Path(data)/'train.jsonl.gz',train_sha256),(Path(data)/'val.jsonl.gz',val_sha256)):
@@ -30,7 +39,7 @@ def build_command(*,runner,snapshot,data,out,epochs,world_size,manifest,train_sh
         raise TrainingError('committed target and dataset lineage differs')
     try:verified=verify_dataset(lineage,root,snapshot,data,blind_key=blind_key)
     except (ValueError,OSError,KeyError,TypeError) as exc:raise TrainingError('deterministic source and dataset rederivation failed') from exc
-    if verified['decision_count']!=manifest['decision_count'] or verified['verified_items']!=manifest['verified_items']:
+    if verified['decision_count']!=manifest['decision_count'] or verified['verified_items']!=manifest['verified_items'] or verified.get('both_check_gate')!=gate:
         raise TrainingError('derived acceptance counts differ')
     return [sys.executable,str(runner),'--snapshot',str(snapshot),'--data',str(data),'--out',str(out),
             '--epochs',str(epochs),'--loss','plain','--skip-teacher','--skip-serve','--no-mb-fallback']
