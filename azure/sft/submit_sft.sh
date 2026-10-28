@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
 # Submit a HardRead Glimmer SFT job (one H100 node, or N single-GPU nodes with NODES=N).
 # Usage: bash azure/sft/submit_sft.sh <job_name hrsft-...> <data_dir> <timeout_s> "<description>" [run_sft.py args...]
-#   data_dir: output of tools/sft/build_sft.py (train/val/eval .jsonl.gz + manifest.json); it is shipped
-#             inside the code snapshot (smoke ~2 MB; 50k examples ~40 MB).
+#   data_dir: output of tools/sft/build_sft.py (train/val/eval .jsonl.gz + manifest.json).
+#             It is copied into the code snapshot unless DATA_URI is set, when it supplies hash pins.
 #   NODES=N (env, default 1): multi-node DDP over N single-H100 nodes (see README; not yet run).
 #   DRY_RUN=1: stage the attempt dir and job.yml, do not submit.
+#   DATA_URI=azureml://datastores/workspaceblobstore/paths/pokemon-rl-research/.../
+#   mounts the data read-only and verifies its four local pinned hashes on every node.
 #   CKPT_URI=azureml://.../checkpoints/checkpoint-N/ with CKPT_ARG=--adapter (use with --eval-only) or
 #   CKPT_ARG=--resume-from: mounts that checkpoint read-only as inputs.ckpt and passes it to run_sft.py.
 #   run_sft.py always receives --job-timeout <timeout_s> so its training budget fits inside the job.
@@ -19,14 +21,33 @@ HR_ROOT="$HR"; [ -f "$HR_ROOT/handoff/env.sh" ] && . "$HR_ROOT/handoff/env.sh"
 HR_AZ_MSG="Azure settings missing: source handoff/env.sh or export the HR_AZ_* variables (README, Azure ML jobs)"
 : "${HR_AZ_SUBSCRIPTION:?$HR_AZ_MSG}" "${HR_AZ_RG:?$HR_AZ_MSG}" "${HR_AZ_WS:?$HR_AZ_MSG}" "${HR_AZ_CLUSTER:?$HR_AZ_MSG}"
 RG="${HR_AZ_RG}"; WS="${HR_AZ_WS}"
+DATA_INPUT=""; DATA_CMD="--data data"; RUNNER="python azure/sft/run_sft.py"
+if [[ ${DATA_URI+x} ]]; then
+  prefix='azureml://datastores/workspaceblobstore/paths/pokemon-rl-research/'
+  [[ "$DATA_URI" =~ ^azureml://datastores/workspaceblobstore/paths/pokemon-rl-research/[a-zA-Z0-9._~/-]+/$ ]] || { echo "invalid DATA_URI" >&2; exit 2; }
+  suffix="${DATA_URI#"$prefix"}"
+  [[ "$suffix" != *'//'* && "/$suffix" != *'/../'* && "/$suffix" != *'/./'* ]] || { echo "invalid DATA_URI path" >&2; exit 2; }
+  for file in train.jsonl.gz val.jsonl.gz eval.jsonl.gz manifest.json; do
+    [[ -f "$DATA/$file" && ! -L "$DATA/$file" ]] || { echo "required local data file missing or symlink: $file" >&2; exit 2; }
+  done
+  DATA_INPUT=$'  sft_data:\n    type: uri_folder\n    path: '"$DATA_URI"$'\n    mode: ro_mount'
+  DATA_CMD='--data "${{inputs.sft_data}}"'
+  RUNNER='bash azure/sft/verify_sft_data.sh "${{inputs.sft_data}}"'
+fi
 ENV_ID=/subscriptions/${HR_AZ_SUBSCRIPTION}/resourceGroups/$RG/providers/Microsoft.MachineLearningServices/workspaces/$WS/environments/pokemon-h100-axolotl-cuda13-training/versions/20261026-9f7aa9a5704c
 SNAP=azureml://datastores/workspaceblobstore/paths/pokemon-rl-research/h100/model-snapshots/acquire-20261026-01/
 A="$AZ/attempts/$NAME"
 [ -e "$A" ] && { echo "attempt dir exists: $A"; exit 2; }
-mkdir -p "$A/code/azure/sft" "$A/code/tools/sft" "$A/code/data"
+mkdir -p "$A/code/azure/sft" "$A/code/tools/sft"
 cp "$HERE"/{run_sft.py,eval_sft.py,sft_plugin.py,qlora_sft.yaml} "$A/code/azure/sft/"
 cp "$HR/tools/sft"/{serialize.py,glimmer_chat.py,build_sft.py,dex.json} "$A/code/tools/sft/"
-cp "$DATA"/{train.jsonl.gz,val.jsonl.gz,eval.jsonl.gz,manifest.json} "$A/code/data/"
+if [[ ${DATA_URI+x} ]]; then
+  cp "$HERE/verify_sft_data.sh" "$A/code/azure/sft/"
+  (cd "$DATA" && shasum -a 256 train.jsonl.gz val.jsonl.gz eval.jsonl.gz manifest.json) > "$A/code/data.sha256"
+else
+  mkdir -p "$A/code/data"
+  cp "$DATA"/{train.jsonl.gz,val.jsonl.gz,eval.jsonl.gz,manifest.json} "$A/code/data/"
+fi
 (cd "$HR" && git rev-parse HEAD > "$A/code/HARDREAD_COMMIT" 2>/dev/null || true)
 (cd "$A/code" && find . -type f | sort | xargs shasum -a 256 > "$A/code-manifest.sha256")
 CKPT_CMD=""; CKPT_INPUT=""
@@ -49,7 +70,7 @@ display_name: $NAME
 experiment_name: hardread-sft
 description: "$DESC"
 code: "$A/code"
-command: python azure/sft/run_sft.py --snapshot \${{inputs.model_snapshot}} --data data --out \${{outputs.artifacts}} --job-timeout $TIMEOUT $CKPT_CMD $*
+command: $RUNNER --snapshot \${{inputs.model_snapshot}} $DATA_CMD --out \${{outputs.artifacts}} --job-timeout $TIMEOUT $CKPT_CMD $*
 compute: azureml:${HR_AZ_CLUSTER}
 environment: azureml:$ENV_ID
 environment_variables:
@@ -62,6 +83,7 @@ inputs:
     path: $SNAP
     mode: ro_mount
 $CKPT_INPUT
+$DATA_INPUT
 outputs:
   artifacts:
     type: uri_folder
