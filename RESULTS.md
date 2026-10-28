@@ -1483,3 +1483,13 @@ These are data-generation jobs, with no model score or eligible yield yet. First
 ## 2026-10-28 19:38 UTC — Glimmer v2 twelve-rank startup and training progress
 
 Bounded own-job runtime inspection found exactly ranks0–11:12/12 successful preflights reporting H100,12train stages running, and positive CUDA/step markers. The shared log reached globalstep346 (692numeric step-bearing records, not692distinct optimizer steps). No preflight/train failure, OOM, traceback or NCCL error markers were detected in the bounded read. This is progress evidence, not a completed model or quality gate. GPU utilization, rank0termination and checkpoint persistence remain unverified. The source-bound typed receipt and unchanged12-node/168node-hour controls are recorded in `experiments/cards/GLIMMER-V2-FULL12-STARTUP-PROGRESS.json`. No validation, fixed400 or arena score was read.
+
+
+<a id="xl6-incomplete-arena-20261028"></a>
+## Selected XL6 arena — incomplete technical run (199/200), 2026-10-28
+
+Selected XL6 versus **Abyssal**, seed2000, 200scheduled games/100side-swapped team pairs: **163/200 wins =81.5%**, Wilson95%CI**75.54–86.27%**, counting the one timeout as a loss. The other199 records contain163wins and36losses; completed-only163/199=81.91% is descriptive and does not replace the200denominator. This is the owner-authorized conservative lower-bound record of the original run.
+
+**Incomplete technical run (199/200); job terminal Failed during teardown, wrapper return125. No full arena PASS or model-strength claim.** The runner summary's internal gate counted200ledger rows, not200completed battles. Failure diagnosis established post-run process-group/wrapper lifecycle failure; it did not identify a specific surviving child or a model-quality cause. Runner-reported diagnostics are0/5,525illegal events and policy latency p95=3.588seconds; individual policy logs were not independently available locally.
+
+XL6 was selected using the original2,428validation identities atcommit0f8904c before test/arena reads. Exact selected GGUF/base/source/roster/seed bindings and independent original claim review are recorded in [the readout card](experiments/cards/XL6-ARENA-199-OF-200-READOUT.json). The clean200game rerun with explicit model-server/tee termination and reaping remains with the separate Benchmark & Ladder lane; this conservative record does not substitute for that rerun. Historical Glimmer v0ddpres44.0% and base9/29~31% are separate runs with different denominators and runtime settings, not a matched causal comparison. F1 here names HardRead's search configuration, not the opponent.
