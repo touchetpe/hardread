@@ -1180,3 +1180,14 @@ These are descriptive same-fixed-row teacher-forced results, separate from the2,
 **XL6 fixed-v0 remains PENDING.** Its producer default uses different v1 evalSHA `7ea29968…abb10`; recorded rounded default400 top1=.5425, top3=.8800, CE=1.6117 must be labelled separate and cannot fill the fixed-v0 comparison. E2's last-checkpoint fixed-v0 result is also missing. A separately reviewed one-node selected-XL fixed-v0 job is being staged, with no new score inferred.
 
 Exact e1N4 job `hrsft-20261028-e1-fixed400-91eaa7d3`: teacher resultSHA `eebc73769e6a2d0140bff3f98bccd2986d104140950670008d6d876efee78336`, rowsSHA `f3bf2908571dddee033aa1ab0f1f4ed7aaa5347d15695dcd396bd06ab9f29d3b`. Bold `hrsft-20261027-v1bold-d3cb`: resultSHA `310f653627a697014728a6bf78571b91aab56428f2e24633c36be5215904a15f`, rowsSHA `e7a72665090b632d84c43fb2d08cf7c3a1afa5978ea4f963bd7c77bbc3bddd9c`. Artifact bytes were acquired privately under standing own-job approval; their identities matched before/after retrieval.
+
+
+## 2026-10-28 12:12 UTC — Sealed technical launch acceptance; primary incomplete (C11/S3.1)
+
+All25 exact primary jobs were observed Running after their11:05–11:09 creates. First c000 direct-counter checks are valid for25/25 archives, with positive treatment markers, zero fallback warnings and20 records per chunk:500 records,498 decided. Independent technical/provenance review ACCEPT is `scratch_ds/codex/c11/first-chunk-provenance-review.private.md`; counter summary SHA `f3b2d4976fbce648d2cac37feaf2547d9889612917157dd3a02b220b9d4f7de3`. A4/tag/build/package/create chronology remains verified against the earlier freeze record.
+
+The final mechanical S3.1 signal is now saved: `scratch_ds/codex/c11/root-freeze-20261028/sealed-followup-counts.private.json` at11:58:58UTC reports **25 Running,59/500 chunks** and explicitly computes no estimate before completion. Root accepts the technical freeze/launch step; full primary analysis is still gated on all500 required chunks and replacements. Counts are not wins or a strength result. No protected interim outcome analysis was performed. OTS calendar confirmation remains pending.
+
+## 2026-10-28 12:12 UTC — Linux synthetic probe failed before runtime proof
+
+Own one-node job `hrt1probe-20261028-linux-7846756a` failed at import/startup: `ModuleNotFoundError: poke_engine`, line11. Exact1021-byte stdlog SHA `9c7c975433f73c530bba1f2d09bf82ca0393d1b8122e6dbe3ce4ddccb0c0824a` is retained under `scratch_ds/codex/training-roadmap/t1-linux-probe/terminal-diagnostics-20261028T115905Z/`. No model/data was mounted, no real review occurred and no valid runtime proof resulted. The source acceptance remains distinct from this runtime failure. No automatic retry or install; a finite plan using an already approved runtime is being checked.
