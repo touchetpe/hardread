@@ -341,6 +341,36 @@ def check_root_approval(path, expected_sha, config_sha, purpose, code_sha=None):
     if code_sha is not None and doc['code_sha256']!=code_sha: raise DPOError('root approval source differs')
     return doc
 
+def validate_xl6_selection(selection, cfg, binding):
+    """Accept only the governed selected-XL6 source proof and exact adapter inventory."""
+    import re
+    fixed={'schema':'hardread.dpo.xl6-selection-proof/v1','status':'accepted','binding_state':'accepted_source_only',
+           'selected_source_job':'hrsft-20261027-v1xl6-92b7','selection_commit':'0f8904cc2716636214968a7d8d7468880a4b8cb2',
+           'selection_source_binding_sha256':'5bd96f493020919e0166699b00b5f3965b313f24d09c5d936f7bd06c125ad885',
+           'adapter_validation_source_binding_sha256':'0ff90fca3b9e74acaabb22b5ba235b0d4547fa8bd3e12632204677e4deaa36a0',
+           'adapter_binding_manifest_sha256':'f5febd996c199601badfece8ff91ea0bb21505f645dd2238d9c37769b8a3f717'}
+    expected={'adapter_model.safetensors':'b2d55ffde079ef484c349d6fa2201e211f603b9604716f3623a6f5cddf4e6d28',
+              'adapter_config.json':'8ea2aaffe2c309092767f57cbaa39dbd704e092f733999c4e2e25c5f2dc965af',
+              'tokenizer.json':'c9dbee66967b58f31a7c27f723c3760da3526ccd0427578e8905b0abb0031c4d',
+              'tokenizer_config.json':'0c06e0c01874afdd42287501927f0faa539374c23dc214263650b66b98d7f1d2'}
+    if not isinstance(selection,dict) or any(selection.get(k)!=v for k,v in fixed.items()): raise DPOError('selected XL6 proof identity differs')
+    if selection.get('source_only') is not True or selection.get('model_call_made') is not False or selection.get('quality_fields_read') is not False: raise DPOError('selected XL6 proof scope differs')
+    if cfg.get('adapter_files')!=expected: raise DPOError('selected XL6 adapter inventory differs')
+    names=selection.get('adapter_files'); inventory={}
+    if not isinstance(names,list) or len(names)!=4: raise DPOError('selected XL6 proof inventory differs')
+    for item in names:
+        if not isinstance(item,dict) or set(item)!={'basename','sha256','size_bytes'} or not isinstance(item['basename'],str) or item['basename'] in inventory or type(item['size_bytes']) is not int or item['size_bytes']<=0: raise DPOError('selected XL6 proof inventory differs')
+        inventory[item['basename']]=item['sha256']
+    if inventory!=expected: raise DPOError('selected XL6 proof inventory differs')
+    for field,name in (('adapter_model_sha256','adapter_model.safetensors'),('adapter_config_sha256','adapter_config.json'),('adapter_tokenizer_sha256','tokenizer.json'),('adapter_tokenizer_config_sha256','tokenizer_config.json')):
+        if selection.get(field)!=expected[name]: raise DPOError('selected XL6 proof artifact differs')
+    if binding.get('adapter_model_sha256')!=expected['adapter_model.safetensors'] or binding.get('adapter_config_sha256')!=expected['adapter_config.json']: raise DPOError('selected XL6 binding differs')
+    uri=cfg.get('job_resources',{}).get('xl6_uri')
+    if not isinstance(uri,str) or not re.fullmatch(r'azureml://datastores/workspaceblobstore/paths/pokemon-rl-research/[A-Za-z0-9._~/-]+',uri): raise DPOError('selected XL6 mount differs')
+    parts=uri.rstrip('/').split('/')
+    if len(parts)<3 or parts[-3]!=fixed['selected_source_job'] or parts[-2]!='checkpoints' or not re.fullmatch(r'verified-[0-9a-f]{32}',parts[-1]) or any(x in ('.','..') for x in parts): raise DPOError('selected XL6 mount differs')
+
+
 def load_inputs(config_path, config_sha, code_root, data_dir, base_dir, adapter_dir, selection_path, *, qualification=False):
     """Verify fixed bytes and operational evidence before the first model load."""
     import json
@@ -371,8 +401,7 @@ def load_inputs(config_path, config_sha, code_root, data_dir, base_dir, adapter_
              'code_sha256':fingerprint(cfg['code_files'])}
     if file_sha(selection_path)!=cfg['xl6_selection_sha256']: raise DPOError('XL6 selection proof differs')
     selection=json.loads(Path(selection_path).read_bytes())
-    if not isinstance(selection,dict) or selection.get('status')!='selected' or selection.get('adapter_model_sha256')!=binding['adapter_model_sha256'] or selection.get('adapter_config_sha256')!=binding['adapter_config_sha256']:
-        raise DPOError('selected XL6 identity differs')
+    validate_xl6_selection(selection,cfg,binding)
     return cfg,pairs,binding
 
 def load_preflight(config_path, config_sha, code_root, data_dir, base_dir, adapter_dir, timing_path, smoke_path, selection_path):
