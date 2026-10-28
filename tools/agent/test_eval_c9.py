@@ -668,6 +668,127 @@ class LockAndPreflightTests(SyntheticWorkspace):
         with self.assertRaisesRegex(manifest_tools.ManifestError, "structured OS snapshot"):
             manifest_tools._validate_live_process(data, process, process_probe=lambda _pid: "ps text")
 
+    def _server_process_fixture(self, argv):
+        executable = self.root / "bin" / "llama-server"
+        executable.parent.mkdir(parents=True, exist_ok=True)
+        executable.write_bytes(b"synthetic executable bytes")
+        model = self.root / "base.gguf"
+        model.write_bytes(b"synthetic model bytes")
+        argv = list(argv)
+        argv[0] = str(executable)
+        argv[argv.index("--model") + 1] = str(model)
+        started = "2026-10-27T17:00:00Z"
+        process = {"pid": 31415, "host": "synthetic-host", "argv": argv,
+                   "executable_path": str(executable),
+                   "executable_sha256": manifest_tools.digest_file(executable), "started_utc": started}
+        flags, i = [], 1
+        launch = {"--model", "--host", "--port"}
+        boolean = {"--jinja", "--swa-full", "--no-webui"}
+        while i < len(argv):
+            if argv[i] in launch:
+                i += 2
+            elif argv[i] in boolean:
+                flags.append(argv[i]); i += 1
+            else:
+                flags.extend(argv[i:i + 2]); i += 2
+        data = {"pid": process["pid"], "host": process["host"], "server_argv": argv,
+                "server_flags": flags, "executable_path": process["executable_path"],
+                "executable_sha256": process["executable_sha256"], "process_started_utc": started,
+                "evidence": {"model": {"model_path": str(model)}}}
+        return executable, model, data, process, flags
+
+    def _mixed_exact_server_argv(self):
+        return ["unused-executable", "--alias", "muse-glimmer", "--ctx-size", "32768",
+                "--model", "unused-model", "--temp", "0", "--top-k", "40", "--host", "127.0.0.1",
+                "--jinja", "--reasoning-format", "deepseek", "--top-p", "1", "--swa-full",
+                "--seed", "42", "--gpu-layers", "99", "--chat-template-kwargs",
+                '{"reasoning_strength":"low"}', "--parallel", "1", "--no-webui", "--port", "18131"]
+
+    def test_mixed_order_full_extras_and_core_only_permutations_pass(self):
+        full_argv = self._mixed_exact_server_argv()
+        _exe, _model, data, process, expected_flags = self._server_process_fixture(full_argv)
+        model_path = manifest_tools._validate_live_process(
+            data, process, process_probe=lambda _pid: dict(process))
+        self.assertEqual(model_path, data["evidence"]["model"]["model_path"])
+        self.assertEqual(data["server_flags"], expected_flags)
+        launch, parsed_flags = manifest_tools._parse_server_argv(process["argv"])
+        self.assertEqual(launch["--host"], "127.0.0.1")
+        self.assertEqual(launch["--port"], "18131")
+        self.assertEqual(parsed_flags, expected_flags)
+
+        permuted_subset = ["unused-executable", "--parallel", "1", "--model", "unused-model",
+                           "--gpu-layers", "99", "--host", "localhost", "--swa-full",
+                           "--reasoning-format", "deepseek", "--ctx-size", "32768", "--port", "18131",
+                           "--jinja", "--temp", "0"]
+        _exe, _model, subset_data, subset_process, subset_flags = self._server_process_fixture(permuted_subset)
+        manifest_tools._validate_live_process(
+            subset_data, subset_process, process_probe=lambda _pid: dict(subset_process))
+        self.assertEqual(subset_data["server_flags"], subset_flags)
+        self.assertEqual(subset_flags, ["--parallel", "1", "--gpu-layers", "99", "--swa-full",
+                                        "--reasoning-format", "deepseek", "--ctx-size", "32768",
+                                        "--jinja", "--temp", "0"])
+
+    def test_each_invalid_server_option_fails_closed(self):
+        valid = self._mixed_exact_server_argv()
+        value_mutations = {
+            "alias": ("--alias", "muse-glimmer-v2"), "temperature": ("--temp", "0.1"),
+            "top_k": ("--top-k", "41"), "top_p": ("--top-p", "0.9"), "seed": ("--seed", "43"),
+            "template_kwargs": ("--chat-template-kwargs", '{"reasoning_strength":"high"}'),
+        }
+        bad_cases = []
+        for label, (option, wrong_value) in value_mutations.items():
+            bad = list(valid); bad[bad.index(option) + 1] = wrong_value; bad_cases.append((label, bad))
+        bad = list(valid); bad.extend(("--lora", "adapter.gguf")); bad_cases.append(("lora", bad))
+        bad = list(valid); bad.extend(("--unknown", "value")); bad_cases.append(("unknown", bad))
+        bad = list(valid); bad.extend(("--ctx-size", "32768")); bad_cases.append(("duplicate_core", bad))
+        bad = list(valid); bad.extend(("--temp", "0")); bad_cases.append(("duplicate_extra", bad))
+        bad = list(valid); bad.extend(("--port", "18131")); bad_cases.append(("duplicate_launch", bad))
+        bad = list(valid); del bad[bad.index("--swa-full")]; bad_cases.append(("missing_core", bad))
+        bad = list(valid); del bad[bad.index("--seed") + 1]; bad_cases.append(("missing_value", bad))
+        bad = list(valid); bad.append("--ctx-size=32768"); bad_cases.append(("equals_spelling", bad))
+        bad = list(valid); bad.append("unexpected-positional"); bad_cases.append(("positional", bad))
+        bad = list(valid); bad.append("true"); bad_cases.append(("boolean_value", bad))
+        for label, argv in bad_cases:
+            with self.subTest(label=label):
+                _exe, _model, data, process, _flags = self._server_process_fixture(argv)
+                with self.assertRaises(manifest_tools.ManifestError):
+                    manifest_tools._validate_live_process(
+                        data, process, process_probe=lambda _pid, value=process: dict(value))
+
+        _exe, _model, data, process, flags = self._server_process_fixture(valid)
+        data["server_flags"] = flags[:-2]
+        with self.assertRaisesRegex(manifest_tools.ManifestError, "full ordered live non-launch argv"):
+            manifest_tools._validate_live_process(data, process, process_probe=lambda _pid: dict(process))
+        data["server_flags"] = flags
+        data["server_argv"] = list(data["server_argv"])
+        data["server_argv"].append("--no-webui")
+        with self.assertRaisesRegex(manifest_tools.ManifestError, "differs from saved provenance"):
+            manifest_tools._validate_live_process(data, process, process_probe=lambda _pid: dict(process))
+
+    def test_invalid_optional_flag_stops_before_client_health_chat_or_output_reservation(self):
+        bad_argv = self._mixed_exact_server_argv()
+        bad_argv[bad_argv.index("--temp") + 1] = "0.1"
+        _exe, _model, data, process, _flags = self._server_process_fixture(bad_argv)
+        items = self.root / "items.json"
+        write_json(items, {})
+        def reject_bad_live_flags(_path):
+            return manifest_tools._validate_live_process(
+                data, process, process_probe=lambda _pid: dict(process))
+        for module, loader_name, kind in ((eval_a0, "load_validated_a0", "a0"),
+                                          (eval_a1, "load_validated_a1", "a1")):
+            with self.subTest(kind=kind), \
+                    patch.object(module.manifest_tools, loader_name, return_value=({}, "hash", [])), \
+                    patch.object(manifest_tools, "validate_server_provenance", side_effect=reject_bad_live_flags), \
+                    patch.object(manifest_tools, "validate_record_output_paths") as reserve, \
+                    patch.object(module, "GlimmerClient") as client_ctor, \
+                    patch.object(sys, "argv", [module.__file__, "--items", str(items),
+                                                "--server-provenance", str(self.root / "provenance.json"),
+                                                "--out", "scratch_ds/evals/should-not-be-reserved.json"]):
+                with self.assertRaisesRegex(manifest_tools.ManifestError, "registered setting"):
+                    module.main()
+                client_ctor.assert_not_called()
+                reserve.assert_not_called()
+
     def test_consistent_wrong_binary_build_claim_rejected_before_recorded_client(self):
         import platform
         from datetime import datetime, timezone
@@ -676,9 +797,15 @@ class LockAndPreflightTests(SyntheticWorkspace):
         executable.chmod(0o700)
         model = self.root / "base.gguf"
         model.write_bytes(b"synthetic model")
-        flags = ["--ctx-size", "32768", "--jinja", "--reasoning-format", "deepseek", "--swa-full",
-                 "--gpu-layers", "99", "--parallel", "1"]
-        argv = [str(executable), "--model", str(model), "--host", "127.0.0.1", "--port", "18131", *flags]
+        argv = [str(executable), "--alias", "muse-glimmer", "--ctx-size", "32768",
+                "--model", str(model), "--temp", "0", "--top-k", "40", "--host", "127.0.0.1",
+                "--jinja", "--reasoning-format", "deepseek", "--top-p", "1", "--swa-full",
+                "--seed", "42", "--gpu-layers", "99", "--chat-template-kwargs",
+                '{"reasoning_strength":"low"}', "--parallel", "1", "--no-webui", "--port", "18131"]
+        flags = ["--alias", "muse-glimmer", "--ctx-size", "32768", "--temp", "0", "--top-k", "40",
+                 "--jinja", "--reasoning-format", "deepseek", "--top-p", "1", "--swa-full", "--seed", "42",
+                 "--gpu-layers", "99", "--chat-template-kwargs", '{"reasoning_strength":"low"}',
+                 "--parallel", "1", "--no-webui"]
         process = {"pid": 31415, "host": platform.node(), "argv": argv,
                    "executable_path": str(executable), "executable_sha256": manifest_tools.digest_file(executable),
                    "started_utc": "2026-10-27T17:00:00Z"}

@@ -1016,6 +1016,70 @@ def _mac_process_snapshot(pid):
             "executable_sha256": digest_file(executable_path), "started_utc": started_utc}
 
 
+_SERVER_LAUNCH_VALUE_OPTIONS = ("--model", "--host", "--port")
+_SERVER_CORE_VALUE_OPTIONS = {
+    "--ctx-size": "32768",
+    "--reasoning-format": "deepseek",
+    "--gpu-layers": "99",
+    "--parallel": "1",
+}
+_SERVER_EXTRA_VALUE_OPTIONS = {
+    "--alias": "muse-glimmer",
+    "--temp": "0",
+    "--top-k": "40",
+    "--top-p": "1",
+    "--seed": "42",
+    "--chat-template-kwargs": '{"reasoning_strength":"low"}',
+}
+_SERVER_BOOLEAN_OPTIONS = {"--jinja", "--swa-full", "--no-webui"}
+_SERVER_REQUIRED_BOOLEAN_OPTIONS = {"--jinja", "--swa-full"}
+
+
+def _parse_server_argv(argv):
+    """Parse the exact supported llama-server argv without normalizing its order."""
+    if (not isinstance(argv, list) or not argv
+            or any(not isinstance(token, str) or not token for token in argv)):
+        raise ManifestError("live server argv is malformed")
+    launch_values, seen = {}, set()
+    ordered_flags = []
+    value_options = {**_SERVER_CORE_VALUE_OPTIONS, **_SERVER_EXTRA_VALUE_OPTIONS}
+    i = 1
+    while i < len(argv):
+        option = argv[i]
+        if not option.startswith("--") or "=" in option:
+            raise ManifestError("live server argv contains an unexpected positional token or --flag=value")
+        if option in seen:
+            raise ManifestError("live server argv contains a duplicate option")
+        seen.add(option)
+        if option in _SERVER_BOOLEAN_OPTIONS:
+            ordered_flags.append(option)
+            i += 1
+            continue
+        if option not in _SERVER_LAUNCH_VALUE_OPTIONS and option not in value_options:
+            raise ManifestError("live server argv contains an unapproved option")
+        if i + 1 >= len(argv) or argv[i + 1].startswith("--"):
+            raise ManifestError("live server argv option is missing its value")
+        value = argv[i + 1]
+        if not value:
+            raise ManifestError("live server argv option has an empty value")
+        if option in _SERVER_LAUNCH_VALUE_OPTIONS:
+            launch_values[option] = value
+        else:
+            if value != value_options[option]:
+                raise ManifestError("live server argv option value differs from the registered setting")
+            ordered_flags.extend((option, value))
+        i += 2
+
+    if set(launch_values) != set(_SERVER_LAUNCH_VALUE_OPTIONS):
+        raise ManifestError("live server argv must contain exactly model, host and port")
+    if (set(_SERVER_CORE_VALUE_OPTIONS) - seen
+            or _SERVER_REQUIRED_BOOLEAN_OPTIONS - seen):
+        raise ManifestError("live server argv is missing a required core setting")
+    if launch_values["--host"] not in ("127.0.0.1", "localhost") or launch_values["--port"] != "18131":
+        raise ManifestError("live server endpoint differs from the handed-over local endpoint")
+    return launch_values, ordered_flags
+
+
 def _validate_live_process(data, saved_process, *, process_probe=None):
     """Require exact saved/live OS process identity and protocol arguments; return its model path."""
     required_saved = ("pid", "host", "argv", "executable_path", "executable_sha256", "started_utc")
@@ -1055,25 +1119,9 @@ def _validate_live_process(data, saved_process, *, process_probe=None):
     if not isinstance(data.get("executable_sha256"), str) or len(data["executable_sha256"]) != 64:
         raise ManifestError("live server executable hash is missing or malformed")
 
-    expected_flags = ["--ctx-size", "32768", "--jinja", "--reasoning-format", "deepseek", "--swa-full",
-                      "--gpu-layers", "99", "--parallel", "1"]
-    actual_flags, launch_values, i = [], {}, 1
-    while i < len(argv):
-        token = argv[i]
-        if token in ("--model", "--host", "--port"):
-            if token in launch_values or i + 1 >= len(argv):
-                raise ManifestError("live server launch flags are missing or duplicated")
-            launch_values[token] = argv[i + 1]
-            i += 2
-            continue
-        actual_flags.append(token)
-        i += 1
-    if set(launch_values) != {"--model", "--host", "--port"}:
-        raise ManifestError("live server argv must contain exactly model, host and port")
-    if launch_values["--host"] not in ("127.0.0.1", "localhost") or launch_values["--port"] != "18131":
-        raise ManifestError("live server endpoint differs from the handed-over local endpoint")
-    if actual_flags != expected_flags or data.get("server_flags") != expected_flags:
-        raise ManifestError("live server argv does not match the exact protocol flags")
+    launch_values, actual_flags = _parse_server_argv(argv)
+    if data.get("server_flags") != actual_flags:
+        raise ManifestError("saved server flags do not match the full ordered live non-launch argv")
     model_path = launch_values["--model"]
     saved_model_path = data.get("evidence", {}).get("model", {}).get("model_path")
     if model_path != saved_model_path:
@@ -1114,10 +1162,9 @@ def validate_server_provenance(path, *, root=ROOT, now=None, process_probe=None,
         raise ManifestError("server provenance is missing required actual-evidence fields")
     if data["llama_cpp_commit"] != "f8def7f":
         raise ManifestError("llama.cpp commit differs from EVAL_PROTOCOL_AGENT.md")
-    expected_flags = ["--ctx-size", "32768", "--jinja", "--reasoning-format", "deepseek", "--swa-full",
-                      "--gpu-layers", "99", "--parallel", "1"]
-    if data["server_flags"] != expected_flags:
-        raise ManifestError("llama-server flags differ from EVAL_PROTOCOL_AGENT.md")
+    if not isinstance(data["server_flags"], list) or any(not isinstance(value, str)
+                                                         for value in data["server_flags"]):
+        raise ManifestError("llama-server flags are malformed")
     if data["url"] != "http://127.0.0.1:18131/v1/chat/completions":
         raise ManifestError("recorded server URL is not the handed-over local endpoint")
     if not isinstance(data["gguf_sha256"], str) or len(data["gguf_sha256"]) != 64:

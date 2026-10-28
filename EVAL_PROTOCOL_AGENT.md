@@ -33,6 +33,9 @@ This addendum binds implementation to the already shipped capability; it is not 
 
 **Implementation clarification v1c — source-proven product rejection (before first A1/A0 record).** The §3 candidate census, minimum length, decided-result rule, SHA rank, first ten successful unique games per pool, questions and 20/60/30 sizes remain unchanged. A ranked replay rejected by the shipped app’s 100-turn limit is a counted review exception under the existing selection rule. The constructor verifies the pinned app source and replay record, reproduces the exact overlength `InputError`, and saves a private source-bound witness; manifest validation independently rederives that witness and ordered attempt trail. It then continues in the original rank order. Other preparation, worker, integrity or context failures still stop. The failed 113-turn constructor attempt remains reported; no replay is truncated and no model outcome informs selection.
 
+
+**Implementation clarification v1d — exact live server argv provenance (before first A1/A0 record).** The registered six core server settings remain mandatory, each exactly once with its registered value, independent of order. The observed optional extras are limited to `--alias muse-glimmer`, `--temp 0`, `--top-k 40`, `--top-p 1`, `--seed 42`, `--chat-template-kwargs {"reasoning_strength":"low"}`, and the standalone boolean `--no-webui`; any subset may appear, each at most once, with each value-bearing extra carrying only its exact listed value. Provenance stores the complete ordered non-launch token list in `server_flags` and the complete original order in `server_argv`; both must match saved and live process evidence exactly. Unknown, malformed, missing, duplicate, changed, or additional options remain a hard stop. This pre-record clarification changes no model, prompt, request body, population, denominator, outcome measure, or threshold.
+
 ## 2. Arms
 
 | Arm | System | Runs by default |
