@@ -1147,3 +1147,20 @@ The owner ratified the exact offered A4 record. At 2026-10-28T11:00:12.543131+00
 The one post-A4 pool build completed at 2026-10-28T11:00:19.260161+00:00: **1,000 teams**, stored content SHA-256 verified as `d60e036d2a4c608b7ce3fded7522ebc83456a63fc4592bc66ad3c554c7fb6311`; actual tarball SHA-256 **`7304a879fd69501d2afd4aa0e8905c9d296d97cae67e4443362a2a595c896874`**. No local extraction or set inspection occurred. All 25 separate code snapshots/YAMLs were rendered and hash-bound while HEAD remained the exact A4 commit, before subsequent source changes. Every snapshot binds that A4 commit, frozen fork, this tarball and no student/belief checkpoint. Private freeze/build/render receipts are under `scratch_ds/codex/c11/root-freeze-20261028/`.
 
 The reviewed primary is 25 one-node jobs ×20 chunks ×10 side-swapped pairings =10,000 games, maximum300 H100 node-hours. At this record no real sealed job has been created, so S3.1 is not complete. Admission, exact-name/output absence and a live identity-bound watcher's complete initial pending poll remain required. Only chunk/marker validity counters may be read until all500 chunks and replacements finish; no protected outcome has been read.
+
+
+## 2026-10-28 11:02:46 UTC — F1 complete validation and selection: XL6 (owner addendum7)
+
+**Prospective method:** the owner-directed e1/XL6/bold candidate set and rule were committed in ops at09:47UTC (`fced085`), before either new validation call or quality read. Card SHA-256 `2590bbd9798382d109ecdd5b4660f0623b5fb7208214dc5d118683b553e47674`: maximum unrounded engine-target top-1 on the same2,428 action identities, then minimum math.fsum mean cross-entropy, then e1→XL6→bold. The original08:30 R1 selection deadline was **missed**; this is the later addendum7 F1 selection. E2's saved partial-second-epoch checkpoint remains eligible for separately disclosed validation but unresolved/unvalidated in this immediate three-candidate set.
+
+| Candidate | Engine-target agreement | Mean policy cross-entropy | Status |
+|---|---:|---:|---|
+| e1 |1,294/2,428 =53.29489291598023%|1.6187080494656885|Comparable accepted baseline|
+| XL6 |1,379/2,428 =56.79571663920923%|1.5677069632737148|**SELECTED**, highest unrounded agreement|
+| bold |568/2,428 =23.393739703459637%|1.9314002983196616|Not selected|
+
+Each new job Completed, with identical2,666 paired identities (2,428 action,238 read), exact action-ID digest `95b5abff823805f5082ac1a325c944deeb8b7cdb92e3a4293d1915375c7cba72`, legal predictions, finite CE and independent argmax/CE recomputation. There are128 game prefixes; played choices differ from engine targets on264 rows. These are correlated offline engine-target metrics, **not battle win percentages**; no row-independent CI or p is claimed. XL6 stopped after5,668/5,959 planned steps (partial epoch). Bold's3,517 steps do not prove a full epoch.
+
+Selected XL6 adapter weights SHA-256 `b2d55ffde079ef484c349d6fa2201e211f603b9604716f3623a6f5cddf4e6d28`, config `8ea2aaffe2c309092767f57cbaa39dbd704e092f733999c4e2e25c5f2dc965af`. Actual jobs: `hrsft-20261028-xl6-fullval-f1-70a4c2e1`, `hrsft-20261028-bold-fullval-f1-9b6e0f34`. Independent Sol **ACCEPT** SHA-256 `af2b3b80d8989cec801fded1d2e845ed1cfd9383b8058c84682a7e389689128b`. XL result/rows digests `13e02fba3465ebc743b38152838da945eb36671cb6c2d7ee7cbca39eede89cf9` / `72fef924ab56cbc5a53e920e9987d70f5a96c1356e4b86bebebe65de9d2b6c5d`; bold `47b75d68b6de2fc44ae0d9867a301434e9284619b0bbf053a205ade92edba522` / `de209d9fcabfeee78b3ba16182739a81aa9386bd231a4998ff1d714b258b58aa`.
+
+**Selection barrier:** no fixed-400 or default-producer quality output has been opened. This selection is committed before those reads; later test results cannot change this winner. Full25 sealed source packages were rendered before this main-documentation change.
