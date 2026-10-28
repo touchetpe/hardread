@@ -1454,3 +1454,11 @@ Full-readout authorization3c30e1c preceded the sole call. ResultSHAe1286b7a365c1
 Root submitted `hrsft-20261028-v2all-31317803` after the reviewed sealed Ending B released C2 capacity (ff88b21). The exact watcher observed Running, with zero verification errors. This is one epoch on the admitted335,628rows using the accepted weighted XL6 recipe and full read-only DATA_URI. Mandatory actual2kGPU smoke passed1b5a17a; actual12-node source/cost review3155947 and root authorization3b5fdde preceded creation.
 
 Fresh admission found0owned nonterminal nodes and0other-team active jobs; after this sole create12nodes are reserved. Name/output absence,13snapshot hashes and live pending_creation watcher passed. CancelOct29 08:30:26UTC,hard end08:45:26UTC,AMLtimeout50,400seconds,maximum168H100node-hours. Supervisor38901 andcaffeinate38902 are root-owned. Actual GPU utilization,12rankstartup,epochcompletion,allfive rank0stages,11workerterminals,persistence andmodelquality remain unproved. Full2,428identityvalidation requires at least1,416correct before fixed-v0 test reads; the benchmark lane owns the arena.
+
+
+<a id="student-v21-topup4-created-20261028"></a>
+## 2026-10-28 19:23:36 UTC — Four student-data top-up farms submitted
+
+Root created the four prospectively reviewed one-node farms at 19:20:42–19:22:04 UTC after source-byte, permanent seed, exact-name/output absence, live watcher and fresh aggregate capacity checks. The source/cost review is `dbd4d594…fdf9`; authorization `fa41237`. Each has a six-hour AML timeout; total ceiling 24 node-hours. All nonterminal reservations count: twelve Glimmer v2 nodes plus four farms = sixteen. Other-team aggregate was zero at every admission.
+
+These are data-generation jobs, with no model score or eligible yield yet. First valid chunks, prospective source catalog and independent data admission remain required. Student v2.1 still requires at least 100,000 eligible NEW decisions. Exact observed create times, YAML/source hashes, watcher PIDs and individual deadlines are in `experiments/cards/STUDENT-V21-TOPUP4-CREATE-RECEIPT.json`. The existing `20261030` name labels are preserved; actual creation was October28.
