@@ -1401,3 +1401,16 @@ The consumer-schema repair a4d924c passed29 root synthetic checks; it preserves 
 Original actual-smoke source/data/cost ACCEPT SHA f19225ec4eac8485486fbe1ba21a5ec7fd6fa0eabc3f51d8a717f508da7c2e26. Prospective job hrsft-20261028-v2mount-smoke-6f8428c2 is **staged, not created**: one H100 /7200seconds /2node-hour ceiling, one optimizer step, exact weighted XL6 recipe, no fallback or quality/serving evaluation. YAML1cfa8df97eb6e4a983d436ec0ff50e0107572a64aa878594f3cc36f26353b5e4; code manifest5723d99d92924e38062e90323501f23c8a41c2335e012cbc8758ef73379e589f. Four data hashes are checked on each read-only mount before model loading; dataset bytes are absent from the code snapshot. Eight exact full/smoke objects were uploaded to fresh private own-workspace paths and independently downloaded:291,528,538bytes in each direction, everySHA/byte/ETag matched. Transport receipt43c5206db7e5d1a83c0c27e331531c303a894ac3d319121d98f2c370e41c0e88. No public access or new resource was created.
 
 Fresh capacity, exact-name/output absence, sealed/conditional-C2 priority, a newly armed identity-bound watcher and root's create decision remain. No new v2 model, GPU fit, win rate, agreement or full-wave pass is claimed.
+
+
+<a id="dpo-pairs-admitted-20261028"></a>
+
+## 2026-10-28 18:01:35 UTC — DPO pair dataset completed and independently admitted
+
+The authorized T2 offline build ran16:54:48–17:43:11.317146UTC and exited0. From311,185 admitted raw decision links it reported5,904 minimum-legal drops,62,760 decisions without a qualifying pair, and242,521 qualified pairs. The deterministic registered cap retains **100,000 pairs:77,160 P5 and22,840 P6**, covering3,710 admitted games. All seven overlap domains are zero. These are data counts, not model scores.
+
+Fresh Sol admission ACCEPT committed75ac845 independently streamed all100,000 retained rows: exact file bindings, canonical unique IDs and rank order, admitted game/source membership, holdout-ID exclusion, prompt masks/digests and one-token response differences. Every retained gap is at least0.05 and agreement at least3 positive worlds; maximum observed length1,581tokens. Exact source-decision membership, legal-action mapping and cap selection across all242,521 candidates rely on the already accepted producer/build proof; this review did not rescan archives or run a tokenizer.
+
+Manifest SHA256b76c5a0c27d8d5f058fa22deb2d4ebc46d6896fd83b424f6d8c51fe34513539b; pair file2,524,616,187bytes, SHAe4a5164d6559b568a459c0c3e5fa2fe69828fd382849726188f752fb268aa563. Structured review863886b4a45a2534ad879b0c890ea7f8562c1eff0c8c2636196a4ac962f04e7f; private evidence12158afa5ef4c85f31a292efa71bcb59f584e658ba1a0aa7d6f32a71b94e5f7d. Source activation50cbaf8 and distinct build authorization589850b preceded execution.
+
+No GPU fit, six-rank startup, training or model-quality result is implied. Exact own-private pair/manifest transport and one-node selected-XL6 memory/timing qualification are next. Full six-node DPO remains behind sealed/conditional-C2 priority and runtime admission.
