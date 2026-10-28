@@ -1371,3 +1371,12 @@ The ordered exclusions account for4,887 games /413,123 decision links. All three
 Fresh build authorization430f941 permits one guarded offline SFT dataset build from this accepted index. Root launched it at16:35:05UTC, OS PID1881, exec session17337, with a7,200-second cap ending18:35UTC. It recomputes the accepted index, applies the unchanged teacher/serialization/token gates, verifies fixed-file readback and zero overlap, and publishes the output atomically. As of this entry it is still running: **final teacher/action/read row counts and the final manifest are unknown**. No upload, model training or cloud job follows from this build authorization. The mounted four-file proof and mandatory2k-row/one-step smoke remain next gates after sealed/conditional-C2 priority.
 
 P6 contributes at most70,911 newly eligible decisions before row-level losses. It therefore cannot alone meet studentv2.1's100,000-new-decision requirement; the deficit is at least29,089. The prospective top-up farm card retains the existing reviewed producer contract, fresh disjoint seeds/source catalog and all admission barriers. No top-up farm or studentv2.1 training has been launched.
+
+
+<a id="student-v21-topup-seed-reservation-20261028"></a>
+
+## 2026-10-28T17:40:59.057991+00:00 — Prospective student v2.1 top-up seeds permanently reserved
+
+Seeds 10,330,000–10,330,199; seeds 10,340,000–10,340,199; seeds 10,350,000–10,350,199; seeds 10,360,000–10,360,199 are permanently reserved for four prospective C1t1 / hr_train top-up farm jobs. Each can use at most offsets0–24; the entire200-seed block stays reserved even if no job runs. Fresh read-only union SHA2567e04ed0d64d1a633e4992ec3962b938bafecbb424e44f321254f0581885d6675 found no intersection or unclassified attempt. All historical reservations remain unchanged.
+
+Source/cost review v2 ACCEPT SHA256dbd4d59459e75b07b616d9b84d2105e11a7fe9cc7aaa48dbeabb5b8ff7b0fdf9 covers at most four one-node six-hour jobs /24node-hours. The rejected first packet and repaired cutoff/watcher evidence are retained. These are unsubmitted reservations, not data or training results. Root still must bind fresh per-job absolute times, exact-name watcher identities, current capacity and higher-priority work before serial creation. New producer IDs will need an authenticated new source-catalog version and actual eligible-count checks before indexing/training.
