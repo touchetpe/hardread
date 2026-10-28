@@ -1414,3 +1414,12 @@ Fresh Sol admission ACCEPT committed75ac845 independently streamed all100,000 re
 Manifest SHA256b76c5a0c27d8d5f058fa22deb2d4ebc46d6896fd83b424f6d8c51fe34513539b; pair file2,524,616,187bytes, SHAe4a5164d6559b568a459c0c3e5fa2fe69828fd382849726188f752fb268aa563. Structured review863886b4a45a2534ad879b0c890ea7f8562c1eff0c8c2636196a4ac962f04e7f; private evidence12158afa5ef4c85f31a292efa71bcb59f584e658ba1a0aa7d6f32a71b94e5f7d. Source activation50cbaf8 and distinct build authorization589850b preceded execution.
 
 No GPU fit, six-rank startup, training or model-quality result is implied. Exact own-private pair/manifest transport and one-node selected-XL6 memory/timing qualification are next. Full six-node DPO remains behind sealed/conditional-C2 priority and runtime admission.
+
+
+## 2026-10-28 18:08:59 UTC — Mandatory mounted-data smoke submitted
+
+Root created exactly one reviewed job, `hrsft-20261028-v2mount-smoke-6f8428c2`, one H100 node,7,200-second AML limit, one optimizer step, no quality/teacher/serving/model-selection read. It was Starting on create; no runtime PASS or checkpoint is yet proven. Source/data/cost review f19225ec4eac8485486fbe1ba21a5ec7fd6fa0eabc3f51d8a717f508da7c2e26 and exact YAML1cfa8df97eb6e4a983d436ec0ff50e0107572a64aa878594f3cc36f26353b5e4 preceded the create; root authorization7c5ccf9.
+
+The live exact-name watcher first polled pending_creation before submission; original launcher26733 exec-transitioned to the supervisor with the same PID/start time, verified before create. Cancel19:48:13UTC/hard end20:03:13UTC, earlier than the job's own latest possible timeout. Fresh two-command admission found0owned nonterminal nodes and0other-team active jobs; reserve25forconditionalC2 +1smoke =26of27. Output/name absence and13snapshot file hashes passed. Primary25jobs were already Completed and exact500sealedchunks present, with full-source fetch underway; the spare-node qualification cannot delay C2.
+
+Two pre-create checks stopped without any create: a process argv changed through the expected caffeinate exec transition, then the exact output-absence query timed out. Original evidence remains private; identity and fresh admission were rechecked, with a single actual create at18:08:59.217213UTC. Final mounted hashes, real global_step1, persisted adapter/training state, terminal success and coherent ranks remain required before full SFT.
