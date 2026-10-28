@@ -1353,3 +1353,21 @@ All attempts below are identity/source admission only; **no dataset build, eligi
 The old metadata census defined its `decided` flag as statusok AND both RCs typed zero AND winner non-null; its13nondecided and4status-ok/nonzero counters were composite health counts. Runtime had used raw A/B winner membership for those assertions. The earlier side-census prose therefore incorrectly described all missing-side games as nondecided. Original evidence remains intact with superseding correction SHA0aab1e632139d3ab3268790892bf3cf3cde4c92014f87e1f19b532408e3d7e94.
 
 Reviewed v7.3 source main00ebb42 separates composite health failure13, status-ok/nonzero process4, malformed RC9, nonzero RC12 and status-not-ok9 from the independently reported raw absent-winner-marker count. Invalid present markers fail closed. It preserves raw completion checks, the v7.2 missing-side guard, all exclusions/holdouts and second-pass checks. Original Sol source ACCEPT;35independent and root synthetic tests passed. Spec SHA622f171c7e80212b8200d1e4df240678a736ec4ee8802bee23b2a31b473c88fd; CARD02552d2654dd737d63b676ec0947d1d4a2cc64dbf4871f582f3ec82e6402f33b. This fixes counter definitions without changing scientific eligibility. Until an actual index receipt is accepted, training data remain **NOT ADMITTED**.
+
+<a id="all-data-identity-admission-20261028"></a>
+
+## 2026-10-28 16:51:58 UTC — All-source identity admission accepted; actual dataset build running
+
+The v7.3 index authorized at94ff997 exited0 at16:26:45.460904UTC. Its receipt reconciles364 archives,8,600 raw game lines,8,597 joined games,three missing-log tombstones and724,308 linked raw decisions. The source candidates surviving the fixed identity, roster, team-name and approved health exclusions are3,710 games /311,185 linked raw decisions. These are **source candidates, not serialized eligible teacher rows**.
+
+| Source | Raw joined games / decision links | Candidate games / decision links |
+|---|---:|---:|
+|P5|6,597 /551,493|2,884 /240,274|
+|P6,100 valid archives|2,000 /172,815|826 /70,911|
+|Total|8,597 /724,308|3,710 /311,185|
+
+The ordered exclusions account for4,887 games /413,123 decision links. All three tombstone identities and their roster/name barriers remain. The independent actual-index review found no admitted intersection with the registered holdout components, names or rosters. Fixed tests and validation identities are unchanged. Receipt SHA2567b598b22b129c4a6cfcd11edcd23e3aeaa0f34e697388fa12b39a2a5ecab5438; source00ebb42; spec622f171c7e80212b8200d1e4df240678a736ec4ee8802bee23b2a31b473c88fd. Review JSON SHA87bf44feccefaeb2019ee382069f3b96e188ea49a304752d6b57d19b17cc842e committed at e24a952. Earlier failed attempts above remain historical and are not relabeled successful.
+
+Fresh build authorization430f941 permits one guarded offline SFT dataset build from this accepted index. Root launched it at16:35:05UTC, OS PID1881, exec session17337, with a7,200-second cap ending18:35UTC. It recomputes the accepted index, applies the unchanged teacher/serialization/token gates, verifies fixed-file readback and zero overlap, and publishes the output atomically. As of this entry it is still running: **final teacher/action/read row counts and the final manifest are unknown**. No upload, model training or cloud job follows from this build authorization. The mounted four-file proof and mandatory2k-row/one-step smoke remain next gates after sealed/conditional-C2 priority.
+
+P6 contributes at most70,911 newly eligible decisions before row-level losses. It therefore cannot alone meet studentv2.1's100,000-new-decision requirement; the deficit is at least29,089. The prospective top-up farm card retains the existing reviewed producer contract, fresh disjoint seeds/source catalog and all admission barriers. No top-up farm or studentv2.1 training has been launched.
