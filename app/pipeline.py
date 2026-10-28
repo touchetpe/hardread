@@ -693,6 +693,21 @@ def read_check(review, turn, k, belief):
     try:
         sys.path.insert(0, str(HARDREAD / "tools" / "agent"))
         import parse_note as PN
-        return PN.read_check(review, turn, k, belief)
+        rc = PN.read_check(review, turn, k, belief)
+        expected = (belief or {}).get("expects_action") or {}
+        if (rc and rc.get("status") == "checked" and isinstance(expected, dict)
+                and expected.get("kind") == "switch" and not expected.get("species")):
+            decision = next((d for d in review.get("decisions") or []
+                             if d.get("turn") == turn and d.get("k", 0) == k), {})
+            listed_switch = any(isinstance(action, str) and action.startswith("switch ")
+                                for action, _ in decision.get("opponent_policy_top") or [])
+            listed = ("A switch was listed among the engine's top three actions." if listed_switch
+                      else "No switch was listed among the engine's top three actions.")
+            played = rc.get("played")
+            played_text = f"They played {played}." if played else "The log does not show their action."
+            rc = dict(rc, sentence="You expected a switch. " + listed + " The total probability of any switch "
+                      "is unavailable from the top three. " + played_text,
+                      engine_prob_of_expected=None, upper_bound_if_not_listed=None)
+        return rc
     except Exception:  # noqa: BLE001
         return None
