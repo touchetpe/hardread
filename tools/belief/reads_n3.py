@@ -56,9 +56,11 @@ def project_baselines(selected, rows):
             for key,value in d.items():
                 if not isinstance(key,str) or not key or type(value) not in (int,float) or not math.isfinite(value) or not 0<=value<=1:
                     raise N3Error('invalid baseline probability')
-            # The S-A usage predictor legitimately emits {} for unsupported species.
-            if field!='moves' and d and abs(sum(d.values())-1)>1e-3:
-                raise N3Error('categorical distribution is not normalized')
+            # Historical belief output omits low-probability and reserved classes.
+            # Six-decimal rounding and float32 softmax can slightly exceed one.
+            # Preserve stored mass and probabilities exactly for benchmark scoring.
+            if field!='moves' and math.fsum(d.values())>1 + len(d)*0.5e-6 + 1e-6:
+                raise N3Error('categorical probability mass exceeds producer bound')
     return found
 
 def _public_view(view):
@@ -225,7 +227,7 @@ def score_rows(labels, prompt_records, outputs, usage, belief, benchmark, parse_
             item={'model':float(row_valid and pred_id==true),'model_nll':None}
             for name,baseline in (('usage',up),('belief_v1',bp)):
                 sc=benchmark.score_cat(baseline[base],true,1e-4)
-                item[name]=sc['top1'];item[name+'_nll']=sc['nll']
+                item[name]=sc['top1'];item[name+'_nll']=sc['nll'];item[name+'_true_in_support']=true in baseline[base]
             if pred_id is None:failures['missing_'+base]+=1
             scores_row['metrics'][attr]=item
         if hidden_moves:
@@ -263,6 +265,12 @@ def bootstrap(scores, *, iterations=2000, seed=0):
         for arm in ('usage','belief_v1'):
             vals=[r['metrics'][attr][arm+'_nll'] for r in scores if attr in r['metrics']]
             entry['nll'][arm]=None if attr=='moves' else float(sum(vals)/len(vals))
+        if attr!='moves':
+            entry['baseline_log_score_definition']='mean -ln(max(stored_true_class_probability,1e-4)); omitted classes use the floor; no renormalization'
+            entry['true_class_support']={}
+            for arm in ('usage','belief_v1'):
+                supported=sum(r['metrics'][attr][arm+'_true_in_support'] for r in scores if attr in r['metrics'])
+                entry['true_class_support'][arm]={'count':supported,'denominator':n,'rate':supported/n}
         result[attr]=entry
     return result
 
