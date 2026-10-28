@@ -969,3 +969,18 @@ All three fixed independent technical reviews completed with HTTP200 views/recei
 A separate precommitted Q1 card made one ordinary explanation request on each same review with empty offered keys. Final modes: repaired Glimmer, template fallback, raw Glimmer. Across the three answers, **17/17 checked citations resolve**, exact receipt replay and re-render match, and there are zero hidden decision/disagreement references or never-say hits. Worker latencies were47.0/55.8/42.8seconds; polling wall times use a different clock. The template fallback cause is not exposed. This demonstrates narrow numeric provenance and successful job completion, not semantic accuracy, A1/A0 quality or an end-to-end verdict flow. Fresh Sol saved-output ACCEPT SHA-256 `9d9f72cb1eaa96bb4785fa4f17baa92779ab9a16ad93a6f734393e65dd2b9ec0`; all160manifest entries independently rehashed by root. Frozen manifest SHA-256 `89b4afbd5221be364589bc375784b032ed7cfdb5179e8b2e092d2f78f3a19c3d`.
 
 C9 source/protocolv1b integrated at main d887982 after fresh repair ACCEPT. Root's13constructor/manifest/source tests pass, alongside the independently run synthetic suites. The real20-review/60A1/30A0population is not frozen, parser has no gold notes, and explanation quality remains unmeasured.
+
+
+## 2026-10-28 01:54 UTC — Optional farm slots 07–09 permanently reserved before any creation
+
+The fresh exhaustive seed audit (SHA-256 `b4d93c88ab646f5cfd6a938db0c6411d78ef523bded5a60027fcbbc92d35fe96`) and independent Sol source/cost and reservation review ACCEPT the three prospective blocks. All prior reservations, failed attempts, and nonfarm seed points remain included. No overlap or unknown reservation was found. Each entire closed 200-seed block below is now permanently consumed, including unused or failed attempts; never reuse it.
+
+| Exact job | Closed seed block | State at reservation |
+|---|---|---|
+| `hrlab-20261027-r2-wfill07-a72c51e4` | [10300000,10300199] | RESERVED; not created |
+| `hrlab-20261027-r2-wfill08-a72c51e4` | [10310000,10310199] | RESERVED; not created |
+| `hrlab-20261027-r2-wfill09-a72c51e4` | [10320000,10320199] | RESERVED; not created |
+
+This records reservations only. N4 e1 has priority. Source/cost ACCEPT SHA-256 `fdb3d242b5903aad2cde72ede4ee5a3ed7e45eb7a758b3e2baae54c5385ffa26`; seed/card ACCEPT `44d2bfda89cf4b4b402043022c8c25a2d5fdc2d2d74900c436810f5d62dd3efd`. Each job uses one node, at most six hours, C1t1/hr_train, v3/sample64 logs, 20 games per chunk. No create or rank start at or after 02:00 UTC; cancellation 08:15 and hard end 08:30.
+
+Owner-invoked addendum 6 replaces the expensive admission workflow with its two-command, two-minute check and explicit last-good-count fallback after one retry. Root remains the sole creator and charges every subsequent attempted job once. The cap is 25, or 27 only with no other active jobs. Source, exact name/output absence, armed deadlines, and science rules remain in force.
