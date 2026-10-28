@@ -8,6 +8,7 @@ import copy
 import gzip
 import importlib.util
 import json
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -255,6 +256,161 @@ class SyntheticWorkspace(unittest.TestCase):
         write_json(self.root / "scratch_ds/evals/synthetic-a1-items.json", a1_doc)
         write_json(self.root / "scratch_ds/evals/synthetic-a0-items.json", a0_doc)
         return manifest, a1_doc, a0_doc
+
+
+class ConstructorSourceBindingTests(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory(prefix="hardread-c9-source-binding-")
+        self.root = Path(self._tmp.name)
+        self._git("init", "-q", "-b", "main")
+        self._git("config", "user.name", "Synthetic C9 Test")
+        self._git("config", "user.email", "c9-test@example.invalid")
+        self.hashes = {}
+        for rel in manifest_tools.REVIEW_SOURCE_PATHS:
+            path = self.root / rel
+            path.parent.mkdir(parents=True, exist_ok=True)
+            raw = ("synthetic constructor source: " + rel + "\n").encode()
+            path.write_bytes(raw)
+            self.hashes[rel] = hashlib.sha256(raw).hexdigest()
+        self._git("add", "-A")
+        self._git("commit", "-q", "-m", "synthetic constructor source")
+        self.commit = self._git_text("rev-parse", "HEAD")
+        self.manifest = {"review_code_commit": "synthetic-review-code",
+                         "review_source_sha256": dict(self.hashes)}
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def _git(self, *args, check=True):
+        return subprocess.run(["git", *args], cwd=self.root, stdout=subprocess.PIPE,
+                              stderr=subprocess.PIPE, check=check)
+
+    def _git_text(self, *args):
+        return self._git(*args).stdout.decode().strip()
+
+    def _frozen_constants(self, manifest=None, *, commit=None):
+        manifest = manifest or self.manifest
+        return [
+            patch.object(manifest_tools, "FROZEN_C9_V1_MANIFEST_DIGEST",
+                         manifest_tools.manifest_digest(manifest)),
+            patch.object(manifest_tools, "FROZEN_C9_V1_REVIEW_CODE_COMMIT",
+                         manifest["review_code_commit"]),
+            patch.object(manifest_tools, "FROZEN_C9_V1_CONSTRUCTOR_COMMIT", commit or self.commit),
+            patch.object(manifest_tools, "FROZEN_C9_V1_M_SHA256",
+                         manifest["review_source_sha256"]["tools/agent/build_eval_manifest.py"]),
+        ]
+
+    def _assert_frozen_binding(self, manifest=None):
+        manifest = manifest or self.manifest
+        patches = self._frozen_constants(self.manifest)
+        for item in patches:
+            item.start()
+        try:
+            manifest_tools._verify_frozen_c9_v1_source_binding(
+                manifest, manifest["review_source_sha256"], root=self.root)
+        finally:
+            for item in reversed(patches):
+                item.stop()
+
+    def test_historical_blob_helper_reads_exact_bytes_and_rejects_wrong_or_unknown_refs(self):
+        manifest_tools._verify_historical_constructor_sources(
+            self.hashes, root=self.root, constructor_commit=self.commit)
+        changed = dict(self.hashes)
+        changed["tools/review/review.py"] = "0" * 64
+        with self.assertRaises(manifest_tools.ManifestError):
+            manifest_tools._verify_historical_constructor_sources(
+                changed, root=self.root, constructor_commit=self.commit)
+        with self.assertRaises(manifest_tools.ManifestError):
+            manifest_tools._verify_historical_constructor_sources(
+                self.hashes, root=self.root, constructor_commit="f" * 40)
+
+    def test_missing_historical_blob_fails_closed(self):
+        rel = "tools/review/review.py"
+        self._git("rm", "-q", rel)
+        self._git("commit", "-q", "-m", "remove a synthetic historical object")
+        missing_blob_commit = self._git_text("rev-parse", "HEAD")
+        with self.assertRaises(manifest_tools.ManifestError):
+            manifest_tools._verify_historical_constructor_sources(
+                self.hashes, root=self.root, constructor_commit=missing_blob_commit)
+
+    def test_frozen_binding_rejects_changed_scope_commit_and_source_map(self):
+        self._assert_frozen_binding()
+        for mutate in (
+            lambda m: m.__setitem__("review_code_commit", "wrong-review-commit"),
+            lambda m: m["review_source_sha256"].__setitem__("tools/review/review.py", "0" * 64),
+        ):
+            altered = copy.deepcopy(self.manifest)
+            mutate(altered)
+            with self.assertRaises(manifest_tools.ManifestError):
+                self._assert_frozen_binding(altered)
+        attempt_hashes = dict(self.hashes)
+        attempt_hashes["tools/review/review.py"] = "0" * 64
+        patches = self._frozen_constants(self.manifest)
+        for item in patches:
+            item.start()
+        try:
+            with self.assertRaises(manifest_tools.ManifestError):
+                manifest_tools._verify_frozen_c9_v1_source_binding(
+                    self.manifest, attempt_hashes, root=self.root)
+        finally:
+            for item in reversed(patches):
+                item.stop()
+
+    def test_frozen_binding_rejects_a_changed_constructor_hash_and_dirty_m(self):
+        altered = copy.deepcopy(self.manifest)
+        altered["review_source_sha256"]["tools/agent/build_eval_manifest.py"] = "0" * 64
+        patches = self._frozen_constants(altered)
+        # Keep the pinned M hash fixed as it is in production while updating only
+        # the test's manifest digest boundary.
+        patches[-1] = patch.object(manifest_tools, "FROZEN_C9_V1_M_SHA256",
+                                   self.hashes["tools/agent/build_eval_manifest.py"])
+        for item in patches:
+            item.start()
+        try:
+            with self.assertRaises(manifest_tools.ManifestError):
+                manifest_tools._verify_frozen_c9_v1_source_binding(
+                    altered, altered["review_source_sha256"], root=self.root)
+        finally:
+            for item in reversed(patches):
+                item.stop()
+
+        m_path = self.root / "tools/agent/build_eval_manifest.py"
+        original = m_path.read_bytes()
+        m_path.write_bytes(original + b"dirty")
+        with self.assertRaises(manifest_tools.ManifestError):
+            self._assert_frozen_binding()
+        m_path.write_bytes(original + b"staged")
+        self._git("add", "tools/agent/build_eval_manifest.py")
+        m_path.write_bytes(original)
+        with self.assertRaises(manifest_tools.ManifestError):
+            self._assert_frozen_binding()
+
+    def test_every_other_live_source_remains_hash_checked(self):
+        self._assert_frozen_binding()
+        for rel in manifest_tools.REVIEW_SOURCE_PATHS:
+            if rel == "tools/agent/build_eval_manifest.py":
+                continue
+            path = self.root / rel
+            original = path.read_bytes()
+            path.write_bytes(original + b"changed")
+            with self.subTest(path=rel):
+                with self.assertRaises(manifest_tools.ManifestError):
+                    self._assert_frozen_binding()
+            path.write_bytes(original)
+
+    def test_actual_frozen_manifest_binds_fb101_blobs_not_review_code_commit(self):
+        source_root = SOURCE_ROOT
+        manifest_path = source_root / "scratch_ds/evals/c9-freeze-fb10153-v1/selection_manifest.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        self.assertEqual(manifest_tools.manifest_digest(manifest),
+                         manifest_tools.FROZEN_C9_V1_MANIFEST_DIGEST)
+        self.assertEqual(manifest["review_code_commit"],
+                         manifest_tools.FROZEN_C9_V1_REVIEW_CODE_COMMIT)
+        manifest_tools._verify_frozen_c9_v1_source_binding(
+            manifest, manifest["review_source_sha256"], root=source_root)
+        review_commit_m = manifest_tools._git_blob_sha256(
+            manifest["review_code_commit"], manifest_tools.FROZEN_C9_V1_M_PATH, root=source_root)
+        self.assertNotEqual(review_commit_m, manifest_tools.FROZEN_C9_V1_M_SHA256)
 
 
 class SelectionAndManifestTests(SyntheticWorkspace):

@@ -9,6 +9,7 @@ import hashlib
 import json
 import gzip
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -43,6 +44,11 @@ REVIEW_SOURCE_PATHS = ("tools/review/review.py", "tools/review/reconstruct.py",
                        "tools/human/reconstruct_check.py", "tools/human/parse_replays.py",
                        "tools/dataset/extract.py", "tools/agent/build_eval_manifest.py", "tools/agent/c9_farm_source.py",
                        "tools/agent/construct_eval_c9.py", "app/pipeline.py", "app/bridge_adapter.py")
+FROZEN_C9_V1_MANIFEST_DIGEST = "e556265cef303c25c7bfa2ed47c3945be1ac5ad4f4087fe9122172344516c707"
+FROZEN_C9_V1_REVIEW_CODE_COMMIT = "a2328c90d7f1a6abed44b4ce031fbe52baf11566"
+FROZEN_C9_V1_CONSTRUCTOR_COMMIT = "fb1015301859058b274e6ccc7f792daf19a7c9a4"
+FROZEN_C9_V1_M_PATH = "tools/agent/build_eval_manifest.py"
+FROZEN_C9_V1_M_SHA256 = "3b1538a72ed9ed792231cbabd512d6da01407e3ddc196128a54d888f5a5251aa"
 
 
 class ManifestError(ValueError):
@@ -559,6 +565,85 @@ def _verify_file(path, expected, root=ROOT):
     return actual
 
 
+def _git_blob_sha256(commit, path, *, root=ROOT):
+    """Read one allowlisted immutable source blob without invoking a shell."""
+    if path not in REVIEW_SOURCE_PATHS:
+        raise ManifestError("historical source path is not in the fixed review source set")
+    if commit != "HEAD" and (not isinstance(commit, str) or not re.fullmatch(r"[0-9a-f]{40}", commit)):
+        raise ManifestError("historical source commit is malformed")
+    try:
+        result = subprocess.run(["git", "cat-file", "blob", f"{commit}:{path}"], cwd=root,
+                                stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+    except (OSError, subprocess.CalledProcessError) as exc:
+        raise ManifestError("pinned historical source blob is missing") from exc
+    return digest_bytes(result.stdout)
+
+
+def _require_ancestor_commit(commit, *, root=ROOT):
+    """Require the pinned full commit to exist and be an ancestor of current HEAD."""
+    if not isinstance(commit, str) or not re.fullmatch(r"[0-9a-f]{40}", commit):
+        raise ManifestError("historical source commit is malformed")
+    try:
+        resolved = subprocess.run(["git", "rev-parse", "--verify", f"{commit}^{{commit}}"], cwd=root,
+                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+        if resolved.stdout.decode("ascii", errors="strict").strip() != commit:
+            raise ManifestError("historical source commit did not resolve exactly")
+        subprocess.run(["git", "merge-base", "--is-ancestor", commit, "HEAD"], cwd=root,
+                       stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+    except (OSError, subprocess.CalledProcessError, UnicodeError) as exc:
+        raise ManifestError("pinned historical source commit is missing or not an ancestor") from exc
+
+
+def _verify_historical_constructor_sources(source_hashes, *, root=ROOT, constructor_commit=None):
+    """Bind the fixed source list to one immutable constructor commit.
+
+    ``constructor_commit`` is injectable only at this private helper boundary for
+    synthetic Git-fixture tests. Production validation calls this with the frozen
+    full commit constant and never reads a revision or path from the manifest.
+    """
+    if not isinstance(source_hashes, dict) or set(source_hashes) != set(REVIEW_SOURCE_PATHS):
+        raise ManifestError("historical review source list is incomplete")
+    constructor_commit = constructor_commit or FROZEN_C9_V1_CONSTRUCTOR_COMMIT
+    _require_ancestor_commit(constructor_commit, root=root)
+    for path in REVIEW_SOURCE_PATHS:
+        expected = source_hashes.get(path)
+        if not isinstance(expected, str) or not re.fullmatch(r"[0-9a-f]{64}", expected):
+            raise ManifestError(f"historical source hash is malformed: {path}")
+        if _git_blob_sha256(constructor_commit, path, root=root) != expected:
+            raise ManifestError(f"historical constructor source differs from frozen hash: {path}")
+
+
+def _verify_current_file_matches_head(path, *, root=ROOT):
+    """Require a tracked live file to equal HEAD, including a clean index/worktree."""
+    expected = _git_blob_sha256("HEAD", path, root=root)
+    if digest_file(_resolve_path(path, root)) != expected:
+        raise ManifestError(f"current tracked source differs from HEAD: {path}")
+    try:
+        subprocess.run(["git", "diff", "--quiet", "--", path], cwd=root,
+                       stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+        subprocess.run(["git", "diff", "--cached", "--quiet", "HEAD", "--", path], cwd=root,
+                       stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+    except (OSError, subprocess.CalledProcessError) as exc:
+        raise ManifestError(f"current tracked source is dirty: {path}") from exc
+
+
+def _verify_frozen_c9_v1_source_binding(manifest, source_hashes, *, root=ROOT):
+    """Apply the single frozen-v1 constructor exception; all data files stay live-verified."""
+    if manifest_digest(manifest) != FROZEN_C9_V1_MANIFEST_DIGEST:
+        raise ManifestError("constructor source exception is limited to the exact frozen v1 manifest")
+    if manifest.get("review_code_commit") != FROZEN_C9_V1_REVIEW_CODE_COMMIT:
+        raise ManifestError("frozen v1 review-code commit changed")
+    if source_hashes != manifest.get("review_source_sha256"):
+        raise ManifestError("attempt log review source hashes differ from the manifest")
+    if source_hashes.get(FROZEN_C9_V1_M_PATH) != FROZEN_C9_V1_M_SHA256:
+        raise ManifestError("frozen v1 constructor evaluator hash changed")
+    _verify_historical_constructor_sources(source_hashes, root=root)
+    _verify_current_file_matches_head(FROZEN_C9_V1_M_PATH, root=root)
+    for path in REVIEW_SOURCE_PATHS:
+        if path != FROZEN_C9_V1_M_PATH:
+            _verify_file(path, source_hashes[path], root)
+
+
 def _validate_row_eligibility(row):
     e = row.get("eligibility")
     if not isinstance(e, dict) or e.get("decided") is not True or e.get("result") not in ("win", "loss"):
@@ -590,10 +675,13 @@ def _validate_attempt_evidence(pool, evidence, census, rows, manifest, *, root):
         raise ManifestError(f"{pool} attempt log lacks review source hashes")
     if set(source_hashes) != set(REVIEW_SOURCE_PATHS):
         raise ManifestError(f"{pool} attempt log review source list is incomplete")
-    for path, expected_hash in source_hashes.items():
-        _verify_file(path, expected_hash, root)
     if source_hashes != manifest.get("review_source_sha256"):
         raise ManifestError(f"{pool} attempt log review source hashes differ from the manifest")
+    if manifest_digest(manifest) == FROZEN_C9_V1_MANIFEST_DIGEST:
+        _verify_frozen_c9_v1_source_binding(manifest, source_hashes, root=root)
+    else:
+        for path, expected_hash in source_hashes.items():
+            _verify_file(path, expected_hash, root)
     eligible = [entry for entry in census if entry.get("exclusion_reason") is None]
     eligible.sort(key=lambda row: (row["rank_hash"], row["uid"], row["side"]))
     rows_by_identity = {(row["pool"], row["uid"], row["side"]): row for row in rows}
