@@ -1,0 +1,61 @@
+$schema: https://azuremlschemas.azureedge.net/latest/commandJob.schema.json
+name: __NAME__
+display_name: __NAME__
+experiment_name: hardread-dpo
+code: ./code
+command: >-
+  python azure/sft/train_dpo.py --config job-config.json --config-sha256 __CONFIG_SHA__
+  --code-root . --data ${{inputs.pairs}} --base ${{inputs.base}}
+  --adapter ${{inputs.xl6}} --timing ${{inputs.timing}} --smoke ${{inputs.smoke}}
+  --selection ${{inputs.selection}}
+  --out ${{outputs.artifacts}}
+compute: __COMPUTE__
+environment: __ENVIRONMENT__
+environment_variables:
+  HF_HUB_OFFLINE: "1"
+  TRANSFORMERS_OFFLINE: "1"
+  HF_HUB_DISABLE_TELEMETRY: "1"
+  WANDB_MODE: offline
+  NCCL_IB_DISABLE: "1"
+  TORCH_NCCL_ASYNC_ERROR_HANDLING: "1"
+inputs:
+  pairs:
+    type: uri_folder
+    path: __PAIRS_URI__
+    mode: ro_mount
+  base:
+    type: uri_folder
+    path: __BASE_URI__
+    mode: ro_mount
+  xl6:
+    type: uri_folder
+    path: __XL6_URI__
+    mode: ro_mount
+  timing:
+    type: uri_file
+    path: __TIMING_URI__
+    mode: ro_mount
+  selection:
+    type: uri_file
+    path: __SELECTION_URI__
+    mode: ro_mount
+  smoke:
+    type: uri_file
+    path: __SMOKE_URI__
+    mode: ro_mount
+outputs:
+  artifacts:
+    type: uri_folder
+    path: __OUTPUT_URI__
+    mode: rw_mount
+limits:
+  timeout: __TIMEOUT__
+resources:
+  instance_count: 6
+  shm_size: 128g
+distribution:
+  type: pytorch
+  process_count_per_instance: 1
+tags:
+  project: pokemon-rl-research
+  lane: hardread-dpo

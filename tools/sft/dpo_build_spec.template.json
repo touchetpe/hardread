@@ -1,0 +1,8 @@
+{
+  "status": "DRAFT_NOT_APPROVED",
+  "plan_sha256": "9d6d411405d1120165597b9e57b2d6ec9b934411534e9afa4d729331287880c4",
+  "source_index_sha256": "REPLACE_ACCEPTED_INDEX_SHA256",
+  "output_dir": "scratch_ds/REPLACE_UNIQUE_PRIVATE_OUTPUT",
+  "max_pairs": 100000,
+  "code_sha256": {"REPLACE_COMPLETE_CODE_CLOSURE": "REPLACE_SHA256"}
+}
