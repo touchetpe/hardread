@@ -1216,3 +1216,30 @@ The prospectively fixed local benchmark ran40 scheduled identities,20 side-swapp
 All40 identities launched;39 completed. Raw outcomes: **13wins,0draws,26losses,1unknown**. Fixture0 failed after model load because the harness used a relative policy-log path; original artifacts were preserved and no fixture was replayed. Under the prospective launched-failure-as-loss rule, primary **13/40=32.5%**, Wilson95% **[20.0843%,47.9825%]**. The completed-only decisive secondary is **13/39=33.3333%**. The unknown is a harness failure, not an observed battle defeat.
 
 Across1660 observed Student decisions, zero fallback, server rejection, illegal action or invalid policy rows; nearest-rank policy latency p50 **0.024s**, p95 **0.082s**. These timings belong to this local protocol. Root reproduced counts from the immutable continuation ledger SHA `73e68d3372490cc47bbea35906bf1f02878278094b998df95b57846931a196a4`. Independent terminal readout ACCEPT SHA `619540657cbe8fe593c581dacc48d9dca3f57c7e9a131b82ed179d2eb0fef351`; counts SHA `4386cee26353da2c9d55f4a217310fef96f79a14e397683984149c39c4ab8def`. No XL6 comparison result or paired difference is available yet.
+
+
+## 2026-10-28 13:24:53 UTC — Addendum8 semantic source acceptance and DATA_URI preparation
+
+Integrated semantic source commit `b07b0d5` distinguishes attributed `luck_pts` from counterfactual `swing_pts`, preserves exact cited field/value/sign, and rejects the three reconstructed misleading claims. Root checks passed:53 verifier/template tests,10 receipt tests,3 semantic methods covering3 original cases plus10 prespecified synthetics and a bare-swing case. Independent source ACCEPT SHA `8b4d371bfe0740efd880c04556c1f5bba5289e65a181886fe404cbc08b1a3896`. These are source regressions, not a new A1 quality score; v1 labels12/60 remain unchanged. Templates/noAgentic remain the product policy.
+
+Integrated DATA_URI commit `b59f533` provides optional read-only mounted SFT data, with four exact file hashes verified on each node before the unchanged trainer. Root5 unittest methods passed; the independent source/cost review records19 synthetic scenarios, SHA `70a26879737e96e0bf69f68a560d36ec5bdf7487dd51ef8aa2033a7f4cee4c10`. No real dataset has been admitted by this source change. All-data identity/filter/overlap checks, frozen v1val/eval, remote readback and mandatory2k-row one-step smoke remain required before full training.
+
+Both standalone Linux probes Failed. The first lacked poke_engine; the second rejected its private ledger at the directory/0700 check (exact stdlog SHA `99d086d965b523b47d1185d6f00239fffa1609acfa28b289e625e999da49cda9`). Artifact-mount mode behavior is a plausible explanation, not proven by this exception. No automatic third probe. Any conditional realT1 uses localPOSIX0700journals plus actual same-job proof.
+
+
+## 2026-10-28 13:24:53 UTC — F2 farm termination triage; raw counts are not eligible training rows
+
+Independent original analysis ACCEPT SHA `f16fb64d2ee50f6635a20c9bac55f997e57c88cb83edbea5620edd5f9b322a73`. The six outer guards propagated parent SIGTERM(rc143); exact signal times follow.
+
+| Owned job | AML Start UTC | Parent-signal TERM sent UTC | Start + 21,600 s UTC | Difference | Direct cause evidence |
+|---|---|---|---|---:|---|
+| `hrlab-20261027-r2-wfill01-a72c51e4` | 00:59:48 | 06:59:33 | 06:59:48 | −15 s | `parent_signal_term_sent`; owned group stopped 06:59:34, rc 143 |
+| `hrlab-20261027-r2-wfill02-a72c51e4` | 00:59:55 | 06:59:42 | 06:59:55 | −13 s | parent signal; stopped 06:59:42, rc 143 |
+| `hrlab-20261027-r2-wfill03-a72c51e4` | 01:00:14 | 07:00:02 | 07:00:14 | −12 s | parent signal; stopped 07:00:02, rc 143 |
+| `hrlab-20261027-r2-wfill04-a72c51e4` | 01:00:19 | 07:00:07 | 07:00:19 | −12 s | parent signal; stopped 07:00:07, rc 143 |
+| `hrlab-20261027-r2-wfill05-a72c51e4` | 01:00:27 | 07:00:14 | 07:00:27 | −13 s | parent signal; stopped 07:00:14, rc 143 |
+| `hrlab-20261027-r2-wfill06-a72c51e4` | 01:04:20 | 07:04:07 | 07:04:20 | −13 s | parent signal; stopped 07:04:07, rc 143 |
+
+The guard's scheduled absolute TERM was08:25, the chunk stop-before-next deadline08:10, and watcher cancellation08:15. The watcher recorded zero cancel requests and all targets terminal07:05:24. None explains these06:59–07:04 parent signals. AML end timestamps31–99seconds after nominal timeout are compatible with platform timeout; the12–15second early signals and absent platform reason do not establish the upstream sender. Cause remains **UNKNOWN**, not confirmed planned termination. Slot01 signal06:59:33 differs from owned-group stop06:59:34.
+
+Source census:100 independently complete valid archives,2000 decided game rows,six invalid archives quarantined,zero partial archives,no finalized in-job POSTPACK_FINAL. Hash-bound fetch covers the100 expected archives. Raw172815 decision rows remain **eligible teacher count UNKNOWN** until the prospective source/holdout/policy/serialization admission audit. No >=100k student-data readiness claim. No protected outcomes were read for this triage.
