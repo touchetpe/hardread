@@ -1423,3 +1423,12 @@ Root created exactly one reviewed job, `hrsft-20261028-v2mount-smoke-6f8428c2`, 
 The live exact-name watcher first polled pending_creation before submission; original launcher26733 exec-transitioned to the supervisor with the same PID/start time, verified before create. Cancel19:48:13UTC/hard end20:03:13UTC, earlier than the job's own latest possible timeout. Fresh two-command admission found0owned nonterminal nodes and0other-team active jobs; reserve25forconditionalC2 +1smoke =26of27. Output/name absence and13snapshot file hashes passed. Primary25jobs were already Completed and exact500sealedchunks present, with full-source fetch underway; the spare-node qualification cannot delay C2.
 
 Two pre-create checks stopped without any create: a process argv changed through the expected caffeinate exec transition, then the exact output-absence query timed out. Original evidence remains private; identity and fresh admission were rechecked, with a single actual create at18:08:59.217213UTC. Final mounted hashes, real global_step1, persisted adapter/training state, terminal success and coherent ranks remain required before full SFT.
+
+
+## 2026-10-28 — Mandatory mounted-data GPU smoke independently accepted
+
+The exact one-node job `hrsft-20261028-v2mount-smoke-6f8428c2` completed successfully. Independent actual-runtime review SHA2f0db2975f8bdb2f466c8a3e0ae29a4b6a34947ca2cd67111f66db71510a8f14 accepted H100 preflight/train, the frozen2,000rows(1,809action/191reads), exact mounted four-file pins, one real optimizer-step event and trainer_state.global_step1, persisted identical final/checkpoint adapters plus optimizer/scheduler, and26downloaded file hashes over1,980,540,018bytes. The exact watcher recorded Running→Finalizing→Completed, zero errors.
+
+The wrapper is silent when each file hash matches; its pinned control flow checks all four mounted files before Python/model loading. Successful model preflight and training prove passage through that gate; no separate printed hash receipt is claimed. It is a single-process infrastructure smoke with no DDP-marker or model-quality claim. No teacher, serving, fixed-test or selection score was read.
+
+Storage CLI metadata attempts timed out, so the standard AML named-output private download was used as the30-minute manual fallback;1.98GB stayed below the6GB/3-minute bounds. Full12-node source/cost review separately ACCEPT55fc2b4b…ab66, committed3155947. Actual full training still needs sealed/C2 priority, current admission, live exact-name watcher and root create.
