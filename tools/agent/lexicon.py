@@ -5,7 +5,7 @@ verifier's strictness is part of the eval protocol (EVAL_PROTOCOL_AGENT.md), so 
 """
 import re
 
-LEXICON_VERSION = "agent-lex-v5"
+LEXICON_VERSION = "agent-lex-v6"
 
 # ---- rule 2: phrase classes. Each class: trigger regex -> allowed (kind, pts-subkind or None) of a slot.
 PHRASE_CLASSES = [
@@ -16,6 +16,7 @@ PHRASE_CLASSES = [
     ("percentile", r"\bpercentile\b", {("percentile", None)}),
     ("chance", r"\bchances?\b|\bprobabilit(?:y|ies)\b|\bodds\b|\blikel(?:y|ihood)\b|\bunlikely\b",
      {("prob", None)}),
+    ("counterfactual_swing", r"\bcounterfactual[\s-]+swing\b", {("pts", "swing")}),
     # "swung"/"swing" are neutral verbs ("choices swung {c}"); chance-event words name luck
     ("luck", r"\blu(?:ck|cky)\b|\bunlucky\b|\bhax\b|\bdice\b|\bcrit(?:s|ical(?:\s+hits?)?)?\b|\bmiss(?:es|ed)?\b"
              r"|\bflinch(?:ed|es)?\b|\bfull(?:y)?\s+paraly[sz]\w*|\bdamage\s+rolls?\b|\bspeed\s+ties?\b",

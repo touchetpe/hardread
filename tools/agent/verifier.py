@@ -3,8 +3,7 @@
 An answer passes only if every rule holds (plus the structural rule 0):
   0. structure: 1-4 sentences, each {"text": str, "slots": {name: "#id.field"}}; every {placeholder} has a slot.
   1. every slot reference resolves to an existing scalar field of a tool output from this session;
-  2. the slot's key type is allowed for its phrase class (lexicon.PHRASE_CLASSES: luck words -> *luck*/*swing*
-     points; "chance" -> p/*_prob; "win chance"/"start" -> *_wp_pct; "prefers/disagrees" -> gap_pts; "choices"
+  2. the slot's key type is allowed for its phrase class (lexicon.PHRASE_CLASSES: luck words -> luck points; counterfactual swing -> swing_pts; "chance" -> p/*_prob; "win chance"/"start" -> *_wp_pct; "prefers/disagrees" -> gap_pts; "choices"
      -> choices_pts; "turn {t}" -> a turn); every numeric slot needs a phrase that says what it is;
      choices_pts is never "your choices" (it is both players');
   3. the free text has no digits and no number words, EXCEPT digits inside a species/move name that appears in
@@ -33,7 +32,7 @@ from lexicon import (BOTH_PLAYERS_RE, CERTAIN_RE, DIGIT_RE, HEDGE_RE, LEXICON_VE
 from names import find_entities, to_id  # noqa: E402
 from tools import field_kind, pts_subkind  # noqa: E402
 
-VERIFIER_VERSION = "agent-verifier-v5 (" + LEXICON_VERSION + ")"
+VERIFIER_VERSION = "agent-verifier-v6 (" + LEXICON_VERSION + ")"
 MAX_SENTENCES = 4
 MAX_CHARS = 300
 
@@ -165,13 +164,21 @@ def verify(payload, session):
                 continue
             best = _bind_trigger(neutral, a, b, triggers)
             if best is None:
-                _fail(fails, 2, i, f"{{{name}}} ({field}) has no words saying what the number is (e.g. 'luck', "
-                                   f"'win chance', 'chance', 'preferred by')", name)
+                if field == "swing_pts":
+                    _fail(fails, 2, i, "swing_pts is a counterfactual swing, not luck points; cite luck_pts for "
+                                       "luck or say counterfactual swing for swing_pts", name)
+                else:
+                    _fail(fails, 2, i, f"{{{name}}} ({field}) has no words saying what the number is (e.g. 'luck', "
+                                       f"'win chance', 'chance', 'preferred by')", name)
                 continue
             _, cname, allowed = best
             if (kind, sub) not in allowed and (kind, None) not in allowed:
-                _fail(fails, 2, i, f"{{{name}}} cites {field} but is phrased as '{cname}'; that phrase needs "
-                                   f"{sorted(k + ('_' + s_ if s_ else '') for k, s_ in allowed)}", name)
+                if field == "swing_pts" or cname == "counterfactual_swing":
+                    _fail(fails, 2, i, "swing_pts is a counterfactual swing, not luck points; cite luck_pts for "
+                                       "luck or say counterfactual swing for swing_pts", name)
+                else:
+                    _fail(fails, 2, i, f"{{{name}}} cites {field} but is phrased as '{cname}'; that phrase needs "
+                                       f"{sorted(k + ('_' + s_ if s_ else '') for k, s_ in allowed)}", name)
             if kind == "pts" and sub == "choices" and YOUR_CHOICES_RE.search(neutral):
                 _fail(fails, 2, i, "choices_pts is both players' choices together; never call it 'your choices'",
                       name)

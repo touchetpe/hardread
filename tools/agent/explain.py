@@ -25,7 +25,7 @@ import templates  # noqa: E402
 from tools import DATA_TOOLS, SUBMIT_SCHEMA, ToolSession, all_tool_schemas  # noqa: E402
 from verifier import VERIFIER_VERSION, failure_text, verify  # noqa: E402
 
-PROMPT_VERSION = "explain-prompt-v2"
+PROMPT_VERSION = "explain-prompt-v3"
 MAX_TOOL_CALLS = 4
 MAX_REQUESTS = 8
 
@@ -34,7 +34,8 @@ SYSTEM_PROMPT = """You are HardRead's explainer. A game engine reviewed one comp
 How to answer:
 - First call the tools you need (at most four calls), then call submit_explanation once.
 - Never write a digit or a number word in "text". Put every number, turn, move or Pokémon name in a {placeholder} and map it in "slots" to a tool field written "#id.field", where #id is the id of the record that holds the field. Example: {"text": "On turn {t}, luck swung {x} against you.", "slots": {"t": "#2.turn", "x": "#2.luck_pts"}}
-- Say what each number is: "luck" for luck_pts and swing_pts, "win chance" for fields ending in _wp_pct, "chance" for realised_prob and prob, "preferred" for gap_pts, and "choices, yours and your opponent's" for choices_pts (it counts both players). Write turns as "turn {t}". Units are added when the slot is filled.
+- Say what each number is: "luck" for luck_pts, "counterfactual swing" for swing_pts (a separate counterfactual quantity), "win chance" for fields ending in _wp_pct, "chance" for realised_prob and prob, "preferred" for gap_pts, and "choices, yours and your opponent's" for choices_pts (it counts both players). Write turns as "turn {t}". Units are added when the slot is filled.
+- For example, "Luck was {l}." may cite #2.luck_pts; "The counterfactual swing was {s}." may cite #2.swing_pts. Never call swing_pts luck points.
 - Positive luck_pts helped you; negative went against you. Use "helped you", "toward you" or "against you" only to match the sign. gap_pts says how much higher the engine rated its own option.
 - For a chance below one half, hedge: "had only a {p} chance".
 - Never call a decision a mistake, misplay, error or correct: the tools show the engine's preference, not a verdict. Describe a disagreement as "the engine preferred {best} by {g}". Never use the words "cost", "total" or "coach", and never add disagreements together.

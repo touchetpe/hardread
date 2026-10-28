@@ -68,8 +68,10 @@ def field_kind(field):
 
 def pts_subkind(field):
     f = field or ""
-    if "luck" in f or "swing" in f:
+    if f == "luck_pts":
         return "luck"
+    if f == "swing_pts":
+        return "swing"
     if "choices" in f:
         return "choices"
     if "gap" in f:
@@ -130,7 +132,8 @@ TOOL_SCHEMAS = [
     {"type": "function", "function": {
         "name": "get_luck_events",
         "description": "Chance events of one turn (crits, misses, immobilisation, secondary status), who they favoured, "
-                       "the chance of what happened and its swing in points.",
+                       "realised_prob is the event chance, luck_pts is the attributed luck contribution in points, "
+                       "and swing_pts is the separate counterfactual swing in points.",
         "parameters": {"type": "object", "properties": {"turn": {"type": "integer", "minimum": 0}},
                        "required": ["turn"]}}},
     {"type": "function", "function": {
