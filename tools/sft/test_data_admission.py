@@ -454,7 +454,7 @@ class HistoricalCensusTests(unittest.TestCase):
     names=['lab-n3-c015','lab-n3-c037','lab-n3-c043']+[f'synthetic-{i}' for i in range(261)]
     records=[]
     for i,name in enumerate(names):
-        tomb=int(i<3);records.append({'source':'P5','run_id':name,'raw_game_lines':25,'game_count':25-tomb,'missing_log_tombstones':tomb,'decision_count':551493 if i==0 else 0,'p5_health_counts':{'not_decided':13,'malformed_rc':9,'nonzero_rc':12,'status_not_ok':9,'status_ok_nonzero_undecided':4} if i==0 else {}})
+        tomb=int(i<3);records.append({'source':'P5','run_id':name,'raw_game_lines':25,'game_count':25-tomb,'missing_log_tombstones':tomb,'decision_count':551493 if i==0 else 0,'p5_health_counts':{'composite_health_failure':13,'winner_marker_absent':0,'malformed_rc':9,'nonzero_rc':12,'status_not_ok':9,'status_ok_nonzero_process':4} if i==0 else {}})
     records.extend({'source':'P6','raw_game_lines':20,'game_count':20,'missing_log_tombstones':0,'decision_count':172815 if i==0 else 0} for i in range(100))
     R.verify_source_census(records)
     records[1]['game_count']+=1
@@ -518,5 +518,21 @@ class ApprovedNonzeroMissingSideTests(unittest.TestCase):
             source['kind']='P6'
             with self.assertRaisesRegex(R.RuntimeErrorClosed,'side decision log missing'):R.extract_joined_archive(path,source['sha256'],source,teams,None,extract,identity)
             source['kind']='P5'
+        srcgame['winner']='unexpected';source['sha256']=write(0,True)
+        with self.assertRaisesRegex(R.RuntimeErrorClosed,'malformed present winner marker'):R.extract_joined_archive(path,source['sha256'],source,teams,None,extract,identity)
+
+class HealthCensusDefinitionTests(unittest.TestCase):
+ def test_decided_nonzero_is_composite_failure_not_absent_winner(self):
+    import data_admission_runtime as R
+    g=game(1801);g.update(rc_a=0,rc_b=1,p5_nonzero_process_rc=True,decided=True,source_status='ok')
+    flags=R.p5_health_flags(g)
+    self.assertTrue(flags['composite_health_failure']);self.assertTrue(flags['status_ok_nonzero_process']);self.assertTrue(flags['nonzero_rc']);self.assertFalse(flags['winner_marker_absent'])
+    idx=make_index([g]);hold={'components':{H('other')},'tokens':set(),'rosters':{H('other-roster')},'team_names':set()}
+    kept,reasons=A.partition_games(idx,hold,{H('held')},{'reserved'},{H('reserved')},expected_heldout=1)
+    self.assertEqual(kept,[]);self.assertEqual(reasons,{'p5_nonzero_process_rc':1})
+    g.update(rc_b=0,p5_nonzero_process_rc=False,decided=False,p5_incomplete_game=True)
+    flags=R.p5_health_flags(g);self.assertTrue(flags['winner_marker_absent']);self.assertTrue(flags['composite_health_failure'])
+    kept,reasons=A.partition_games(idx,hold,{H('held')},{'reserved'},{H('reserved')},expected_heldout=1)
+    self.assertEqual(kept,[]);self.assertEqual(reasons,{'p5_incomplete_game':1})
 
 if __name__=='__main__':unittest.main()
