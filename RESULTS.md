@@ -1432,3 +1432,18 @@ The exact one-node job `hrsft-20261028-v2mount-smoke-6f8428c2` completed success
 The wrapper is silent when each file hash matches; its pinned control flow checks all four mounted files before Python/model loading. Successful model preflight and training prove passage through that gate; no separate printed hash receipt is claimed. It is a single-process infrastructure smoke with no DDP-marker or model-quality claim. No teacher, serving, fixed-test or selection score was read.
 
 Storage CLI metadata attempts timed out, so the standard AML named-output private download was used as the30-minute manual fallback;1.98GB stayed below the6GB/3-minute bounds. Full12-node source/cost review separately ACCEPT55fc2b4b…ab66, committed3155947. Actual full training still needs sealed/C2 priority, current admission, live exact-name watcher and root create.
+
+
+<a id="sealed-full-s41-20261028"></a>
+
+## 2026-10-28T18:47:11.484481+00:00 — Sealed 10,000-game test: registered Ending B, no demonstrated improvement
+
+The single registered full readout on500accepted logical chunks gives **50.05% treatment wins**,95% pairing-clustered interval **49.16–50.94%**, two-sided **p=.912**,5,000side-swapped pairings and9,997analyzed games from10,000raw game records. The registered improvement criterion (>50% and p<.05, with both A/As passed) is **not met**. Root selects **Ending B** after independent ACCEPT; **no confirmatory C2 run is authorized or required**. The sealed capacity reservation is released. This does not establish equivalence or a model-strength ranking.
+
+All25primary jobs Completed before the final name inventory/fetch. Exactly500expected nonempty archives,total393,625,216compressed bytes,are hash-bound in the accepted selection;492initial downloads and8exact-object retries are preserved. All original bytes/logs remain. No scientific reruns,replacements,missing seeds or chunk gaps. The reviewed counters-only preflight passed500chunks/10,000records,valid treatment-only markers,zero fallback/infra warnings andzero metadata failures before any estimate. Three unknown outcomes were permitted by the registered sensitivity analysis; no protected interim outcome was read.
+
+There are44raw games without a direct winner:41A-crash forfeits resolved by the registered attribution rule(20treatment/21vanilla), plus3unknown excluded from the primary9,997. Unknown-as-loss sensitivity:50.04%,CI49.15–50.93,p=.9295; unknown-as-win:50.07%,CI49.18–50.96,p=.8769,each10,000games. Both A/A gates remain PASS: AA1 49.65%,p=.7349,n1,000pairings/1,999games;AA2 50.85%,p=.3972,n1,000/2,000.
+
+Frozen A4 tag3ee88fde16d06869591f3f7b8668c7800efbdde6;engine088d04bf5068cd8d3421c6b4ff60503dfdea7e72;forkf061e63d3d588f30e72af2f4a7d12d3101896d02;sealed tar7304a879fd69501d2afd4aa0e8905c9d296d97cae67e4443362a2a595c896874. Exact25job bindings are in scratch_ds/codex/c11/root-freeze-20261028/all25-rendered.private.json; each usesj00–24/k000–019 and registeredseeds1,000,000+10,000j+k. Analysis tools byte-match frozen A4.
+
+Full-readout authorization3c30e1c preceded the sole call. ResultSHAe1286b7a365c1bba4c4164a22cb5932a3504c55df4bc0ac0a83903684ddcbd85;failuresSHAf3c03ffdf6ddfe7f1d59e2c4830d8c22216d593bd9794acd63573ef2a24c8607;preflight84b075152dd266e5da76256686f3777f998d723dbf29366d824288804be8a39a. FreshSolreadoutACCEPTe94ca56b84d3b3166c6f4bb26dd8ff4aa2c49a1ab1608e43c496c9ffb789e74c independently verifiedall500archivehashes/identities/seeds/source/failure arithmetic and both A/As without a second estimator call. Readout/EndingBdecision is a separate scientific result from the Studentv2/XL6local battle comparison.
