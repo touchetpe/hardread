@@ -1278,3 +1278,37 @@ Evidence manifest SHA256 `039a9549d855eb0f8d88fedf190faefa40bc9756b66c9b60313344
 |case05|5:1|5 /8 /38 /30|
 
 Original case03 step03 full-page screenshots obscure the note first line under fixed navigation; these remain unchanged and cannot alone prove the paste. The accepted camera-only supplement SHA256 `797caa1d9d105226d458463ae101e9874acf073c380be139c6e57809e4991dc6` supplies two readable375/1366frames with exact frozen input, contemporaneous AX/DOM value and note fully below the header. Only scroll/focus/camera followed this literal paste, no parse/model/engine/verdict rerun. The earlier mutable-helper mixed/overwritten image attempts are excluded, with a retained deviation receipt. Old empty-offer failures, fixed synthetic2/3, selected API parser recovery and pre-fix semantic failure remain historical. This is a scoped product demonstration success using templates; original A1 flags/owner checks and new A1v2 are separate.
+
+
+<a id="student-v2-xl6-foul-play-matched40-20261028"></a>
+
+## 2026-10-28 — Student v2 and selected XL6 versus Foul Play F1: accepted matched local readout
+
+The accepted failure-inclusive comparison covers the same 40 prospectively scheduled fixtures in each arm, arranged as 20 side-swapped matched team blocks with team seed 6200. The opponent was untreated Foul Play F1 at 100 ms, two parallel searches, one thread. Teams were partly seen; battle-event RNG was uncontrolled. The Student arm here is the same 40-game outcome set already recorded in the standalone terminal Student v2 section above, not a second Student sample.
+
+| Arm | Launched | Raw W / D / L / unknown | Registered primary compliant W/40 | Wilson 95% |
+|---|---:|---:|---:|---:|
+| Student v2 | 40/40 | 13 / 0 / 26 / 1 | **13/40 = 32.5%** | 20.08%–47.98% |
+| Selected Glimmer XL6 | 40/40 | 10 / 0 / 28 / 2 | **8/40 = 20.0%** | 10.50%–34.76% |
+
+The registered paired Student-minus-XL6 difference is **+12.5 percentage points**. Resampling the 20 matched team blocks while keeping each block's two swapped-seat games together, with 10,000 percentile-bootstrap samples and PRNG seed 6200, gives **95% interval [0, 25] percentage points**. The interval includes zero. Event RNG was uncontrolled across arms; the sequential local runs also had differing Mac resource load, including overlapping local model/CPU work and I/O during XL6. This is a failure-inclusive matched local result, not proof of model superiority or a controlled speed comparison.
+
+Student launched all 40 fixtures and completed 39: 13 wins, 0 draws, 26 losses, and one unknown after the original harness failed at its policy-log path. That fixture is a primary nonwin; it was not replayed. Student's completed-only 13/39 = 33.3% is secondary. Its 39 completed policy logs contain 1,660 decisions, zero fallback, rejection, illegal-action, or invalid-policy rows; nearest-rank p50/p95 latency is 0.024/0.082 s. The registered run had one original harness failure.
+
+XL6 launched all 40 fixtures and completed 38: 10 raw wins, 0 draws, 28 losses, and two unknown. Its failure-inclusive primary result is 8/40 after 15 primary nonwins were designated noncompliant: nine initial-harness fixtures and six later fallback/timeout-contaminated fixtures. XL6's 10/38 raw wins include noncompliant games; its 25 compliant completed games contain 8 wins (32.0%). The compliant-only 8/25 and Student's 13/39 are exploratory subsets with different failure filters; they are nonrandom and do not support a strength ranking.
+
+Across all 40 preserved XL6 policy logs, the complete attempted-decision audit is 1,371 decisions and 223 fallbacks (208 serializer errors and 15 request timeouts), with zero observed illegal actions or server rejections; nearest-rank p50/p95 is 8.010/10.994 s. The ledger-only view remains explicitly separate at 1,357 decisions and 209 fallbacks, with p50/p95 8.023/11.133 s. The all-log audit includes 14 additional decisions from the interrupted original index-8 policy log, all serializer fallbacks. No ledger figure is silently overwritten by the all-log count.
+
+Independent matched readout ACCEPT SHA-256 `59bdc5752a5be0477ab6a24eb9431214f18852020c545a018052ae4283e45a4f`; root independent final-check SHA-256 `44a11022775978d1cdc5537989d81d1bb3ad736584b7079162d7ee13bc05b710`. Student continuation ledger SHA-256 `73e68d3372490cc47bbea35906bf1f02878278094b998df95b57846931a196a4`; XL6 continuation ledger SHA-256 `1785d3d3233737ca5cc51e2a65ab7ad28808ee8a4e9bb6e8fb636e5289be613c`; common schedule SHA-256 `09afc31f5262b6aa4c737711510eaee748113c387d2d3fcc9543cf6c62d6b1d0`. No outcome-driven rerun, reseeding, selection, or retuning occurred.
+
+<a id="selected-xl6-abyssal-arena-failure-20261028"></a>
+
+## 2026-10-28 15:49:35 UTC — Selected XL6/Abyssal arena attempt: incomplete technical failure, no score
+
+The planned run contained 200 game records; technical progress reached 199/200 before the attempt ended in Failed status. This is a technical completeness observation only. No partial win rate, outcome quality metric, or 199/200 score is recorded here.
+
+The accepted diagnosis classifies the failure as post-run process-group teardown / Azure execution-wrapper finalization, not a model-quality cause. The absolute-deadline guard recorded `orphan_descendant_term_sent` at 13:51 UTC and returned code 125 after the leader exited while an owned descendant remained. The available evidence does not establish the surviving descendant's identity. Setup completed in 124 seconds and server readiness was recorded after 5 seconds; setup warnings are not established as causal. The attempt remains failed/incomplete, and automatic retry is forbidden.
+
+**Benchmarklane handoff:** In a new reviewed candidate, explicitly terminate and wait for every background child before the arena shell returns, including the llama-server process after kill; track and reap a process-substitution `tee` child if used. Preserve the deadline guard. Root owns admission of any future run, which would determine whether the exit-125 teardown failure is cleared. Do not infer which process caused the orphan event.
+
+Technical diagnosis source SHA-256 `a0795c892303d4b8bff9df408b9902504a4c7188bf73ddd0181b8b2b15b8d1ce`; execution-wrapper log SHA-256 `9dfc2812f525cb1f38b18116cfe5b1f33ed04c0ecc9a22bff02f591adaceb012`; job log SHA-256 `0c7363d8a1ce5b239a2832bd00bb87138f5fdf5eb8690d5edf1ce3a85249f731`. No retry or new arena run was launched for this note.
