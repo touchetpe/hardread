@@ -150,7 +150,9 @@ def construct(root, outrel, fp_python):
   def context_fn(candidate,review): return cache[(candidate['uid'],candidate['side'])][0]
   selection=M.select_candidates(census[pool],pool,review_fn,context_fn,
         farm_source_identity=identity if pool=='hr_val' else None,
-        review_code_commit=code_commit,review_source_sha256=code_hashes,root=root)
+        review_code_commit=code_commit,review_source_sha256=code_hashes,root=root,
+        exception_witness_fn=lambda witness: save(
+            f"{pool}-{witness['rank_hash']}-turn-limit-witness.json", M.canonical_json(witness).encode()+b'\n'))
   if len(selection['selected'])!=10: raise M.ManifestError('fewer than ten reviewed unique games')
   rows=[]
   for item in selection['selected']:

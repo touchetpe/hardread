@@ -91,6 +91,20 @@ class ConstructorTest(unittest.TestCase):
     with self.assertRaisesRegex(M.ManifestError,'context/team preparation'):
      C.construct(root,'scratch_ds/evals/context-failure',root/'fake-python')
    self.assertEqual(list((root/'scratch_ds/evals/context-failure').glob('*-failure.json')),[])
+   # Reconstruct a fresh synthetic run with the earliest ranked crawl game at 113 turns.
+   from test_c9_turn_exception import valid_log
+   source=M.EXPECTED_CRAWL_SOURCES['games'];original=(root/source).read_bytes()
+   crawl=[json.loads(x) for x in original.splitlines()]
+   first=min(crawl,key=lambda row:min(M.rank_hash(row['uid'],side) for side in ('p1','p2')))
+   first['log']=valid_log(113);pins['games']=put(root,source,b''.join(map(raw,crawl)))
+   repaired_path=C.construct(root,'scratch_ds/evals/overlong',root/'fake-python')
+   repaired=json.loads((root/repaired_path).read_bytes());attempt=repaired['selection_evidence']['crawl']['attempts'][0]
+   self.assertEqual((attempt['exception_type'],attempt['raw_turn_count'],attempt['parsed_turn_count']),('ProductMaxTurns',113,113))
+   self.assertEqual(len(repaired['rows']),20);witness=root/attempt['witness_path']
+   self.assertEqual(stat.S_IMODE(witness.stat().st_mode),0o600)
+   self.assertEqual(M.digest_json(json.loads(witness.read_bytes())),attempt['witness_sha256'])
+   self.assertEqual(len(json.loads((root/'scratch_ds/evals/overlong/a1_items.json').read_bytes())['items']),60)
+   self.assertEqual(len(json.loads((root/'scratch_ds/evals/overlong/a0_items.json').read_bytes())['items']),30)
 
 class PrivateArtifactModeTest(unittest.TestCase):
  def test_exclusive_file_is_0600_even_with_restrictive_umask(self):

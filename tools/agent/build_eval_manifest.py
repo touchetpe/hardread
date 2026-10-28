@@ -312,9 +312,60 @@ def _candidate_eligibility(candidate, pool):
             "half": half, "both_seats_eligible": candidate.get("both_seats_eligible") is True}
 
 
+def _product_max_turn_witness(candidate, review_code_commit, source_hashes, *, root=ROOT):
+    """Reproduce only the shipped product's specific source-bound turn-limit error."""
+    if not isinstance(source_hashes, dict):
+        raise ManifestError("turn-limit proof lacks reviewed source hashes")
+    pipeline_hash = source_hashes.get("app/pipeline.py")
+    if pipeline_hash != "147b6d20ecc9e5f1ef157b6dba6fad22b675cee2bf23fc8d63bf9523b7d2c620":
+        raise ManifestError("turn-limit proof requires the reviewed app pipeline")
+    _verify_file("app/pipeline.py", pipeline_hash, root)
+    if str(ROOT) not in sys.path: sys.path.insert(0, str(ROOT))
+    from app import pipeline
+    if digest_file(Path(pipeline.__file__)) != pipeline_hash or pipeline.MAX_TURNS != 100:
+        raise ManifestError("shipped app turn-limit source changed")
+    _verify_file(candidate.get("source_path"), candidate.get("source_sha256"), root)
+    matches = [(record, record_hash) for index, record, record_hash in
+               _read_source_jsonl(candidate["source_path"], root=root)
+               if index == candidate.get("source_record_index")]
+    if len(matches) != 1:
+        raise ManifestError("turn-limit source record missing")
+    record, record_hash = matches[0]
+    if (record_hash != candidate.get("source_record_sha256")
+            or _raw_game_uid(record) != candidate.get("uid")
+            or _raw_turn_count(record) != candidate.get("turns")):
+        raise ManifestError("turn-limit source record differs from candidate")
+    raw_log = record.get("log")
+    raw_log = "\n".join(raw_log) if isinstance(raw_log, list) else raw_log
+    if not isinstance(raw_log, str):
+        raise ManifestError("turn-limit replay missing")
+    parsed = None
+    try:
+        parsed = pipeline.PR.GameParser({"log": raw_log}, None, set()).run().turn
+        pipeline.inspect_game({"log": raw_log, "formatid": "gen9ou", "private": True})
+    except pipeline.InputError as exc:
+        if (type(exc) is not pipeline.InputError or type(parsed) is not int
+                or parsed != candidate["turns"] or parsed <= pipeline.MAX_TURNS
+                or str(exc) != f"This game lasted {parsed} turns; HardRead reviews games up to {pipeline.MAX_TURNS} turns."):
+            raise ManifestError("app rejected source for a different reason") from None
+    except Exception as exc:
+        raise ManifestError("cannot reproduce turn-limit source proof") from exc
+    else:
+        raise ManifestError("app did not reject the overlong source")
+    return {"schema": "c9-product-max-turns-witness-v1", "exception_type": "ProductMaxTurns",
+            "pool": candidate["pool"], "rank_hash": rank_hash(candidate["uid"], candidate["side"]),
+            "candidate_sha256": digest_json(_source_identity(candidate)),
+            "source_path": candidate["source_path"], "source_sha256": candidate["source_sha256"],
+            "source_record_index": candidate["source_record_index"],
+            "source_record_sha256": record_hash, "raw_turn_count": candidate["turns"],
+            "parsed_turn_count": parsed, "product_max_turns": pipeline.MAX_TURNS,
+            "app_pipeline_sha256": pipeline_hash, "review_code_commit": review_code_commit,
+            "observed_error_class": "InputError"}
+
+
 def select_candidates(candidates, pool, review_fn, context_fn, *, limit=ROWS_PER_POOL,
                       farm_source_identity=None, offered_fn=None, review_code_commit=None,
-                      review_source_sha256=None, root=ROOT):
+                      review_source_sha256=None, root=ROOT, exception_witness_fn=None):
     """Rank eligible sides, count review exceptions, and keep the first unique-game successes.
 
     ``review_fn(candidate)`` returns a review mapping. A successful review whose context
@@ -348,6 +399,29 @@ def select_candidates(candidates, pool, review_fn, context_fn, *, limit=ROWS_PER
         if candidate["uid"] in selected_uids:
             duplicate_sides += 1
             attempts.append({**attempt, "outcome": "duplicate_game"})
+            continue
+        if type(candidate.get("turns")) is int and candidate["turns"] > 100:
+            witness = _product_max_turn_witness(candidate, review_code_commit, review_source_sha256, root=root)
+            if exception_witness_fn is None:
+                raise ManifestError("turn-limit exception witness writer is required")
+            ref = exception_witness_fn(witness)
+            if not isinstance(ref, dict) or not ref.get("path") or not ref.get("sha256"):
+                raise ManifestError("turn-limit exception witness was not saved")
+            witness_path = _resolve_path(ref["path"], root)
+            if not witness_path.is_relative_to((Path(root) / "scratch_ds" / "evals").resolve()):
+                raise ManifestError("turn-limit witness must be private")
+            saved = _read_json(ref["path"], root)
+            _verify_file(ref["path"], ref["sha256"], root)
+            if canonical_json(saved) != canonical_json(witness):
+                raise ManifestError("saved turn-limit witness differs from source proof")
+            exceptions += 1
+            failed.append({"uid": candidate["uid"], "side": candidate["side"], "exception_type": "ProductMaxTurns"})
+            attempts.append({**attempt, "outcome": "review_exception", "exception_type": "ProductMaxTurns",
+                             "raw_turn_count": witness["raw_turn_count"], "parsed_turn_count": witness["parsed_turn_count"],
+                             "product_max_turns": witness["product_max_turns"], "source_record_index": witness["source_record_index"],
+                             "source_record_sha256": witness["source_record_sha256"],
+                             "witness_path": ref["path"], "witness_file_sha256": ref["sha256"],
+                             "witness_sha256": digest_json(witness)})
             continue
         try:
             review = review_fn(candidate)
@@ -390,6 +464,7 @@ def select_candidates(candidates, pool, review_fn, context_fn, *, limit=ROWS_PER
             "eligibility": eligibility_counts(candidates, pool), "candidate_census": census,
             "attempt_evidence": {"attempts": attempts, "attempts_sha256": digest_json(attempts),
                                  "review_code_commit": review_code_commit,
+                                 "review_exceptions": exceptions,
                                  "review_source_sha256": review_source_sha256 or {}}}
 
 
@@ -523,7 +598,7 @@ def _validate_attempt_evidence(pool, evidence, census, rows, manifest, *, root):
     eligible.sort(key=lambda row: (row["rank_hash"], row["uid"], row["side"]))
     rows_by_identity = {(row["pool"], row["uid"], row["side"]): row for row in rows}
     selected_uids, selected_identities = set(), []
-    has_unverified_review_exception = False
+    verified_review_exceptions = 0
     cursor = 0
     for attempt in attempts:
         if len(selected_identities) >= ROWS_PER_POOL:
@@ -546,13 +621,24 @@ def _validate_attempt_evidence(pool, evidence, census, rows, manifest, *, root):
                 raise ManifestError(f"{pool} duplicate game attempt was not skipped exactly")
             continue
         if outcome == "review_exception":
-            if (not isinstance(attempt.get("exception_type"), str) or not attempt["exception_type"].strip()
-                    or identity in rows_by_identity or "selected_row_sha256" in attempt):
+            if identity in rows_by_identity or "selected_row_sha256" in attempt:
                 raise ManifestError(f"{pool} review exception attempt is malformed or selected")
-            # The exception name and mutable attempt-log hash are not evidence that
-            # review.py actually raised. Until a separately reviewed approval
-            # mechanism exists, retain selection ordering for audit but fail closed.
-            has_unverified_review_exception = True
+            if attempt.get("exception_type") != "ProductMaxTurns":
+                raise ManifestError(f"{pool} candidate exception provenance is pending; recorded selection is not approved")
+            witness = _product_max_turn_witness(candidate, evidence.get("review_code_commit"), source_hashes, root=root)
+            expected_fields = {key: witness[key] for key in ("raw_turn_count", "parsed_turn_count", "product_max_turns",
+                                                               "source_record_index", "source_record_sha256")}
+            expected_fields["witness_sha256"] = digest_json(witness)
+            if any(canonical_json(attempt.get(key)) != canonical_json(value)
+                   for key, value in expected_fields.items()):
+                raise ManifestError(f"{pool} turn-limit exception evidence differs from source proof")
+            path = _resolve_path(attempt.get("witness_path"), root)
+            if not path.is_relative_to((Path(root) / "scratch_ds" / "evals").resolve()):
+                raise ManifestError("turn-limit witness must be private")
+            _verify_file(attempt["witness_path"], attempt.get("witness_file_sha256"), root)
+            if canonical_json(_read_json(attempt["witness_path"], root)) != canonical_json(witness):
+                raise ManifestError(f"{pool} turn-limit witness differs from source proof")
+            verified_review_exceptions += 1
             continue
         if outcome != "selected":
             raise ManifestError(f"{pool} attempt outcome is not selected, exception, or duplicate")
@@ -572,8 +658,8 @@ def _validate_attempt_evidence(pool, evidence, census, rows, manifest, *, root):
         raise ManifestError(f"{pool} attempt log does not prove the first ten successful unique games")
     if selected_identities != [(row["pool"], row["uid"], row["side"]) for row in rows]:
         raise ManifestError(f"{pool} selected rows differ from the attempt log's first ten successes")
-    if has_unverified_review_exception:
-        raise ManifestError(f"{pool} candidate exception provenance is pending; recorded selection is not approved")
+    if type(evidence.get("review_exceptions")) is not int or evidence["review_exceptions"] != verified_review_exceptions:
+        raise ManifestError(f"{pool} exception count differs from attempt evidence")
 
 
 def _validate_candidate_census(manifest, sources, *, root):

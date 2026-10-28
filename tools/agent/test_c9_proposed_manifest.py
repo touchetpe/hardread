@@ -46,8 +46,11 @@ class ManifestTest(unittest.TestCase):
  def build(self):
   census={p:M.enumerate_source_candidates(p,self.src,root=self.root) for p in M.POOLS}
   rows=[];evidence={}
+  def save_witness(witness):
+   path='scratch_ds/evals/'+witness['rank_hash']+'-witness.json'
+   return {'path':path,'sha256':put(self.root,path,raw(witness))}
   for pool in M.POOLS:
-   selection=M.select_candidates(census[pool],pool,lambda c:dict(self.review,meta={'side':c['side'],'end_reason':'ko'}),lambda c,r:dict(self.ctx,side=c['side']),farm_source_identity=self.identity if pool=='hr_val' else None,review_code_commit='commit',review_source_sha256=self.codehashes,root=self.root)
+   selection=M.select_candidates(census[pool],pool,lambda c:dict(self.review,meta={'side':c['side'],'end_reason':'ko'}),lambda c,r:dict(self.ctx,side=c['side']),farm_source_identity=self.identity if pool=='hr_val' else None,review_code_commit='commit',review_source_sha256=self.codehashes,root=self.root,exception_witness_fn=save_witness)
    evidence[pool]=selection['attempt_evidence']
    for i,c in enumerate(selection['selected']):
     prefix=f'scratch_ds/evals/{pool}-{i}';replay=prefix+'-replay';team=prefix+'-team'
