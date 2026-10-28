@@ -1,0 +1,16 @@
+{
+  "schema": "hardread-official-model-artifact-v1",
+  "model": "Muse Glimmer30B",
+  "artifact": "Muse-Glimmer-30B-KQuant-17GB-Q4_K_M.gguf",
+  "upstream_repository": "meta-models/Muse-Glimmer-30B-GGUF",
+  "upstream_revision": "b44f1072cf75e918a1b82a3a17b45c4389b076e7",
+  "sha256": "4cc57c0f51040a226e5a72cc47b7613f7772950e460a665f7083de89f183f60e",
+  "bytes": 16756683904,
+  "captured_local_disk_sha_matches_official_lfs_oid": true,
+  "scope": "Captured local disk artifact identity; organizer verification remains pending.",
+  "sources": {
+    "meta_documentation": "https://dev.meta.ai/docs/muse-glimmer/get-the-model",
+    "pinned_artifact_tree": "https://huggingface.co/api/models/meta-models/Muse-Glimmer-30B-GGUF/tree/b44f1072cf75e918a1b82a3a17b45c4389b076e7?recursive=1&expand=1"
+  },
+  "source_audit_sha256": "8cd93a17165e4086c0e30b582c32fb00ea3d5fe5a619f6835240a1a13a399858"
+}
