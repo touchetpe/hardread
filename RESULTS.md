@@ -1312,3 +1312,44 @@ The accepted diagnosis classifies the failure as post-run process-group teardown
 **Benchmarklane handoff:** In a new reviewed candidate, explicitly terminate and wait for every background child before the arena shell returns, including the llama-server process after kill; track and reap a process-substitution `tee` child if used. Preserve the deadline guard. Root owns admission of any future run, which would determine whether the exit-125 teardown failure is cleared. Do not infer which process caused the orphan event.
 
 Technical diagnosis source SHA-256 `a0795c892303d4b8bff9df408b9902504a4c7188bf73ddd0181b8b2b15b8d1ce`; execution-wrapper log SHA-256 `9dfc2812f525cb1f38b18116cfe5b1f33ed04c0ecc9a22bff02f591adaceb012`; job log SHA-256 `0c7363d8a1ce5b239a2832bd00bb87138f5fdf5eb8690d5edf1ce3a85249f731`. No retry or new arena run was launched for this note.
+
+
+<a id="a1-base-v2-completed-20261028"></a>
+
+## 2026-10-28 16:19:20 UTC — Base A1 v2 completed; blind audit point thresholds met, owner verification pending
+
+The prospective base-first A1 v2 recording completed60/60 frozen Q1–Q3 items on20reviews, exit0 at16:01:46.939826UTC. All v2 method/source/config commits preceded the15:09:08 recorder launch; the original v1 outputs and labels remain unchanged. Source/config pins55c0d4a/34fa6cb/6dbea13/788c9e1/70ab801 bind the registered base Q4 server58330 and complete model-visible tool receipts. This is a separate protocol version, with fixed semantic source repairs and complete audit evidence; no isolated causal improvement claim follows.
+
+| A1 v2 recorder measure | Count / denominator | Fraction | Wilson95% |
+|---|---:|---:|---:|
+|Direct numeric/tool verifier pass|41/60 answers|68.33%|55.77–78.69%|
+|After at most one repair|59/60 answers|98.33%|91.14–99.71%|
+|Template fallback|1/60 answers|1.67%|0.29–8.86%|
+|Post-wording-guard replacements|0/60 answers|0%|Not separately estimated|
+
+Server errors0. Recorded answer latency p50=43.905s,p95=86.871s on the shared Mac; this is not serving-action latency or a controlled hardware comparison. The early local battle arm, later data-index CPU work and one29.151s video encode overlapped portions of recording. The encode MP4 mtime is15:56:22.845907UTC, completion observed by15:59:18; encoder PID was not captured. No inference replay/reset or source/model change occurred.
+
+Summary SHA25632b5f4dc0fccfa5f89641a500af0f68b19e8288f05369f287231748e4339932f; full60-row trace SHA2562f002dd19c2678bacac1cdd8d37e25146b1d67505d65156f122b54705b0839bc; config a81f27ad11491e9376853c471e3aeb81ace91ef6b6d699d47dc23b0365895b53; source closure61ae0c47094b42ff89c21d907bf30715436bb5b09ef8c0ee9d2723b3faf5fee2. Physical frozen items and complete scoped returns were verified by bound_derive before the blinded packet was written. Sentence population120; seeded sample60; templates excluded.
+
+Fresh blinded Sol audit labels cover60unique packet IDs in packet order with no structural issue: **3/60 sentences flagged =5.00%**, Wilson95%1.71–13.70%, all categoryc(unsupported causal/decisive claim). Packet SHAa3580072c2e52592c42d353270dd4cda281fd27576feead9f51840571ab67045; labels SHA9c7d3f48a13c8ac41f8ec5bc461110781e0cac7875ff91d2b76eec6cbeb2471b. This is a blinded-label diagnostic while owner checks are pending, not a completed bound score or semantic-accuracy claim. Original v1 remains49/60afterrepair and12/60audit flags, unchanged.
+
+Both registered point thresholds are met (after-repair>=80%, flagged<=5%). **Full release/Agentic decision PENDING:**15new seeded v2 owner labels missing, bound_score not run. The15 readable cards v2-01…v2-15 and private mapping are under scratch_ds/evals/owner15-v2-readable; owner asked once with a ten-minute estimate and example. Original v1 owner request remains separate/pending. Product stays on templates; conditional T1 training does not start on a pending base-v2 gate.
+
+<a id="data-admission-index-attempts-20261028"></a>
+
+## 2026-10-28 16:19:20 UTC — All-data source-index attempts and census-definition repair
+
+All attempts below are identity/source admission only; **no dataset build, eligible-teacher count, model training, upload or cloud create** follows from them. Actual owner approvals for whole-game typed-nonzero P5 exclusion and nine timeout/null-RC quarantines are retained. Three missing-log source identities remain tombstones/roster barriers; P6 and fixed tests stay strict.
+
+| Version / root authorization | Result | Diagnosis / disposition |
+|---|---|---|
+|v5 /65cb57c|Stopped; no index receipt|Typed-nonzero source games required owner policy; failed attempt retained.|
+|v6 /2212283|Stopped14:34:42; no receipt|Incomplete/wrong-config generic source check; original exclusion approval did not cover nine null-return cases.|
+|v7.1 /8f97354|Exit2 at15:23; no receipt|Side decision log missing, before approved whole-game exclusion could retain identity.|
+|Unchanged v7.1 passive context /8ff2ad9|Exit2 at15:46:22; exact context saved|P5lab-n4-c008/g6 is winner-decided, rcA0/rcB1, missingB; it was already excluded under approved nonzero policy.|
+|v7.2 /180778a|Exit2 at16:04:17.604955; no receipt|Missing-side guard fixed; full scan stopped on source-health census-definition mismatch.|
+|v7.3 /94ff997|Running since16:16:57|Named counters aligned to pinned census definition, eligibility unchanged; await actual receipt and independent admission review.|
+
+The old metadata census defined its `decided` flag as statusok AND both RCs typed zero AND winner non-null; its13nondecided and4status-ok/nonzero counters were composite health counts. Runtime had used raw A/B winner membership for those assertions. The earlier side-census prose therefore incorrectly described all missing-side games as nondecided. Original evidence remains intact with superseding correction SHA0aab1e632139d3ab3268790892bf3cf3cde4c92014f87e1f19b532408e3d7e94.
+
+Reviewed v7.3 source main00ebb42 separates composite health failure13, status-ok/nonzero process4, malformed RC9, nonzero RC12 and status-not-ok9 from the independently reported raw absent-winner-marker count. Invalid present markers fail closed. It preserves raw completion checks, the v7.2 missing-side guard, all exclusions/holdouts and second-pass checks. Original Sol source ACCEPT;35independent and root synthetic tests passed. Spec SHA622f171c7e80212b8200d1e4df240678a736ec4ee8802bee23b2a31b473c88fd; CARD02552d2654dd737d63b676ec0947d1d4a2cc64dbf4871f582f3ec82e6402f33b. This fixes counter definitions without changing scientific eligibility. Until an actual index receipt is accepted, training data remain **NOT ADMITTED**.
