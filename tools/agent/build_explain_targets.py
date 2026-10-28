@@ -79,7 +79,7 @@ def select_target(item, config, attempts, labels, *, blind_key):
         try:
             expected_request = blind_request(item, expected_id, payload, result['rendered'], result['trace'],
                 blind_key=blind_key, prompt=config['judge_prompt'],
-                prompt_sha256=config['judge_prompt_sha256'])
+                prompt_sha256=config['judge_prompt_sha256'], replayed_result=result)
         except JudgeError as exc:
             reports.append({'slot': slot, 'status': 'judge_input_rejected', 'reason': str(exc)})
             continue

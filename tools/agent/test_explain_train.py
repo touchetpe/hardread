@@ -71,7 +71,7 @@ def label_for(item, attempt, cfg, passed=True):
     result = attempt['result']; payload = result['attempts'][0]['payload']
     request = judge.blind_request(item, attempt['candidate_id'], payload, result['rendered'], result['trace'],
                                   blind_key=bytes.fromhex('11'*32), prompt=cfg['judge_prompt'],
-                                  prompt_sha256=cfg['judge_prompt_sha256'])
+                                  prompt_sha256=cfg['judge_prompt_sha256'], replayed_result=result)
     cats = {c: {'misleading': not passed and c == 'a', 'evidence': 'synthetic evidence'} for c in judge.CATEGORIES}
     label = {'blind_id': request['blind_id'], 'categories': cats, 'pass': passed, 'self_disagreement': False}
     return {'request': request, 'request_sha256': manifest.digest(request), 'label': label}
