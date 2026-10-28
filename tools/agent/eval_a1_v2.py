@@ -60,8 +60,19 @@ def _available_memory():
         return int(page.group(1))*sum(counts.values())
     except (OSError,ValueError,subprocess.SubprocessError) as exc:raise RecordError('live memory probe failed') from exc
 
+def _live_build(executable,expected):
+    """Bounded version query on the executable already bound to the live PID."""
+    try:
+        result=subprocess.run([executable,'--version'],capture_output=True,text=True,timeout=30,check=False)
+    except (OSError,subprocess.SubprocessError) as exc:raise RecordError('live executable version query failed') from exc
+    if result.returncode!=0 or not isinstance(result.stdout,str) or not isinstance(result.stderr,str):raise RecordError('live executable version query failed')
+    output=result.stdout+result.stderr;lines=output.splitlines()
+    if not output.strip() or not lines or lines[0]!=expected or expected!=TRUSTED_BUILD or sum(line.lstrip().startswith('version:') for line in lines)!=1:
+        raise RecordError('live executable build differs')
+    return output
+
 def verify_server(config,proof,*,now=None):
-    from build_eval_manifest import _mac_process_snapshot,_live_executable_version
+    from build_eval_manifest import _mac_process_snapshot
     now=time.time() if now is None else now
     if not isinstance(proof,dict) or proof.get('schema')!='hardread.a1.v2.owned-server.v1' or proof.get('owned') is not True: raise RecordError('owned-server evidence required')
     s=config.get('server') or {};pid=proof.get('pid');argv=proof.get('argv');url=proof.get('url')
@@ -85,7 +96,7 @@ def verify_server(config,proof,*,now=None):
     for key in ('pid','argv','executable_path','executable_sha256','started_utc'):
         if live.get(key)!=proof.get(key):raise RecordError('live process identity differs')
     if digest(proof['executable_path'])!=proof['executable_sha256'] or digest(proof['model_path'])!=proof['gguf_sha256']:raise RecordError('executable or model bytes changed')
-    if _live_executable_version(proof['executable_path']).strip()!=proof['build'].strip():raise RecordError('live executable build differs')
+    _live_build(proof['executable_path'],proof['build'].strip())
     if _mac_process_snapshot(pid)!=live:raise RecordError('process identity changed')
     memory=proof.get('memory') or {};floor=s.get('min_available_bytes')
     if type(floor) is not int or floor<=0 or memory.get('status')!='pass' or type(memory.get('available_bytes')) is not int or memory['available_bytes']<floor or type(memory.get('observed_epoch')) not in (int,float) or not 0<=now-memory['observed_epoch']<=300:raise RecordError('fresh memory proof missing')

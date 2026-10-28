@@ -116,7 +116,7 @@ class Tests(unittest.TestCase):
    config={'server':{'url':proof['url'],'argv':argv,'executable_sha256':proof['executable_sha256'],'gguf_sha256':proof['gguf_sha256'],'build':proof['build'],'min_available_bytes':50}}
    app={'pid':456,'started_utc':'2026-10-28T00:01:00Z','executable_sha256':'f'*64}
    real_digest=E.digest
-   with patch.object(E,'digest',side_effect=lambda p:E.TRUSTED_MODEL_SHA256 if Path(p)==model else E.TRUSTED_EXECUTABLE_SHA256 if Path(p)==exe else real_digest(p)),patch.object(M,'_mac_process_snapshot',side_effect=lambda pid:proc if pid==123 else app),patch.object(M,'_live_executable_version',return_value=proof['build']),patch.object(E,'_available_memory',return_value=100):
+   with patch.object(E,'digest',side_effect=lambda p:E.TRUSTED_MODEL_SHA256 if Path(p)==model else E.TRUSTED_EXECUTABLE_SHA256 if Path(p)==exe else real_digest(p)),patch.object(M,'_mac_process_snapshot',side_effect=lambda pid:proc if pid==123 else app),patch.object(E,'_live_build',return_value=proof['build']),patch.object(E,'_available_memory',return_value=100):
     self.assertTrue(E.verify_server(config,proof,now=1000))
     for key,value in (('pid',9794),('owned',False),('verified_epoch',0),('gguf_sha256','0'*64),('quiescence',{})):
      with self.subTest(key=key),self.assertRaises(E.RecordError):E.verify_server(config,dict(proof,**{key:value}),now=1000)
@@ -125,6 +125,19 @@ class Tests(unittest.TestCase):
      changed=dict(proof,argv=badargv);changed_config={'server':dict(config['server'],argv=badargv)}
      with self.subTest(argv=badargv),self.assertRaises(E.RecordError):E.verify_server(changed_config,changed,now=1000)
     with self.assertRaises(E.RecordError):E.verify_server({'server':dict(config['server'],build='version: 2 (abcdef0)')},dict(proof,build='version: 2 (abcdef0)'),now=1000)
+ def test_live_build_query_is_bounded_and_checks_first_unique_version(self):
+  from types import SimpleNamespace
+  import subprocess
+  version=E.TRUSTED_BUILD
+  good=SimpleNamespace(returncode=0,stdout=version+'\nbuilt with Apple Clang 17.0.0.17000603 for Darwin arm64\n',stderr='')
+  with patch.object(E.subprocess,'run',return_value=good) as run:
+   self.assertEqual(E._live_build('/synthetic/exe',version),good.stdout)
+   run.assert_called_once_with(['/synthetic/exe','--version'],capture_output=True,text=True,timeout=30,check=False)
+  for code,output in ((1,version+'\n'),(0,''),(0,'wrong version\n'),(0,'noise\n'+version+'\n'),(0,version+'\nversion: 2 (wrong)\n')):
+   with self.subTest(code=code,output=output),patch.object(E.subprocess,'run',return_value=SimpleNamespace(returncode=code,stdout=output,stderr='')):
+    with self.assertRaises(E.RecordError):E._live_build('/synthetic/exe',version)
+  with patch.object(E.subprocess,'run',side_effect=subprocess.TimeoutExpired('synthetic',30)):
+   with self.assertRaises(E.RecordError):E._live_build('/synthetic/exe',version)
  def test_fresh_quiescence_before_and_after_lock(self):
   import urllib.request
   from types import SimpleNamespace
