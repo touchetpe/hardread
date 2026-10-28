@@ -26,7 +26,7 @@
     "tools/agent/c9_farm_source.py": "27c7a818afb23ced20a76a1236ffb372c7a39a6ad67628c0f4a5cc2f5445758a",
     "tools/agent/construct_eval_c9.py": "f4ac6da4fb1056c029c4770f20b3d85102f81d3ca8e903f46a35a63cc524774f",
     "tools/agent/eval_a1.py": "652ff6061c785466dbe7c02a4fcef8d95476e99b5263bcfca1dd17e2929aa377",
-    "tools/agent/eval_a1_v2.py": "3cc6b69b467481a4652d76657a5745f2af411926bce0b99d85cf5c9cd6439f73",
+    "tools/agent/eval_a1_v2.py": "f34b2e33aefce7dc028b2bb729452d3962605871e780ea9afa24dca04b1eeb57",
     "tools/agent/evallock.py": "cef4daa71eaf34cc97737a41dd756fe279b2b8078238df3509401aee5dc9c542",
     "tools/agent/explain.py": "990fe482d749bf5295784b04ef1d1cadb5e53b2121747079d0acb2480120872a",
     "tools/agent/lexicon.py": "d37e1363bb035088513483fbaa00d239252925e5a9735cd348a7e84ed368d0cf",
@@ -50,7 +50,7 @@
     "tools/review/select_offered.py": "98dbad5e3e745a708fe099e6ef2ac8ecb5dabde16707f42e2b24bee0a07994cc",
     "tools/review/verdict_identity.py": "4a03189943908ff31bdb550d3b648482d39582b507f60b6167c5965d84376f29"
   },
-  "source_commit": "34fa6cb2feaf5d60a4fcf6f00765052c26497ffd",
+  "source_commit": "788c9e18cf7fd75219943126138998b2fdb0d64a",
   "protocol_commit": "34fa6cb2feaf5d60a4fcf6f00765052c26497ffd",
   "protocol_path": "EVAL_PROTOCOL_AGENT.md",
   "protocol_sha256": "7b712bb47c0fc4de0218cc63c93044f21ae83feac6656be112b05ce56452d8c4",
