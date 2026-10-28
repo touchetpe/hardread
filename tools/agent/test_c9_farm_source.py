@@ -36,7 +36,7 @@ def fixture(root, count=79, bad_label=False, duplicate=False):
   run=f'val-n1-c{chunk:03d}'; members={}; raw=[]
   for n in range(20):
    i=chunk*20+n; a=f'a{i}'; b=f'b{i}'
-   game={'game':n,'a':a,'b':b,'winner':None if i==2 else 'A','status':'finished','team_a':'hr_train/a' if bad_label and i==1 else 'a','team_b':'b'}
+   game={'game':n,'a':a,'b':b,'winner':None if i==2 else 'A','status':'finished','team_a':'gen9/hr_train/a' if bad_label and i==1 else 'gen9/hr_val/a','team_b':'gen9/hr_val/b'}
    if duplicate and i==1: game['game']=0
    raw.append(jsonline(game))
    if i != 0:
@@ -69,6 +69,9 @@ class FarmTest(unittest.TestCase):
   games,cov,mapping,counts=self.build();self.assertEqual((len(games),len(cov),len(mapping)),(1580,1580,1580))
   self.assertEqual(counts,{'missing_log':1,'zero':1,'partial':2,'both':1577})
   self.assertEqual(games[1]['winner_player'],'p2');self.assertEqual(cov[1]['sides'],{'p2':1})
+  self.assertEqual(games[1]['team_exports']['p2']['member'],'gen9/hr_val/a')
+  self.assertEqual(games[1]['team_exports']['p1']['member'],'gen9/hr_val/b')
+  self.assertEqual(mapping[1]['team_exports'],games[1]['team_exports'])
   self.audit['source_catalog'][0]['archives'].reverse()
   try:
    shuffled=self.build();self.assertEqual(shuffled,(games,cov,mapping,counts))
@@ -86,6 +89,30 @@ class FarmTest(unittest.TestCase):
   try:
    with self.assertRaises(farm.SourceError):self.build()
   finally:producer['pool']=old
+
+
+class RawLabelResolverTest(unittest.TestCase):
+ def test_exact_prefix_and_member_binding(self):
+  a={'member':'gen9/hr_val/a','sha256':digest(b'A')}
+  self.assertEqual(farm._pool_ref_for_raw_label('gen9/hr_val/a',{'a':a}),a)
+  # Unknown, differently cased, malformed and unsafe labels fail in the actual resolver.
+  invalid=[None,42,'a','gen9/hr_train/a','gen9/hr_val/unknown',
+           'gen9/hr_val/','gen9/hr_val/.','gen9/hr_val/..',
+           'gen9/hr_val/../a','gen9/hr_val/x/a','gen9/hr_val/a\\b',
+           'gen9/hr_val/a\0b','Gen9/hr_val/a','gen9/hr_val/%2e%2e%2fa']
+  for raw in invalid:
+   with self.subTest(raw=repr(raw)),self.assertRaises(farm.SourceError):
+    farm._pool_ref_for_raw_label(raw,{'a':a})
+  with self.assertRaises(farm.SourceError):
+   farm._pool_ref_for_raw_label('gen9/hr_val/a',{'a':{'member':'gen9/hr_val/b','sha256':digest(b'A')}})
+  # Unsafe components are rejected even when a forged pool contains that key.
+  for bare in ('', '.', '..', '../a', 'x/a', 'a\\b', 'a\0b'):
+   raw='gen9/hr_val/'+bare
+   with self.subTest(forged_component=repr(bare)),self.assertRaisesRegex(farm.SourceError,'invalid raw team label'):
+    farm._pool_ref_for_raw_label(raw,{bare:{'member':raw,'sha256':digest(b'A')}})
+  class LabelSubclass(str): pass
+  with self.assertRaisesRegex(farm.SourceError,'invalid raw team label'):
+   farm._pool_ref_for_raw_label(LabelSubclass('gen9/hr_val/a'),{'a':a})
 
 
 class CandidateTest(unittest.TestCase):
@@ -173,7 +200,9 @@ class MutationTest(unittest.TestCase):
   for change in ('bad_label','duplicate'):
    with self.subTest(change=change),tempfile.TemporaryDirectory() as tmp:
     root=Path(tmp);audit,ready,pool=fixture(root,**{change:True})
-    with self.assertRaises(farm.SourceError):
+    expected_message='invalid raw team label' if change=='bad_label' else None
+    with self.assertRaises(farm.SourceError) as caught:
      farm._derived(root,audit,ready,pool,expected=(79,1580,3156,1577,2,1),extract_module=extract)
+    if expected_message:self.assertEqual(str(caught.exception),expected_message)
 
 if __name__=='__main__': unittest.main()

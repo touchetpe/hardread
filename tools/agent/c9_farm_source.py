@@ -59,6 +59,19 @@ def pool_members(root, manifest, pool_path=POOL):
         raise SourceError('pool content mismatch')
     return members
 
+def _pool_ref_for_raw_label(raw, pool):
+    """Bind the producer's exact prefixed label to a verified tar member."""
+    prefix = 'gen9/hr_val/'
+    if type(raw) is not str or not raw.startswith(prefix):
+        raise SourceError('invalid raw team label')
+    bare = raw[len(prefix):]
+    if not bare or bare in ('.', '..') or '/' in bare or '\\' in bare or '\0' in bare:
+        raise SourceError('invalid raw team label')
+    ref = pool.get(bare)
+    if not isinstance(ref, dict) or ref.get('member') != raw:
+        raise SourceError('team label outside pinned val pool')
+    return ref
+
 def code_hash(path):
     path=Path(path)
     if not path.is_dir(): raise SourceError('producer snapshot missing')
@@ -172,8 +185,8 @@ def _derived(root, audit, readiness, pool_manifest, *, expected=(79, 1580, 12461
             uid=_uid(run,g.get('game')); key=(run,g['game'])
             if key in seen_games: raise SourceError('duplicate game identity')
             seen_games.add(key)
-            labels=[g.get('team_a'),g.get('team_b')]
-            if any(not isinstance(x,str) or x not in pool for x in labels): raise SourceError('team outside pinned val pool')
+            ref_a=_pool_ref_for_raw_label(g.get('team_a'),pool)
+            ref_b=_pool_ref_for_raw_label(g.get('team_b'),pool)
             pair=(g.get('a'),g.get('b'))
             if pair in game_pairs or pair[::-1] in game_pairs: raise SourceError('duplicate game player pair')
             game_pairs.add(pair)
@@ -187,7 +200,7 @@ def _derived(root, audit, readiness, pool_manifest, *, expected=(79, 1580, 12461
                     raise SourceError('replay or seat mapping mismatch')
                 a=ex['player_a']; b='p2' if a=='p1' else 'p1'; loglines=ex['log']
                 if not isinstance(loglines,list) or not all(isinstance(s,str) for s in loglines): raise SourceError('bad replay')
-                exports={a:pool[labels[0]], b:pool[labels[1]]}
+                exports={a:ref_a, b:ref_b}
                 winner={'A':a,'B':b}.get(g.get('winner'))
                 row={'uid':uid,'run_id':run,'game':g['game'],'winner_player':winner,'log':loglines,'team_exports':exports}
             else:
