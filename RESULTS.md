@@ -1243,3 +1243,19 @@ Independent original analysis ACCEPT SHA `f16fb64d2ee50f6635a20c9bac55f997e57c88
 The guard's scheduled absolute TERM was08:25, the chunk stop-before-next deadline08:10, and watcher cancellation08:15. The watcher recorded zero cancel requests and all targets terminal07:05:24. None explains these06:59–07:04 parent signals. AML end timestamps31–99seconds after nominal timeout are compatible with platform timeout; the12–15second early signals and absent platform reason do not establish the upstream sender. Cause remains **UNKNOWN**, not confirmed planned termination. Slot01 signal06:59:33 differs from owned-group stop06:59:34.
 
 Source census:100 independently complete valid archives,2000 decided game rows,six invalid archives quarantined,zero partial archives,no finalized in-job POSTPACK_FINAL. Hash-bound fetch covers the100 expected archives. Raw172815 decision rows remain **eligible teacher count UNKNOWN** until the prospective source/holdout/policy/serialization admission audit. No >=100k student-data readiness claim. No protected outcomes were read for this triage.
+
+
+<a id="s1-e2-last-fixed400-20261028"></a>
+
+## 2026-10-28 13:35:46 UTC — E2 partial-second-epoch checkpoint on the same fixed-v0 test400
+
+Exact job `hrsft-20261028-s1-e2last-fixed400-dcf05ed8` Completed; watcher observed13:15:42 and all-terminal13:15:44. The highest persisted `checkpoint-5500` is a **partial second epoch**, not a final/completed-epoch result; its original training timeout remains recorded. The comparison does not change validation selection of XL6.
+
+| Same fixed-v0 cohort | Teacher-forced hard played-choice top1 | Top3 | Policy-argmax agreement | Mean CE vs policy |
+|---|---:|---:|---:|---:|
+|E2 checkpoint5500|212/400=53.00%|340/400=85.00%|218/400=54.50%|1.599177601729603|
+|Base same400 prefix|101/400=25.25%|228/400=57.00%|109/400=27.25%|3.35584456830693|
+
+Independent analysis ACCEPT SHA `e441f7490574fb91b01b2163d0d500b6bde159bc8952482e754e22c91fe13abe`:400 unique ordered action IDs, registered LF-join digest `dcf05ed82eaf7b487df1741f27c091c581aa65aa1af6869fb1153bd44225c545`, fixed eval SHA `3b0ba8fa2e2db60b9149d4ac03f1ae5bcbcb152745c4fa8fe1bf54fcc5e06276`, evaluator SHA `60abc879…3137`, all14 staged source hashes and4 checkpoint/tokenizer hashes match. Both preflight/eval_teacher stages pass; raw rows independently reproduce summary. Mechanical receipt SHA `f6841f3e0d04a70e8059c66d242020f6575a075b8360e34718e17738dec1a345`; only3 small allowlisted result artifacts(227723bytes) acquired under standing own-job approval.
+
+Teacher-forced top1 and policy-argmax agreement are distinct. Mean legal token-probability mass0.999933358431 is not serving-action legality: generation was disabled(n=0), no serving/arena result follows. Same fixed-v0 hard-token references remain e150.00%,XL655.75%,bold18.25%,historical fullv047.0%. These hard-label numbers are not battle wins or the2428-row validation engine-target agreement. No test-driven reselection.
