@@ -1380,3 +1380,24 @@ P6 contributes at most70,911 newly eligible decisions before row-level losses. I
 Seeds 10,330,000–10,330,199; seeds 10,340,000–10,340,199; seeds 10,350,000–10,350,199; seeds 10,360,000–10,360,199 are permanently reserved for four prospective C1t1 / hr_train top-up farm jobs. Each can use at most offsets0–24; the entire200-seed block stays reserved even if no job runs. Fresh read-only union SHA2567e04ed0d64d1a633e4992ec3962b938bafecbb424e44f321254f0581885d6675 found no intersection or unclassified attempt. All historical reservations remain unchanged.
 
 Source/cost review v2 ACCEPT SHA256dbd4d59459e75b07b616d9b84d2105e11a7fe9cc7aaa48dbeabb5b8ff7b0fdf9 covers at most four one-node six-hour jobs /24node-hours. The rejected first packet and repaired cutoff/watcher evidence are retained. These are unsubmitted reservations, not data or training results. Root still must bind fresh per-job absolute times, exact-name watcher identities, current capacity and higher-priority work before serial creation. New producer IDs will need an authenticated new source-catalog version and actual eligible-count checks before indexing/training.
+
+
+<a id="glimmer-v2-dataset-built-20261028"></a>
+
+## 2026-10-28 17:47:57 UTC — Glimmer v2 dataset built and independently admitted; GPU smoke staged
+
+The guarded local build ran16:35:05–17:13:13.374699UTC and exited0 under auth430f941. The final dataset has **305,281 action examples +30,347 opponent-read examples =335,628 serialized rows**, from3,710 admitted games /2,640 distinct rosters. It processed311,185 admitted raw decision links;5,904 rows failed the fixed minimum-legal-action gate, and there were no task/tokenization drops. All seven registered overlap domains are zero. These are dataset counts, not model agreement or battle scores.
+
+| Source | Admitted raw decisions | Action rows | Read rows |
+|---|---:|---:|---:|
+|P5|240,274|235,721|23,519|
+|P6|70,911|69,560|6,828|
+|Total|311,185|305,281|30,347|
+
+Independent Sol actual-data admission ACCEPT, committed060fc4b; review SHA2560aa03c8dec43c38b851c52b01a4410309bbfb54fca50b5335155e18a0540291b, private evidencee52b927adce4a8594791ca00d5990cc88d587f14e46b72b7b5f8c6657eb66816. It independently read all335,628 rows and checked IDs, duplicates, action token targets, deterministic reads selection, source reconciliations and holdout-ID intersections without another source-archive scan or quality inference. Full manifest0822d13ec13eda05a3f188abaaead9b70dd67e74428a4d3273b72ddf45acfd60; receipt4cfd09e0425825f3c9469241b11a92a1b8bc270e88d6ae254cf00e1c1ac09aa1; train285,790,119bytes, SHAfc94428772b0fc67e893347099513ba968b7c9aff175167c0012f1cf5eac1979. Frozen v1 val/eval bytes remain unchanged. P6 counts here describe SFT eligibility; student-specific feature eligibility remains a separate check and its100k-new requirement is still unmet.
+
+The consumer-schema repair a4d924c passed29 root synthetic checks; it preserves legacy manifests and validates proof-bound full-v2 and distinct derived-smoke schemas. The first actual derivation stopped on the proposed output parent's permissions before writing a subset. A dedicated0700 sibling parent and fresh auth2dae6b3 repaired that environment issue without source/data-selection changes. The successful unchanged prefix contains2,000 unique rows:1,809 action/191 reads. Its manifest11d61e08bb5d3d0d379b93c1c6c09a4e3315660ec38331cc4350492d365bf87f and ordered-ID digest2e157de6f3a487abd226b745b607cea0cd9f6e56f676bea0db0593e737371ce2 match the parent byte-for-byte selection rule.
+
+Original actual-smoke source/data/cost ACCEPT SHA f19225ec4eac8485486fbe1ba21a5ec7fd6fa0eabc3f51d8a717f508da7c2e26. Prospective job hrsft-20261028-v2mount-smoke-6f8428c2 is **staged, not created**: one H100 /7200seconds /2node-hour ceiling, one optimizer step, exact weighted XL6 recipe, no fallback or quality/serving evaluation. YAML1cfa8df97eb6e4a983d436ec0ff50e0107572a64aa878594f3cc36f26353b5e4; code manifest5723d99d92924e38062e90323501f23c8a41c2335e012cbc8758ef73379e589f. Four data hashes are checked on each read-only mount before model loading; dataset bytes are absent from the code snapshot. Eight exact full/smoke objects were uploaded to fresh private own-workspace paths and independently downloaded:291,528,538bytes in each direction, everySHA/byte/ETag matched. Transport receipt43c5206db7e5d1a83c0c27e331531c303a894ac3d319121d98f2c370e41c0e88. No public access or new resource was created.
+
+Fresh capacity, exact-name/output absence, sealed/conditional-C2 priority, a newly armed identity-bound watcher and root's create decision remain. No new v2 model, GPU fit, win rate, agreement or full-wave pass is claimed.
