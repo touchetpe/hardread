@@ -18,7 +18,7 @@ def game(i,rosters=None):
             'log':log,'source_log_bytes':raw,'log_sha256':hashlib.sha256(raw).hexdigest(),'player_a':'p1','player_names':['player-a','player-b'],'source_player_a':'player-a',
             'team_names':[f'gen9/hr_train/team{i}a',f'gen9/hr_train/team{i}b'],
             'joined_team_names':[f'gen9/hr_train/team{i}a',f'gen9/hr_train/team{i}b'],
-            'joined_rosters':rosters,'roster_digests':[roster_digest(r) for r in rosters]}
+            'joined_rosters':rosters,'roster_digests':[roster_digest(r) for r in rosters], 'source_kind':'P5','rc_a':0,'rc_b':0,'p5_nonzero_process_rc':False,'decision_count':1}
 
 def make_index(gs):
     teams={name:{'split':'dev','roster_digest':digest} for g in gs for name,digest in zip(g['team_names'],g['roster_digests'])}
@@ -155,7 +155,8 @@ class ArchiveAdapterTests(unittest.TestCase):
         for side,choice in (('a','a'),('b','b')):
             drow={'v':2,'turn':1,'choice':choice,'worlds':[{'chance':1,'side_one':[{'m':'a','v':4,'s':0},{'m':'b','v':6,'s':0}]}]}
             dec.append((f'g0001_{side}.decisions.jsonl',json.dumps(drow).encode()+b'\n'))
-        def write(bad=False,malformed=False):
+        def write(bad=False,malformed=False,rc_a=0,rc_b=0):
+            game_row.update(rc_a=rc_a,rc_b=rc_b)
             with tarfile.open(path,'w:gz') as tar:
                 contents=[('games.jsonl',json.dumps(game_row).encode()+b'\n'),('summary.json',json.dumps({'run_id':'sample','seed':100,'games':1,'completed':1,'team_pool':'gen9/hr_train','cfg_a':'C1t1','cfg_b':'C1t1'}).encode()),('battlelogs/g.log.json',json.dumps(replay).encode())]+dec
                 if malformed:
@@ -174,6 +175,16 @@ class ArchiveAdapterTests(unittest.TestCase):
             indexed,bad_rows,_=R.extract_joined_archive(path,digest,source,teams,None,extract,identity)
         self.assertIsNone(bad_rows[0]['history_end']);self.assertEqual(bad_rows[0]['worlds'][0]['side_one'],[{'m':'a'}])
         with self.assertRaisesRegex(A.AdmissionError,'history cut'):A.teacher_row(bad_rows[0],indexed[0],set(),set())
+        for rc_a,rc_b in ((0,1),(3,2)):
+            write(rc_a=rc_a,rc_b=rc_b);digest=hashlib.sha256(path.read_bytes()).hexdigest();source['sha256']=digest
+            indexed,bad_rows,_=R.extract_joined_archive(path,digest,source,teams,None,extract,identity)
+            self.assertTrue(indexed[0]['p5_nonzero_process_rc']);self.assertEqual(indexed[0]['decision_count'],2);self.assertEqual(len(bad_rows),2)
+        for rc_a,rc_b in ((None,0),(True,0),('0',0)):
+            write(rc_a=rc_a,rc_b=rc_b);digest=hashlib.sha256(path.read_bytes()).hexdigest();source['sha256']=digest
+            with self.assertRaisesRegex(R.RuntimeErrorClosed,'RC type'):R.extract_joined_archive(path,digest,source,teams,None,extract,identity)
+        write(rc_a=0,rc_b=1);digest=hashlib.sha256(path.read_bytes()).hexdigest();source['sha256']=digest;source['kind']='P6'
+        with self.assertRaisesRegex(R.RuntimeErrorClosed,'P6 process RC'):R.extract_joined_archive(path,digest,source,teams,None,extract,identity)
+        source['kind']='P5'
         write(True);digest=hashlib.sha256(path.read_bytes()).hexdigest()
         with self.assertRaisesRegex(R.RuntimeErrorClosed,'unsafe'):R.read_archive(path,digest)
 
@@ -217,11 +228,14 @@ class ProductionBuilderTests(unittest.TestCase):
     import glimmer_chat
     gs=[game(201),game(202),game(203)]
     for g in gs:g['key']=g['uid']
-    idx=make_index(gs);ids={g['uid']+'/A/000':g['uid'] for g in gs[:2]}
-    hold=A.project_holdouts(idx,{'v1':[projection(gs[0])],'fixed400':[projection(gs[1])]},{'v1':1,'fixed400':1},ids)
+    gs[0].update(rc_b=1,p5_nonzero_process_rc=True)
+    idx=make_index(gs);ids={gs[1]['uid']+'/A/000':gs[1]['uid']}
+    hold=A.project_holdouts(idx,{'v1':[projection(gs[1])],'fixed400':[projection(gs[1])]},{'v1':1,'fixed400':1},ids)
+    kept,reasons=A.partition_games(idx,hold,{H('held')},{'reserved'},{H('reserved')},expected_heldout=1)
+    self.assertNotIn(gs[0]['uid'],kept);self.assertEqual(reasons['p5_nonzero_process_rc'],1);self.assertIn(gs[2]['uid'],kept)
     excluded_bad=dict(row(gs[0]),history_end=None,worlds=[{'chance':1,'side_one':[{'m':'a'}]}])
     state={'index':idx,'rows':[excluded_bad,row(gs[2])],'kept':[gs[2]['uid']],'hold':hold,'heldout':{H('held')},'heldout_names':set(),'reserved_names':{'reserved'},'reserved_rosters':{H('reserved')},'frozen':{}}
-    receipt={'archive_records':[{'archive_sha256':gs[2]['archive_sha256'],'source':'P5','decision_count':2,'game_count':2}],'excluded_game_counts':{}}
+    receipt={'archive_records':[{'archive_sha256':gs[2]['archive_sha256'],'source':'P5','decision_count':2,'game_count':2,'reconciliation':{'admitted_raw_decisions':1}}],'excluded_game_counts':{},'exclusion_reconciliation':{'admitted_raw_decisions':1}}
     data=A.canonical(receipt)+b'\n';spec_sha=H('spec');index_sha=hashlib.sha256(data).hexdigest()
     review={'status':'accepted','index_sha256':index_sha,'spec_sha256':spec_sha,'card_sha256':H('card'),'reviewer':'independent'}
     example={'messages':[],'tools':[],'id_map':{'act_01':'a','act_02':'b'},'species':[]}
@@ -290,7 +304,7 @@ class ReviewedAuthorizationTests(unittest.TestCase):
     root=Path(__file__).resolve().parents[2]
     required=['tools/sft/data_admission.py','tools/sft/data_admission_runtime.py','tools/sft/build_sft.py','tools/sft/serialize.py','tools/sft/dex.json','tools/sft/glimmer_chat.py','tools/dataset/extract.py','tools/belief/roster_hash.py','tools/human/parse_replays.py','azure/student/p6_trainonly_inspect.py']
     code={f:hashlib.sha256((root/f).read_bytes()).hexdigest() for f in required}
-    spec={'status':'FROZEN_FOR_REVIEW','contract_sha256':'8547147630b68a0dd78689b3222515bdf48b5469f13d8f49af0eaeec8e1a2b33','code_sha256':code}
+    spec={'status':'FROZEN_FOR_REVIEW','contract_sha256':'8547147630b68a0dd78689b3222515bdf48b5469f13d8f49af0eaeec8e1a2b33','amendment_sha256':'77b82491c07e5d212bfa81403b88a73c8f3f84783f6ca5befec1fdbfe1ebd2e7','code_sha256':code}
     raw=json.dumps(spec).encode();sref={'path':'spec','sha256':hashlib.sha256(raw).hexdigest()}
     card={'commit':'a'*40,'path':'card','sha256':H('card')};approval={'commit':'b'*40,'path':'approval','sha256':H('approval')}
     approved={'status':'approved','purpose':'index','card_commit':card['commit'],'card_sha256':card['sha256'],'spec_sha256':sref['sha256'],'owner':'owner'}
@@ -338,5 +352,42 @@ class BoundedMemoryTests(unittest.TestCase):
     state={'catalog':[source],'teams':{},'index':{'games':{g['uid']:R.compact_game(g)}}};receipt={'archive_records':[record]}
     with patch.object(R,'_load_runtime_modules',return_value=(None,None,None)),patch.object(R,'verified_archive_batch',return_value=([g],[r],[H('tampered')])):
         with self.assertRaisesRegex(R.RuntimeErrorClosed,'second-pass archive decisions differ'):list(R.iter_verified_batches('.',state,receipt))
+
+
+class P5ReturnCodeAmendmentTests(unittest.TestCase):
+ def test_bad_games_remain_in_identity_holdouts_and_reconcile(self):
+    import data_admission_runtime as R
+    gs=[game(i) for i in (701,702,703,704)]
+    for g in gs:g['key']=g['uid']
+    gs[0].update(rc_a=1,p5_nonzero_process_rc=True,decision_count=3)
+    gs[1].update(rc_a=1,rc_b=2,p5_nonzero_process_rc=True,decision_count=4)
+    gs[2]['decision_count']=5;gs[3]['decision_count']=6
+    idx=make_index(gs);refs={g['uid']+'/A/000':g['uid'] for g in (gs[0],gs[3])}
+    hold=A.project_holdouts(idx,{'v1':[projection(gs[0])],'fixed400':[projection(gs[3])]},{'v1':1,'fixed400':1},refs)
+    kept,counts=A.partition_games(idx,hold,{H('held')},{'reserved'},{H('reserved')},expected_heldout=1)
+    self.assertIn(gs[0]['uid'],idx['games']);self.assertIn(idx['components'][gs[0]['uid']],hold['components'])
+    self.assertNotIn(gs[0]['uid'],kept);self.assertNotIn(gs[1]['uid'],kept);self.assertEqual(counts['p5_nonzero_process_rc'],2)
+    records=[{'archive_sha256':g['archive_sha256'],'game_count':1,'decision_count':g['decision_count']} for g in gs]
+    total,flags=R.reconcile_exclusions(idx,kept,hold,{H('held')},{'reserved'},{H('reserved')},set(),records)
+    self.assertEqual(total['source_games'],4);self.assertEqual(total['source_raw_decisions'],18);self.assertEqual(total['primary_decision_counts']['p5_nonzero_process_rc'],7)
+    self.assertTrue(flags[gs[0]['uid']]['flags']['holdout_game']);self.assertEqual(flags[gs[0]['uid']]['primary'],'p5_nonzero_process_rc')
+    self.assertEqual(total['source_raw_decisions'],total['admitted_raw_decisions']+total['excluded_raw_decisions'])
+    broken=[dict(x) for x in records];broken[0]['decision_count']+=1
+    with self.assertRaisesRegex(R.RuntimeErrorClosed,'per-archive exclusion arithmetic'):R.reconcile_exclusions(idx,kept,hold,{H('held')},{'reserved'},{H('reserved')},set(),broken)
+    with self.assertRaisesRegex(A.AdmissionError,'nonzero overlap'):A.verify_zero_overlap(idx,[gs[0]['uid']],hold,{H('held')},{'reserved'},{H('reserved')},set(),set())
+ def test_healthy_p5_p6_and_strict_p6_rejection(self):
+    gs=[game(i) for i in (711,712,713)]
+    gs[1]['source_kind']='P6';idx=make_index(gs)
+    refs={gs[2]['uid']+'/A/000':gs[2]['key']};hold=A.project_holdouts(idx,{'v1':[projection(gs[2])],'fixed400':[projection(gs[2])]},{'v1':1,'fixed400':1},refs)
+    kept,_=A.partition_games(idx,hold,{H('held')},{'reserved'},{H('reserved')},expected_heldout=1)
+    self.assertIn(gs[0]['key'],kept);self.assertIn(gs[1]['key'],kept)
+    idx['games'][gs[1]['key']]['rc_a']=1
+    with self.assertRaisesRegex(A.AdmissionError,'RC identity'):A.partition_games(idx,hold,{H('held')},{'reserved'},{H('reserved')},expected_heldout=1)
+ def test_second_pass_rc_tamper_blocks_before_yield(self):
+    import data_admission_runtime as R
+    g=game(705);g['key']=g['uid'];r=row(g);source={'sha256':g['archive_sha256']};record={'archive_sha256':source['sha256'],'game_count':1,'decision_count':1,'decision_ids_sha256':A.digest([r['uid']]),'decision_content_sha256':A.digest([H('content')])}
+    state={'catalog':[source],'teams':{},'index':{'games':{g['uid']:R.compact_game(g)}}};tampered=dict(g,rc_b=1,p5_nonzero_process_rc=True)
+    with patch.object(R,'_load_runtime_modules',return_value=(None,None,None)),patch.object(R,'verified_archive_batch',return_value=([tampered],[r],[H('content')])):
+        with self.assertRaisesRegex(R.RuntimeErrorClosed,'game identity differs'):list(R.iter_verified_batches('.',state,{'archive_records':[record]}))
 
 if __name__=='__main__':unittest.main()

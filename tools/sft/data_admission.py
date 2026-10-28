@@ -105,19 +105,26 @@ def project_holdouts(index,examples,expected_counts,decision_to_game):
             hold['decision_ids'].update(decision for decision,owner in decision_to_game.items() if owner==key)
     return hold
 
+def game_exclusion_flags(index,key,hold,heldout_rosters,reserved_names,reserved_rosters,heldout_names=frozenset()):
+    g=index['games'][key];names=set(g['team_names']);rosters=set(g['roster_digests'])
+    kind=g.get('source_kind');a=g.get('rc_a');b=g.get('rc_b');bad=g.get('p5_nonzero_process_rc')
+    if kind not in ('P5','P6') or type(a) is not int or type(b) is not int or type(bad) is not bool or bad!=(kind=='P5' and (a!=0 or b!=0)) or (kind=='P6' and (a!=0 or b!=0)):raise AdmissionError('source process RC identity differs')
+    return {'p5_nonzero_process_rc':bad,
+        'holdout_game':bool(index['components'][key] in hold['components'] or game_tokens(g)&hold['tokens']),
+        'holdout_team_name':bool(names&(hold['team_names']|heldout_names)),
+        'holdout_roster':bool(rosters&hold['rosters']),
+        'reserved_team_name':bool(names&reserved_names),
+        'excluded_roster':bool(rosters&(heldout_rosters|reserved_rosters))}
+
 def partition_games(index,hold,heldout_rosters,reserved_names,reserved_rosters,*,heldout_names=frozenset(),expected_heldout=596):
     if not isinstance(heldout_names,(set,frozenset)) or any(not isinstance(x,set) for x in (heldout_rosters,reserved_names,reserved_rosters)) or not hold.get('components') or not hold.get('rosters') or not heldout_rosters or not reserved_names or not reserved_rosters:raise AdmissionError('exclusion pool missing')
     if len(heldout_rosters)!=expected_heldout or any(not _sha(x) for x in heldout_rosters|reserved_rosters):raise AdmissionError('held-out roster manifest differs')
     kept=[];counts=Counter()
-    for key,g in index['games'].items():
-        names=set(g['team_names']);rosters=set(g['roster_digests'])
-        if index['components'][key] in hold['components'] or game_tokens(g)&hold['tokens']:reason='holdout_game'
-        elif names&(hold['team_names']|heldout_names):reason='holdout_team_name'
-        elif rosters&hold['rosters']:reason='holdout_roster'
-        elif names&reserved_names:reason='reserved_team_name'
-        elif rosters&(heldout_rosters|reserved_rosters):reason='excluded_roster'
-        else:kept.append(key);continue
-        counts[reason]+=1
+    for key in index['games']:
+        flags=game_exclusion_flags(index,key,hold,heldout_rosters,reserved_names,reserved_rosters,heldout_names)
+        reason=next((name for name,active in flags.items() if active),None)
+        if reason is None:kept.append(key)
+        else:counts[reason]+=1
     return kept,dict(counts)
 
 def decision_identity(row,game,seen_ids,seen_order):
@@ -201,9 +208,10 @@ def real_dataset_build(*args,**kwargs):
 
 def verify_zero_overlap(index,kept,hold,heldout_rosters,reserved_names,reserved_rosters,decision_ids,example_ids,*,heldout_names=frozenset()):
     if not isinstance(decision_ids,set) or not isinstance(example_ids,set) or not hold.get('example_ids') or not hold.get('decision_ids'):raise AdmissionError('decision or holdout ID set missing')
-    counts={'canonical_game':0,'team_name':0,'roster_digest':0,'decision_id':0,'example_id':0}
+    counts={'canonical_game':0,'team_name':0,'roster_digest':0,'decision_id':0,'example_id':0,'p5_nonzero_process_rc':0}
     for key in kept:
         game=index['games'][key]
+        counts['p5_nonzero_process_rc']+=int(game.get('p5_nonzero_process_rc') is True)
         counts['canonical_game']+=int(index['components'][key] in hold['components'] or bool(game_tokens(game)&hold['tokens']))
         counts['team_name']+=int(bool(set(game['team_names'])&(hold['team_names']|heldout_names|reserved_names)))
         counts['roster_digest']+=int(bool(set(game['roster_digests'])&(hold['rosters']|heldout_rosters|reserved_rosters)))

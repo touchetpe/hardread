@@ -58,7 +58,7 @@ def authorize(root,spec_ref,card_ref,approval_ref,purpose,*,execute=False):
     except (ValueError,UnicodeError) as e:raise RuntimeErrorClosed('approval malformed') from e
     expected={'status':'approved','purpose':purpose,'card_commit':card_ref['commit'],'card_sha256':card_ref['sha256'],'spec_sha256':spec_ref['sha256']}
     if not isinstance(approval,dict) or any(approval.get(k)!=v for k,v in expected.items()) or not isinstance(approval.get('owner'),str) or not approval['owner'].strip():raise RuntimeErrorClosed('root authorization differs')
-    if spec.get('status')!='FROZEN_FOR_REVIEW' or spec_ref['sha256'].encode() not in card or spec.get('contract_sha256')!='8547147630b68a0dd78689b3222515bdf48b5469f13d8f49af0eaeec8e1a2b33':raise RuntimeErrorClosed('reviewed CARD or prebuild pins incomplete')
+    if spec.get('status')!='FROZEN_FOR_REVIEW' or spec_ref['sha256'].encode() not in card or spec.get('contract_sha256')!='8547147630b68a0dd78689b3222515bdf48b5469f13d8f49af0eaeec8e1a2b33' or spec.get('amendment_sha256')!='77b82491c07e5d212bfa81403b88a73c8f3f84783f6ca5befec1fdbfe1ebd2e7':raise RuntimeErrorClosed('reviewed CARD or prebuild pins incomplete')
     code=spec.get('code_sha256')
     required={'tools/sft/data_admission.py','tools/sft/data_admission_runtime.py','tools/sft/build_sft.py','tools/sft/serialize.py','tools/sft/dex.json','tools/sft/glimmer_chat.py','tools/dataset/extract.py','tools/belief/roster_hash.py','tools/human/parse_replays.py','azure/student/p6_trainonly_inspect.py'}
     if not isinstance(code,dict) or not required.issubset(code):raise RuntimeErrorClosed('source pins missing')
@@ -119,7 +119,12 @@ def extract_joined_archive(path,expected_sha,source,team_metadata,sanitizer,extr
         else:raise RuntimeErrorClosed('source replay join missing')
         member,logbytes,log=match
         if member in seen_logs:raise RuntimeErrorClosed('replay used by multiple games')
-        if g.get('winner') not in ('A','B') or g.get('cfg_a')!='C1t1' or g.get('cfg_b')!='C1t1' or g.get('rc_a')!=0 or g.get('rc_b')!=0:raise RuntimeErrorClosed('source game incomplete or wrong configuration')
+        if g.get('winner') not in ('A','B') or g.get('cfg_a')!='C1t1' or g.get('cfg_b')!='C1t1':raise RuntimeErrorClosed('source game incomplete or wrong configuration')
+        rc_a,rc_b=g.get('rc_a'),g.get('rc_b')
+        if type(rc_a) is not int or type(rc_b) is not int:raise RuntimeErrorClosed('source process RC type differs')
+        if source.get('kind')=='P6' and (rc_a!=0 or rc_b!=0):raise RuntimeErrorClosed('P6 process RC differs')
+        if source.get('kind') not in ('P5','P6'):raise RuntimeErrorClosed('source family differs')
+        nonzero=source['kind']=='P5' and (rc_a!=0 or rc_b!=0)
         names=[g.get('team_a'),g.get('team_b')]
         if not all(isinstance(x,str) and x.startswith('gen9/hr_train/') for x in names):raise RuntimeErrorClosed('source team pool differs')
         try:
@@ -135,7 +140,7 @@ def extract_joined_archive(path,expected_sha,source,team_metadata,sanitizer,extr
               'raw_replay_sha256':ident['replay_sha256'],'normalized_replay_sha256':ident['normalized_replay_sha256'],
               'source_log_bytes':logbytes,'log_sha256':sha(logbytes),'log':log.get('log'),'player_a':player_a,
               'player_names':[log.get('p1'),log.get('p2')],'source_player_a':g['a'],'team_names':names,'joined_team_names':names[:],
-              'joined_rosters':rosters,'roster_digests':digests}
+              'joined_rosters':rosters,'roster_digests':digests,'source_kind':source['kind'],'rc_a':rc_a,'rc_b':rc_b,'p5_nonzero_process_rc':nonzero,'decision_count':0}
         games.append(game);seen_games.add(number);seen_logs.add(member)
         for side in ('A','B'):
             name=f'g{number:04d}_{side.lower()}.decisions.jsonl'
@@ -146,7 +151,7 @@ def extract_joined_archive(path,expected_sha,source,team_metadata,sanitizer,extr
                 try:d=json.loads(dline)
                 except (ValueError,UnicodeError) as e:raise RuntimeErrorClosed('decision log malformed') from e
                 if not isinstance(d,dict) or d.get('v') not in source['decision_log_versions']:raise RuntimeErrorClosed('decision schema differs')
-                decision_id=f'{uid}/{side}/{ordinal:03d}';expected_decision_ids.append(decision_id);raw_decision_hashes.append(sha(dline))
+                decision_id=f'{uid}/{side}/{ordinal:03d}';expected_decision_ids.append(decision_id);raw_decision_hashes.append(sha(dline));game['decision_count']+=1
                 decision_worlds[decision_id]=d.get('worlds')
                 # The index authenticates identity only. The extractor still derives
                 # side and history joins, but must not inspect teacher targets here.
@@ -402,7 +407,7 @@ def _hash_set(values):return A.digest(sorted(values))
 
 
 
-_COMPACT_GAME_FIELDS=('key','uid','run_id','game','archive_sha256','producer','chunk','seed','line_index','line_sha256','raw_replay_sha256','normalized_replay_sha256','log_sha256','player_a','team_names','roster_digests')
+_COMPACT_GAME_FIELDS=('key','uid','run_id','game','archive_sha256','producer','chunk','seed','line_index','line_sha256','raw_replay_sha256','normalized_replay_sha256','log_sha256','player_a','team_names','roster_digests','source_kind','rc_a','rc_b','p5_nonzero_process_rc','decision_count')
 
 def compact_game(game):
     return {name:game[name] for name in _COMPACT_GAME_FIELDS}
@@ -475,6 +480,41 @@ def verify_source_census(per_archive):
     p5_records=[r for r in per_archive if r['source']=='P5'];p6_records=[r for r in per_archive if r['source']=='P6']
     if sum(r['game_count'] for r in p5_records)!=6597 or sum(r['decision_count'] for r in p5_records)!=551493 or sum(r['game_count'] for r in p6_records)!=2000 or sum(r['decision_count'] for r in p6_records)!=172815:raise RuntimeErrorClosed('source census differs from pinned evidence')
 
+
+def reconcile_exclusions(index,kept,hold,heldout,reserved_names,reserved_rosters,heldout_names,per_archive):
+    """Account once per game; preserve independently overlapping reason flags."""
+    from collections import Counter
+    records={r['archive_sha256']:r for r in per_archive};kept=set(kept);flags_by_game={}
+    if len(records)!=len(per_archive):raise RuntimeErrorClosed('duplicate archive reconciliation')
+    totals=Counter();all_primary_games=Counter();all_primary_decisions=Counter();all_flags=Counter()
+    for record in per_archive:record['_counts']=Counter();record['_primary_games']=Counter();record['_primary_decisions']=Counter();record['_flags']=Counter()
+    for key,game in index['games'].items():
+        record=records.get(game['archive_sha256']);n=game.get('decision_count')
+        if record is None or type(n) is not int or n<0:raise RuntimeErrorClosed('game decision census malformed')
+        flags=A.game_exclusion_flags(index,key,hold,heldout,reserved_names,reserved_rosters,heldout_names)
+        primary=next((reason for reason,active in flags.items() if active),None)
+        if (primary is None)!=(key in kept):raise RuntimeErrorClosed('partition and primary exclusion differ')
+        flags_by_game[key]={'primary':primary,'flags':flags}
+        counters=record['_counts'];counters['source_games']+=1;counters['source_raw_decisions']+=n
+        if primary is None:counters['admitted_games']+=1;counters['admitted_raw_decisions']+=n
+        else:
+            counters['excluded_games']+=1;counters['excluded_raw_decisions']+=n
+            record['_primary_games'][primary]+=1;record['_primary_decisions'][primary]+=n
+            all_primary_games[primary]+=1;all_primary_decisions[primary]+=n
+        for reason,active in flags.items():
+            if active:record['_flags'][reason]+=1;all_flags[reason]+=1
+    for record in per_archive:
+        c=record.pop('_counts');pg=record.pop('_primary_games');pd=record.pop('_primary_decisions');fl=record.pop('_flags')
+        if c['source_games']!=record['game_count'] or c['source_raw_decisions']!=record['decision_count'] or c['source_games']!=c['admitted_games']+c['excluded_games'] or c['source_raw_decisions']!=c['admitted_raw_decisions']+c['excluded_raw_decisions']:raise RuntimeErrorClosed('per-archive exclusion arithmetic differs')
+        fields=('source_games','admitted_games','excluded_games','source_raw_decisions','admitted_raw_decisions','excluded_raw_decisions')
+        result={k:c[k] for k in fields};result.update({'primary_game_counts':dict(pg),'primary_decision_counts':dict(pd),'independent_flag_game_counts':dict(fl)})
+        record['reconciliation']=result;record['game_exclusions']=dict(pg)
+        for k in fields:totals[k]+=c[k]
+    if totals['source_games']!=len(index['games']) or totals['admitted_games']!=len(kept) or totals['source_games']!=totals['admitted_games']+totals['excluded_games'] or totals['source_raw_decisions']!=totals['admitted_raw_decisions']+totals['excluded_raw_decisions']:raise RuntimeErrorClosed('total exclusion arithmetic differs')
+    result={k:totals[k] for k in ('source_games','admitted_games','excluded_games','source_raw_decisions','admitted_raw_decisions','excluded_raw_decisions')}
+    result.update({'primary_game_counts':dict(all_primary_games),'primary_decision_counts':dict(all_primary_decisions),'independent_flag_game_counts':dict(all_flags)})
+    return result,flags_by_game
+
 def derive_index(root,spec,spec_sha):
     """Only called after authorize; authenticate and derive the complete population."""
     p6,extractor,sanitizer=_load_runtime_modules(root)
@@ -496,14 +536,10 @@ def derive_index(root,spec,spec_sha):
     identity={name:read_identity_file(_path(root,frozen[name]),expected[name]) for name in expected}
     hold=holdout_projection(index,decisions,identity['v1_val'],identity['v1_eval'],identity['fixed_v0'],fixed_sha)
     kept,excluded=A.partition_games(index,hold,heldout,reserved_names,reserved_rosters,heldout_names=heldout_names)
-    by_archive={r['archive_sha256']:r for r in per_archive}
-    for game in games:
-        key=game['key'];part={'games':{key:game},'components':{key:index['components'][key]}}
-        _,reasons=A.partition_games(part,hold,heldout,reserved_names,reserved_rosters,heldout_names=heldout_names)
-        counts=by_archive[game['archive_sha256']].setdefault('game_exclusions',{})
-        for reason,n in reasons.items():counts[reason]=counts.get(reason,0)+n
-    receipt={'schema':'hardread.glimmer-v2.identity-index/v1','spec_sha256':spec_sha,'archive_records':per_archive,'game_count':len(games),'decision_count':sum(r['decision_count'] for r in per_archive),'admitted_game_count':len(kept),'excluded_game_counts':excluded,'identity_game_components_sha256':_hash_set(index['components'].values()),'holdout_component_sha256':_hash_set(hold['components']),'holdout_roster_sha256':_hash_set(hold['rosters']),'holdout_example_id_sha256':_hash_set(hold['example_ids']),'holdout_decision_id_sha256':_hash_set(hold['decision_ids']),'holdout_counts':{k:len(hold[k]) for k in ('components','rosters','example_ids','decision_ids')},'heldout_roster_sha256':_hash_set(heldout),'heldout_team_name_sha256':_hash_set(heldout_names),'reserved_roster_sha256':_hash_set(reserved_rosters)}
-    receipt['game_identities']=[{'archive_sha256':g['archive_sha256'],'line_index':g['line_index'],'line_sha256':g['line_sha256'],'source_log_sha256':g['log_sha256'],'uid_token_sha256':sha(('uid:'+g['uid']).encode()),'raw_replay_sha256':g['raw_replay_sha256'],'normalized_replay_sha256':g['normalized_replay_sha256'],'component_sha256':index['components'][g['key']],'roster_digests':g['roster_digests'],'team_name_sha256':[sha(x.encode()) for x in g['team_names']],'new_validation':A.is_new_val(g)} for g in games]
+    reconciled,flag_by_game=reconcile_exclusions(index,kept,hold,heldout,reserved_names,reserved_rosters,heldout_names,per_archive)
+    if reconciled['primary_game_counts']!=excluded:raise RuntimeErrorClosed('primary exclusion totals differ')
+    receipt={'schema':'hardread.glimmer-v2.identity-index/v1','spec_sha256':spec_sha,'archive_records':per_archive,'game_count':len(games),'decision_count':sum(r['decision_count'] for r in per_archive),'admitted_game_count':len(kept),'excluded_game_counts':excluded,'exclusion_reconciliation':reconciled,'identity_game_components_sha256':_hash_set(index['components'].values()),'holdout_component_sha256':_hash_set(hold['components']),'holdout_roster_sha256':_hash_set(hold['rosters']),'holdout_example_id_sha256':_hash_set(hold['example_ids']),'holdout_decision_id_sha256':_hash_set(hold['decision_ids']),'holdout_counts':{k:len(hold[k]) for k in ('components','rosters','example_ids','decision_ids')},'heldout_roster_sha256':_hash_set(heldout),'heldout_team_name_sha256':_hash_set(heldout_names),'reserved_roster_sha256':_hash_set(reserved_rosters)}
+    receipt['game_identities']=[{'archive_sha256':g['archive_sha256'],'line_index':g['line_index'],'line_sha256':g['line_sha256'],'source_log_sha256':g['log_sha256'],'uid_token_sha256':sha(('uid:'+g['uid']).encode()),'raw_replay_sha256':g['raw_replay_sha256'],'normalized_replay_sha256':g['normalized_replay_sha256'],'component_sha256':index['components'][g['key']],'roster_digests':g['roster_digests'],'team_name_sha256':[sha(x.encode()) for x in g['team_names']],'new_validation':A.is_new_val(g),'decision_count':g['decision_count'],'primary_exclusion':flag_by_game[g['key']]['primary'],'exclusion_flags':flag_by_game[g['key']]['flags']} for g in games]
     receipt['holdout_projection']=[]
     fixed_ids=set(select_fixed400_ids([r['example_id'] for r in identity['fixed_v0'] if r['task']=='action'],fixed_sha));v1_ids={r['example_id'] for r in identity['v1_val']}
     for eid in sorted(hold['example_ids']):
@@ -580,6 +616,7 @@ def build(root,spec_ref,card_ref,approval_ref,index_ref,index_review_ref,*,execu
                     task=record['task'];totals[task+'_post_tokenization']+=1;per_source[source][task+'_post_tokenization']+=1
                     spool.append(record);record_count+=1
             del batch,rows,batch_games
+        if totals['admitted_raw_decisions']!=receipt['exclusion_reconciliation']['admitted_raw_decisions'] or any(per_source[r['archive_sha256']]['admitted_raw_decisions']!=r['reconciliation']['admitted_raw_decisions'] for r in receipt['archive_records']):raise RuntimeErrorClosed('build admitted-decision reconciliation differs')
         if not record_count:raise RuntimeErrorClosed('empty admitted dataset')
         zero=A.verify_zero_overlap(state['index'],kept,state['hold'],state['heldout'],state['reserved_names'],state['reserved_rosters'],seen_decisions,seen_examples,heldout_names=state['heldout_names'])
         train=temp/'train.jsonl.gz'
@@ -604,7 +641,7 @@ def build(root,spec_ref,card_ref,approval_ref,index_ref,index_review_ref,*,execu
         if count!=record_count or check_ids!=seen_examples or any(check_tasks[t]!=totals[t+'_post_tokenization'] for t in ('action','reads')):raise RuntimeErrorClosed('train readback count differs')
         if A.verify_zero_overlap(state['index'],kept,state['hold'],state['heldout'],state['reserved_names'],state['reserved_rosters'],check_decisions,check_ids,heldout_names=state['heldout_names'])!=zero:raise RuntimeErrorClosed('readback overlap differs')
         hashes={name:{'sha256':file_sha(temp/name),'bytes':(temp/name).stat().st_size} for name in ('train.jsonl.gz','val.jsonl.gz','eval.jsonl.gz')}
-        manifest={'schema':'hardread.glimmer-v2.train-manifest/v1','source_index_sha256':index_ref['sha256'],'spec_sha256':spec_ref['sha256'],'train_games':len(kept),'train_rosters':len({r for key in kept for r in state['index']['games'][key]['roster_digests']}),'counts':dict(totals),'per_source':{r['archive_sha256']:dict(per_source[r['archive_sha256']],source=r['source'],source_raw_decisions=r['decision_count'],admitted_raw_decisions=per_source[r['archive_sha256']]['admitted_raw_decisions'],source_games=r['game_count'],game_exclusions=r.get('game_exclusions',{})) for r in receipt['archive_records']},'game_exclusions':receipt['excluded_game_counts'],'row_drops':dict(row_drops),'task_drops':dict(task_drops),'overlap_counts':zero,'files':hashes,'tokenizer_sha256':gc.tokenizer_sha256,'template_sha256':gc.template_sha256}
+        manifest={'schema':'hardread.glimmer-v2.train-manifest/v1','source_index_sha256':index_ref['sha256'],'spec_sha256':spec_ref['sha256'],'train_games':len(kept),'train_rosters':len({r for key in kept for r in state['index']['games'][key]['roster_digests']}),'counts':dict(totals),'per_source':{r['archive_sha256']:dict(per_source[r['archive_sha256']],source=r['source'],source_raw_decisions=r['decision_count'],admitted_raw_decisions=per_source[r['archive_sha256']]['admitted_raw_decisions'],source_games=r['game_count'],game_exclusions=r.get('game_exclusions',{}),reconciliation=r['reconciliation']) for r in receipt['archive_records']},'game_exclusions':receipt['excluded_game_counts'],'exclusion_reconciliation':receipt['exclusion_reconciliation'],'row_drops':dict(row_drops),'task_drops':dict(task_drops),'overlap_counts':zero,'files':hashes,'tokenizer_sha256':gc.tokenizer_sha256,'template_sha256':gc.template_sha256}
         (temp/'manifest.json').write_bytes(A.canonical(manifest)+b'\n')
         hashes['manifest.json']={'sha256':file_sha(temp/'manifest.json'),'bytes':(temp/'manifest.json').stat().st_size}
         (temp/'receipt.json').write_bytes(A.canonical({'schema':'hardread.glimmer-v2.output-receipt/v1','files':hashes,'index_sha256':index_ref['sha256']})+b'\n')
