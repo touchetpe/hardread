@@ -481,4 +481,42 @@ class HealthPrecedenceTests(unittest.TestCase):
     timeout=dict(gs[9],source_status='timeout');f=A.game_exclusion_flags({'games':{timeout['uid']:timeout},'components':{timeout['uid']:H('component')}},timeout['uid'],hold,{H('held')},{'reserved'},{H('reserved')})
     self.assertEqual(A.primary_exclusion(timeout,f),'p5_incomplete_game')
 
+
+class ApprovedNonzeroMissingSideTests(unittest.TestCase):
+ def test_decided_nonzero_missing_b_retains_identity_and_excludes_both_sides(self):
+    import io,tarfile
+    import data_admission_runtime as R
+    import extract
+    original=game(1701);names=original['team_names'];replay=json.loads(original['source_log_bytes'])
+    srcgame={'game':6,'a':'player-a','b':'player-b','team_a':names[0],'team_b':names[1],'winner':'A','status':'ok','cfg_a':'C1t1','cfg_b':'C1t1','rc_a':0,'rc_b':1}
+    decision={'v':2,'turn':1,'choice':'a','worlds':[{'chance':1,'side_one':[{'m':'a','v':4,'s':0},{'m':'b','v':6,'s':0}]}]}
+    teams={name:{'split':'dev','roster_digest':digest} for name,digest in zip(names,original['roster_digests'])}
+    identity=lambda uid,log,sanitizer:{'replay_sha256':H('raw'+uid),'normalized_replay_sha256':H('norm'+uid)}
+    with tempfile.TemporaryDirectory() as d:
+        path=Path(d)/'sample.tar.gz'
+        def write(rc_b,missing):
+            srcgame['rc_b']=rc_b
+            summary={'run_id':'sample','seed':100,'games':1,'completed':1,'team_pool':'gen9/hr_train','cfg_a':'C1t1','cfg_b':'C1t1'}
+            members={'games.jsonl':json.dumps(srcgame).encode()+b'\n','summary.json':json.dumps(summary).encode(),'battlelogs/g.log.json':json.dumps(replay).encode(),'g0006_a.decisions.jsonl':json.dumps(decision).encode()+b'\n'}
+            if not missing:members['g0006_b.decisions.jsonl']=b''
+            with tarfile.open(path,'w:gz') as tar:
+                for name,body in members.items():
+                    info=tarfile.TarInfo('sample/'+name);info.size=len(body);tar.addfile(info,io.BytesIO(body))
+            return hashlib.sha256(path.read_bytes()).hexdigest()
+        source={'kind':'P5','run_id':'sample','producer':'job','chunk':0,'seed':100,'decision_log_versions':[2]}
+        for missing in (True,False):
+            source['sha256']=write(1,missing)
+            games,rows,hashes,tombs=R.extract_joined_archive(path,source['sha256'],source,teams,None,extract,identity)
+            self.assertEqual(len(games),1);self.assertTrue(games[0]['decided']);self.assertTrue(games[0]['p5_nonzero_process_rc']);self.assertFalse(games[0]['p5_incomplete_game'])
+            self.assertEqual([r['uid'] for r in rows],['sample/g0006/A/000']);self.assertEqual(len(hashes),1);self.assertEqual(tombs,[]);self.assertEqual(games[0]['roster_digests'],original['roster_digests'])
+            idx=A.index_games(games,teams,{source['sha256']:{k:source[k] for k in ('producer','chunk','seed')}})
+            hold={'components':{H('other')},'tokens':set(),'rosters':{H('other-roster')},'team_names':set()}
+            kept,reasons=A.partition_games(idx,hold,{H('held')},{'reserved'},{H('reserved')},expected_heldout=1)
+            self.assertEqual(kept,[]);self.assertEqual(reasons,{'p5_nonzero_process_rc':1});self.assertIn('uid:sample/g0006',idx['token_owner'])
+            source['sha256']=write(0,missing)
+            with self.assertRaisesRegex(R.RuntimeErrorClosed,'side decision log missing'):R.extract_joined_archive(path,source['sha256'],source,teams,None,extract,identity)
+            source['kind']='P6'
+            with self.assertRaisesRegex(R.RuntimeErrorClosed,'side decision log missing'):R.extract_joined_archive(path,source['sha256'],source,teams,None,extract,identity)
+            source['kind']='P5'
+
 if __name__=='__main__':unittest.main()

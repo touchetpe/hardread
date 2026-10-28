@@ -162,7 +162,7 @@ def extract_joined_archive(path,expected_sha,source,team_metadata,sanitizer,extr
         for side in ('A','B'):
             name=f'g{number:04d}_{side.lower()}.decisions.jsonl'
             if name not in raw or not raw[name].strip():
-                if incomplete:continue
+                if incomplete or nonzero:continue
                 raise RuntimeErrorClosed('side decision log missing')
             sanitized=[]
             for ordinal,dline in enumerate(raw[name].splitlines(keepends=True)):
