@@ -133,13 +133,31 @@ def bound_derive(trace_path,*,root,config_path,source_sha256,blind_key):
     """Validate the physical frozen 60 items before any audit packet is made."""
     import audit_a1 as v1
     raw,rows,errors=v1._read_trace(trace_path)
-    integrity=v1._trace_integrity(trace_path,rows,errors,root=root)
-    if not integrity['valid']: raise AuditError('frozen item integrity failed')
+    if errors:raise AuditError('trace parse failed')
     config_raw=Path(config_path).read_bytes()
     config_hash=hashlib.sha256(config_raw).hexdigest()
     config=json.loads(config_raw)
-    from eval_a1_v2 import validate_config
-    validate_config(config)
+    from eval_a1_v2 import verify_commits
+    verify_commits(config,config_path,root)
+    from a1_v2_frozen_loader import load_registered_a1_v2,ITEM_SHA
+    manifest,manifest_sha,prepared=load_registered_a1_v2(config,root=root)
+    if len(rows)!=60 or len(prepared)!=60:raise AuditError('complete frozen trace required')
+    for i,(row,item) in enumerate(zip(rows,prepared)):
+        binding=row.get('trace_binding');result=row.get('result')
+        if not isinstance(binding,dict) or not isinstance(result,dict):raise AuditError('frozen trace result missing')
+        rendered=result.get('rendered')
+        if (result.get('final') not in ('glimmer_raw','glimmer_repaired','template') or row.get('final')!=result.get('final')
+                or not isinstance(result.get('trace'),list) or not isinstance(rendered,dict) or not isinstance(rendered.get('sentences'),list)
+                or any(not isinstance(sentence,dict) or not isinstance(sentence.get('text'),str) or not sentence['text'].strip()
+                       or type(sentence.get('i')) is not int or sentence['i']<0 for sentence in rendered['sentences'])):
+            raise AuditError('frozen trace result structure differs')
+        expected={key:item.get(key) for key in ('row_index','pool','uid','side','rank_hash','q')}
+        if (row.get('i')!=i or row.get('review')!=item.get('review') or row.get('q')!=item.get('q') or row.get('question')!=item.get('question')
+                or binding.get('expected_items')!=60 or Path(binding.get('items_path','')).resolve()!=(Path(root)/'scratch_ds/evals/c9-freeze-fb10153-v1/a1_items.json').resolve()
+                or binding.get('items_sha256')!=ITEM_SHA or binding.get('manifest_sha256')!=manifest_sha or binding.get('item')!=expected
+                or not isinstance(result.get('trace'),list) or not isinstance(rendered.get('sentences'),list)):
+            raise AuditError('frozen trace binding differs')
+    integrity={'items_sha256':ITEM_SHA,'manifest_sha256':manifest_sha}
     for name,expected in config['source_sha256'].items():
         path=Path(root)/name
         if path.is_symlink() or not path.is_file() or hashlib.sha256(path.read_bytes()).hexdigest()!=expected: raise AuditError('source bytes differ')

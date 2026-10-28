@@ -17,7 +17,7 @@ class Tests(unittest.TestCase):
    for name in E.REQUIRED:
     p=root/name;p.parent.mkdir(parents=True,exist_ok=True);p.write_text('synthetic source '+name+'\n')
    git('add','--',*sorted(E.REQUIRED));git('commit','-qm','synthetic source');source_commit=git('rev-parse','HEAD')
-   protocol=root/'EVAL_PROTOCOL_AGENT.md';protocol.write_text('synthetic prior protocol\n\n'+E.PROTOCOL_SECTION+'\n');git('add','--','EVAL_PROTOCOL_AGENT.md');git('commit','-qm','synthetic protocol');protocol_commit=git('rev-parse','HEAD')
+   protocol=root/'EVAL_PROTOCOL_AGENT.md';protocol.write_text('synthetic prior protocol\n\n'+E.PROTOCOL_SECTION+'\n\n'+E.COMPAT_SECTION+'\n');git('add','--','EVAL_PROTOCOL_AGENT.md');git('commit','-qm','synthetic protocol');protocol_commit=git('rev-parse','HEAD')
    source_pins={p:E.digest(root/p) for p in E.REQUIRED}
    data=root/'data';data.mkdir(); review=data/'review.json';ctx=data/'ctx.json';offered=data/'offered.json'
    review.write_text('{}');ctx.write_text('{}');offered.write_text('[]')

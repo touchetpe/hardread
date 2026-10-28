@@ -64,22 +64,32 @@ class Tests(unittest.TestCase):
    if name=='label':labels.pop()
    with self.subTest(name=name),self.assertRaises(A.AuditError):A._score_derived(changed,altered,labels,owners,**pins)
  def test_bound_trace_detects_rehashed_source_and_trace_mutation(self):
-  import audit_a1 as old
+  import a1_v2_frozen_loader as L
   with tempfile.TemporaryDirectory() as d:
-   root=Path(d);source=root/'source.py';source.write_text('synthetic')
+   root=Path(d).resolve();source=root/'source.py';source.write_text('synthetic')
    config={'source_sha256':{'source.py':E.digest(source)}};cfg=root/'config.json';cfg.write_text(json.dumps(config))
    source_hash=A.sha(config['source_sha256']);config_hash=E.digest(cfg)
-   rows=[dict(copy.deepcopy(fixture()),i=i) for i in range(60)]
-   for row in rows:row['trace_binding'].update(config_sha256=config_hash,source_sha256=source_hash)
+   rows=[dict(copy.deepcopy(fixture()),i=i) for i in range(60)];prepared=[]
+   for i,row in enumerate(rows):
+    item={'row_index':i,'pool':'synthetic','uid':str(i),'side':'p1','rank_hash':str(i),'q':1,'review':'synthetic-review','question':row['question']};prepared.append(item)
+    row.update(review=item['review'],q=1);row['trace_binding'].update(expected_items=60,items_path=str(root/L.ITEM_PATH),items_sha256=L.ITEM_SHA,manifest_sha256='b'*64,config_sha256=config_hash,source_sha256=source_hash,item={k:item[k] for k in ('row_index','pool','uid','side','rank_hash','q')})
    trace=root/'trace.jsonl';trace.write_text(''.join(json.dumps(r)+'\n' for r in rows))
-   integrity={'valid':True,'items_sha256':'a'*64,'manifest_sha256':'b'*64}
-   with patch.object(old,'_trace_integrity',return_value=integrity),patch.object(E,'validate_config',return_value=True):
+   with patch.object(L,'load_registered_a1_v2',return_value=({},'b'*64,prepared)),patch.object(E,'verify_commits',return_value=True):
     frozen=A.bound_derive(trace,root=root,config_path=cfg,source_sha256=source_hash,blind_key=b'k'*32)
     labs=[{'audit_id':p['audit_id'],'misleading':False,'category':None} for p in frozen['packets']]
     owners=[lab for lab,p in zip(labs,frozen['packets']) if p['owner_spot_check']]
     self.assertEqual(A.bound_score(trace,frozen,labs,owners,root=root,config_path=cfg,source_sha256=source_hash,blind_key=b'k'*32)['n'],60)
     trace.write_text(trace.read_text()+'\n')
     with self.assertRaises(A.AuditError):A.bound_score(trace,frozen,labs,owners,root=root,config_path=cfg,source_sha256=source_hash,blind_key=b'k'*32)
+    # A template is excluded from the sentence sample but remains subject to
+    # the same structural validation as every other recorded answer.
+    bad=copy.deepcopy(rows);bad[0]['final']='template';bad[0]['result']['final']='template'
+    bad[0]['result']['rendered']['sentences']=[{'i':'invalid','text':None}]
+    for sentence in ({'i':'invalid','text':None},{'i':0,'text':' '},{'i':True,'text':'x'},{'i':-1,'text':'x'}):
+     bad[0]['result']['rendered']['sentences']=[sentence]
+     trace.write_text(''.join(json.dumps(r)+'\n' for r in bad))
+     with self.assertRaisesRegex(A.AuditError,'result structure'):A.bound_derive(trace,root=root,config_path=cfg,source_sha256=source_hash,blind_key=b'k'*32)
+    trace.write_text(''.join(json.dumps(r)+'\n' for r in rows))
     source.write_text('changed')
     with self.assertRaises(A.AuditError):A.bound_derive(trace,root=root,config_path=cfg,source_sha256=source_hash,blind_key=b'k'*32)
  def test_client_wrapper_captures_exact_outbound_history(self):
@@ -128,7 +138,7 @@ class Tests(unittest.TestCase):
   state={'locked':False,'busy':False,'wrong_listener':False}
   def lsof(*args):
    if '-sTCP:LISTEN' in args:
-    pid='456' if '-iTCP:18051' in args else '123';return SimpleNamespace(returncode=0,stdout='p'+('999' if state['wrong_listener'] else pid)+'\n',stderr='')
+    pid='456' if '-iTCP:18051' in args else '123';return SimpleNamespace(returncode=0,stdout=('999' if state['wrong_listener'] else pid)+'\n',stderr='')
    return SimpleNamespace(returncode=0 if state['busy'] else 1,stdout='p777\n' if state['busy'] else '',stderr='')
   def get(url,timeout):
    self.assertEqual(url,'http://127.0.0.1:18051/api/health')
@@ -142,6 +152,16 @@ class Tests(unittest.TestCase):
    with self.assertRaises(E.RecordError):E.verify_quiescence(proof,locked=True)
    state['wrong_listener']=False;state['locked']=False
    with self.assertRaises(E.RecordError):E.verify_quiescence(proof,locked=True)
+ def test_listener_rejects_multiple_duplicate_and_malformed_pids(self):
+  from types import SimpleNamespace
+  for out in ('123\n456\n','123\n123\n','p123\nf7\n',' 123\n','123 garbage\n','\n',''):
+   with self.subTest(output=out),patch.object(E,'_lsof',return_value=SimpleNamespace(returncode=0,stdout=out,stderr='')):
+    with self.assertRaises(E.RecordError):E._listener(123,18222)
+  for code,err in ((1,''),(0,'warning')):
+   with self.subTest(code=code,err=err),patch.object(E,'_lsof',return_value=SimpleNamespace(returncode=code,stdout='123\n',stderr=err)):
+    with self.assertRaises(E.RecordError):E._listener(123,18222)
+  with patch.object(E,'_lsof',return_value=SimpleNamespace(returncode=0,stdout='123\n',stderr='')) as called:
+   E._listener(123,18222);called.assert_called_once_with('-iTCP:18222','-sTCP:LISTEN','-t')
  def test_private_audit_paths_and_exclusive_creation(self):
   import os
   with tempfile.TemporaryDirectory() as d:
