@@ -1164,3 +1164,19 @@ Each new job Completed, with identical2,666 paired identities (2,428 action,238 
 Selected XL6 adapter weights SHA-256 `b2d55ffde079ef484c349d6fa2201e211f603b9604716f3623a6f5cddf4e6d28`, config `8ea2aaffe2c309092767f57cbaa39dbd704e092f733999c4e2e25c5f2dc965af`. Actual jobs: `hrsft-20261028-xl6-fullval-f1-70a4c2e1`, `hrsft-20261028-bold-fullval-f1-9b6e0f34`. Independent Sol **ACCEPT** SHA-256 `af2b3b80d8989cec801fded1d2e845ed1cfd9383b8058c84682a7e389689128b`. XL result/rows digests `13e02fba3465ebc743b38152838da945eb36671cb6c2d7ee7cbca39eede89cf9` / `72fef924ab56cbc5a53e920e9987d70f5a96c1356e4b86bebebe65de9d2b6c5d`; bold `47b75d68b6de2fc44ae0d9867a301434e9284619b0bbf053a205ade92edba522` / `de209d9fcabfeee78b3ba16182739a81aa9386bd231a4998ff1d714b258b58aa`.
 
 **Selection barrier:** no fixed-400 or default-producer quality output has been opened. This selection is committed before those reads; later test results cannot change this winner. Full25 sealed source packages were rendered before this main-documentation change.
+
+
+## 2026-10-28 11:30:01 UTC — S1 fixed-v0 400 readout after committed F1 selection
+
+Selection main`0f8904c` preceded every new fixed-v0/producer quality read. Independent Sol **ACCEPT** SHA-256 `94f8cd744729d6eb0cec2fac5cefb80022676ff5489d6a047ab0ab6394544446` verifies identical400unique action identities/order and legal teacher predictions for exact e1N4 and bold producer snapshots. Both use fixed-v0 evalSHA `3b0ba8fa…e06276`, evaluatorSHA `60abc879…3137` and selected400-ID LF-join digest `dcf05ed8…fde9` (full hashes in private source receipt).
+
+| Model/version | Fixed-v0 top-1 | Top-3 | Mean CE |
+|---|---:|---:|---:|
+| e1, exact N4 job |200/400=50.00%|331/400=82.75%|1.6327556288156122|
+| bold, producer evaluation |73/400=18.25%|238/400=59.50%|1.9369344775662443|
+
+These are descriptive same-fixed-row teacher-forced results, separate from the2,428-row F1 engine-target agreement. Historical same-fixed-v0 references remain v0-safe39.5%, v0-ddp checkpoint1400 44.0%, v0b checkpoint1400 43.0%, v0ddpres full47.0%. No test-driven reselection: XL6 remains the validation-selected model.
+
+**XL6 fixed-v0 remains PENDING.** Its producer default uses different v1 evalSHA `7ea29968…abb10`; recorded rounded default400 top1=.5425, top3=.8800, CE=1.6117 must be labelled separate and cannot fill the fixed-v0 comparison. E2's last-checkpoint fixed-v0 result is also missing. A separately reviewed one-node selected-XL fixed-v0 job is being staged, with no new score inferred.
+
+Exact e1N4 job `hrsft-20261028-e1-fixed400-91eaa7d3`: teacher resultSHA `eebc73769e6a2d0140bff3f98bccd2986d104140950670008d6d876efee78336`, rowsSHA `f3bf2908571dddee033aa1ab0f1f4ed7aaa5347d15695dcd396bd06ab9f29d3b`. Bold `hrsft-20261027-v1bold-d3cb`: resultSHA `310f653627a697014728a6bf78571b91aab56428f2e24633c36be5215904a15f`, rowsSHA `e7a72665090b632d84c43fb2d08cf7c3a1afa5978ea4f963bd7c77bbc3bddd9c`. Artifact bytes were acquired privately under standing own-job approval; their identities matched before/after retrieval.
