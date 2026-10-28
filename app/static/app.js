@@ -725,7 +725,7 @@
   var MODE_TEXT = {
     glimmer_raw: "Written by Muse Glimmer-30B (base); it passed every check on the first draft.",
     glimmer_repaired: "Written by Muse Glimmer-30B (base); it passed the checks after one repair.",
-    template: "Fixed template: Muse Glimmer was not available, or its draft failed the checks."
+    template: "Fixed template: the words come from application code."
   };
   function explainCard(id, v) {
     var qs = v.questions || {};
@@ -734,8 +734,8 @@
     var current = "q1";
     var card = h("section", { class: "card explain-card", "aria-labelledby": "ex-title" },
       h("div", { class: "ex-head" }, h("h2", { id: "ex-title" }, "In plain words"),
-        h("span", { class: "badge-model" }, "Muse Glimmer-30B (base) · explainer")),
-      h("p", { class: "card-sub" }, "Every number below is copied from a cited engine result; the model only writes the words."),
+        h("span", { class: "badge-model" }, "Explanation")),
+      h("p", { class: "card-sub" }, "Every number below is copied from a cited engine result."),
       tabs, body);
     Object.keys(qs).forEach(function (q) {
       tabs.appendChild(h("button", { type: "button", class: "q-tab", "data-q": q, "aria-pressed": q === current ? "true" : "false",
@@ -775,12 +775,14 @@
       var have = (v.explanations || {})[q];
       if (have) { draw(have); return; }
       if (STATIC) { clear(body); body.appendChild(h("p", { class: "muted" }, "Not included in this static copy.")); return; }
-      waiting("Muse Glimmer is reading the review…");
+      clear(body);
+      body.appendChild(h("p", { class: "muted" }, "Preparing the explanation…"));
       var offeredKeys = (v.disagreements || []).map(function (d) { return { turn: d.turn, k: d.k }; });
       api("/api/explain", { review_id: id, question: q, offered_keys: offeredKeys }).then(function (d) {
         if (!d.ok) { clear(body); body.appendChild(h("p", { class: "muted" }, d.error || "No explanation available.")); return; }
         if (d.cached) { refresh(q); return; }
         if (d.template) { draw(d.template, true); }
+        else { waiting("Explanation job queued…"); }
         poll(d.job_id, q, !!d.template);
       });
     }
@@ -1007,10 +1009,12 @@
       h("h3", { tabindex: "-1" }, h("span", { class: "v-badge" }, h("span", { "aria-hidden": "true" }, VERDICT_GLYPH[c.verdict] + " "), c.verdict)),
       h("p", { class: "v-head" }, c.headline),
       runsPlot(c),
-      c.stated && c.stated.length ? h("p", { class: "small muted" }, "Your read: " + c.stated.join("; ") + ".") : h("p", { class: "small muted" }, "Your read: no details (the engine's own guess at their sets)."),
+      !c.has_stated_hypothesis ? h("p", { class: "small muted" }, "No testable read was recorded. This card compares the moves using the engine's assumptions; it does not check what you expected the opponent to do.") :
+        c.stated && c.stated.length ? h("p", { class: "small muted" }, "Your read: " + c.stated.join("; ") + ".") : null,
       (c.contradictions || []).map(function (t) { return h("p", { class: "small notice-inline" }, t + ". That detail was left out."); }),
       c.third_option ? h("p", { class: "small" }, c.third_option) : null,
       readCheckBlock(c.read_check),
+      c.has_expected_action && !c.read_check ? h("p", { class: "small read-check" }, "The expected opponent action could not be checked for this decision.") : null,
       h("p", { class: "footnote" }, (c.runs || 3) + " independent runs on the same sampled worlds · " + (c.worlds || 4) + " worlds × " + (c.iterations || 20000).toLocaleString("en") + " iterations each" + (c.seconds ? " · " + Math.round(c.seconds) + " s" : "") + ". ",
         reviewId && identitySha && !STATIC ? h("a", { href: "/api/review/" + encodeURIComponent(reviewId) + "/verdict/" + c.turn + "/" + c.k +
           "?identity_sha256=" + encodeURIComponent(identitySha), target: "_blank", rel: "noopener" }, "Full output (JSON)") : null));
@@ -1018,12 +1022,12 @@
   }
   function runsPlot(c) {
     var W = 520, rowH = 34, top = 8, lab = 92, R = 20;
-    var rows = [["Your read", c.delta_U], ["Reference", c.delta_R]];
+    var rows = [[c.has_retained_set_hypothesis ? "Your read" : "Engine baseline", c.delta_U], ["Reference", c.delta_R]];
     var H = top + rows.length * rowH + 22;
     var plotW = W - lab - 14;
     function X(p) { var q = Math.max(-R, Math.min(R, p)); return lab + (q + R) / (2 * R) * plotW; }
     var sv = s("svg", { viewBox: "0 0 " + W + " " + H, class: "runs-plot", role: "img",
-      "aria-label": c.x + " minus your move, in points, three runs per row: under your read " + (c.delta_U || []).join(", ") + "; under " + c.reference_label + " " + (c.delta_R || []).join(", ") + ". Threshold " + c.margin_pts + " points." });
+      "aria-label": c.x + " minus your move, in points, three runs per row: " + (c.has_retained_set_hypothesis ? "under your read " : "Engine baseline ") + (c.delta_U || []).join(", ") + "; under " + c.reference_label + " " + (c.delta_R || []).join(", ") + ". Threshold " + c.margin_pts + " points." });
     sv.appendChild(s("rect", { x: X(c.margin_pts), y: top - 4, width: X(R) - X(c.margin_pts), height: rows.length * rowH, fill: "var(--pos-wash)" }));
     sv.appendChild(s("line", { x1: X(0), x2: X(0), y1: top - 4, y2: top + rows.length * rowH, stroke: "var(--ink-3)", "stroke-width": 1.5 }));
     sv.appendChild(s("line", { x1: X(c.margin_pts), x2: X(c.margin_pts), y1: top - 4, y2: top + rows.length * rowH, stroke: "var(--pos)", "stroke-width": 1, "stroke-dasharray": "4 3" }));
@@ -1113,17 +1117,18 @@
       if (!p.ok) { box.appendChild(h("p", { class: "muted" }, "Not available.")); return; }
       var ex = p.explainer || {}, en = p.engine || {}, lv = p.live || {};
       var rows = [
-        ["Explainer model", (ex.model || "–") + (ex.license ? " (" + ex.license + ")" : "")],
+        ["Explanation mode", lv.explain_mode === "template" ? "Fixed application templates" : (lv.explain_mode || "–")],
+        ["Available model", (ex.model || "–") + (ex.license ? " (" + ex.license + ")" : "")],
         ["Weights file", (ex.gguf || "–") + (ex.gguf_bytes ? " · " + (ex.gguf_bytes / 1e9).toFixed(1) + " GB" : "")],
         ["Weights SHA-256", ex.gguf_sha256 || "–"],
         ["Served with", (ex.server || "–") + (ex.server_flags ? " · " + ex.server_flags : "")],
-        ["Reachable now", lv.explainer_reachable ? "yes" : "no (templates are used)"],
+        ["Model reachable now", lv.explainer_reachable ? "yes" : "no"],
         ["Search engine", (en.name || "–") + (en.license ? " (" + en.license + ")" : "") + (lv.foulplay_commit ? " · commit " + lv.foulplay_commit : "")],
         ["This app", lv.hardread_commit ? "commit " + lv.hardread_commit : "–"]];
       box.appendChild(h("dl", { class: "prov" }, rows.map(function (r) { return [h("dt", null, r[0]), h("dd", { class: r[0].indexOf("SHA") >= 0 ? "mono" : null }, r[1])]; })));
     });
     return h("section", { "aria-labelledby": "prov-title" }, h("h2", { id: "prov-title" }, "Provenance"),
-      h("p", null, "Muse Glimmer runs here as open weights on this machine; nothing is sent to a hosted model."), box);
+      h("p", null, "The explanation mode above identifies how this server produces explanations. In template mode, fixed application code supplies the words."), box);
   }
 
   // ------------------------------------------------------------------ shared SVG defs (hatch for "against you")

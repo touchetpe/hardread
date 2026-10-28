@@ -1,6 +1,8 @@
 """C10 integration coverage: exact offered-list identity from the app route into the worker."""
 import asyncio
 import json
+import os
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -11,6 +13,7 @@ from unittest.mock import patch
 import pipeline as P
 import server as S
 import explain_worker
+import static_export
 
 
 REVIEW = {
@@ -51,6 +54,7 @@ class FakeJobs:
     def __init__(self, *args, **kwargs):
         self.files = None
         self.key = None
+        self.on_done = None
 
     def existing(self, _key):
         return None
@@ -59,7 +63,7 @@ class FakeJobs:
         return True, 0
 
     def submit(self, _kind, key, files, _cmd, _on_done):
-        self.key, self.files = key, dict(files)
+        self.key, self.files, self.on_done = key, dict(files), _on_done
         return "synthetic-job"
 
 
@@ -220,7 +224,7 @@ class OfferedListIntegrationTests(unittest.TestCase):
                 current_explanation = {"rendered": {"text": "current version"},
                                        "policy_version": S.EXPLANATION_POLICY_VERSION}
                 store.write_text(json.dumps({"q3": current_explanation}))
-                S._save_explain_keys("synthetic", "q3", keys)
+                S._save_explain_keys("synthetic", "q3", keys, "loop")
                 reused = asyncio.run(endpoint(request))
                 self.assertTrue(reused["cached"])
                 verdict_source.return_value = {}
@@ -252,6 +256,342 @@ class OfferedListIntegrationTests(unittest.TestCase):
                 self.assertEqual(response["job_id"], "synthetic-job")
                 self.assertEqual(json.loads(app.state.jobs.files["offered_keys.json"]), [{"turn": 2, "k": 1}])
                 self.assertEqual(json.loads(app.state.jobs.files["verdicts.json"]), {"2:1": verdicts["2:1"]})
+
+
+class TemplateGateTests(unittest.TestCase):
+    def test_unset_default_and_template_cache_for_review_and_showcase(self):
+        env = dict(os.environ)
+        env.pop("HARDREAD_EXPLAIN_MODE", None)
+        default = subprocess.check_output([sys.executable, "-c", "import server; print(server.EXPLAIN_MODE)"],
+                                          cwd=Path(__file__).parent, env=env, text=True).strip()
+        self.assertEqual(default, "template")
+        _, offered = P.build_view_with_offered(REVIEW, CTX)
+        keys = S._offered_keys(offered)
+        showcase_file = S.SHOWCASES / "showcase-1.explain.json"
+        before = showcase_file.read_bytes()
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            with patch.object(S, "CACHE", root / "cache"), patch.object(S, "JOBS", root / "jobs"), \
+                 patch.object(S, "STATE", root / "state"), patch.object(S, "Jobs", FakeJobs), \
+                 patch.object(S, "EXPLAIN_MODE", "template"), patch.object(S, "glimmer_up", return_value=True), \
+                 patch.object(S, "load_parts", return_value=(REVIEW, CTX, {"private": False})), \
+                 patch.object(S, "verdicts_of", return_value={}):
+                app = S.create_app()
+                endpoint = next(r.endpoint for r in app.routes if getattr(r, "path", None) == "/api/explain"
+                                and "POST" in getattr(r, "methods", set()))
+                for rid in ("r" + "a" * 19, "showcase-1"):
+                    store = S.explain_store(rid)
+                    store.parent.mkdir(parents=True, exist_ok=True)
+                    store.write_text(json.dumps({"q3": {"final": "glimmer_raw", "rendered": {"text": "MODEL LEAK"},
+                                                         "policy_version": S.EXPLANATION_POLICY_VERSION}}))
+                    S._save_explain_keys(rid, "q3", keys, "template")
+                    self.assertEqual(S.load_view(rid)["explanations"], {})
+                    request = RequestBody({"review_id": rid, "question": "q3", "offered_keys": keys})
+                    self.assertTrue(asyncio.run(endpoint(request))["cached"])
+                    cached = S.load_view(rid)["explanations"]["q3"]
+                    self.assertEqual(cached["final"], "template")
+                    self.assertNotIn("MODEL LEAK", json.dumps(cached))
+                    with patch.object(S, "_template_explanation", side_effect=AssertionError("not reused")):
+                        self.assertTrue(asyncio.run(endpoint(request))["cached"])
+                    self.assertIsNone(app.state.jobs.files)
+                self.assertEqual(showcase_file.read_bytes(), before)
+
+    def test_legacy_fallback_text_is_withheld_and_product_view_is_sanitized(self):
+        _, offered = P.build_view_with_offered(REVIEW, CTX)
+        keys = S._offered_keys(offered)
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            with patch.object(S, "CACHE", root / "cache"), patch.object(S, "JOBS", root / "jobs"), \
+                 patch.object(S, "STATE", root / "state"), patch.object(S, "Jobs", FakeJobs), \
+                 patch.object(S, "EXPLAIN_MODE", "template"), \
+                 patch.object(S, "load_parts", return_value=(REVIEW, CTX, {"private": False})), \
+                 patch.object(S, "verdicts_of", return_value={}):
+                rid = "showcase-1"
+                store = S.explain_store(rid)
+                store.parent.mkdir(parents=True, exist_ok=True)
+                legacy = {"final": "template", "requested_mode": "loop", "policy_rejected": True,
+                          "rejected": {"text": "HISTORICAL_MODEL_TEXT"},
+                          "policy_version": S.EXPLANATION_POLICY_VERSION}
+                store.write_text(json.dumps({"q3": legacy}))
+                S._save_explain_keys(rid, "q3", keys, "template")
+                app = S.create_app()
+                get = next(r.endpoint for r in app.routes if getattr(r, "path", None) == "/api/review/{rid}")
+                post = next(r.endpoint for r in app.routes if getattr(r, "path", None) == "/api/explain"
+                            and "POST" in getattr(r, "methods", set()))
+                self.assertNotIn("HISTORICAL_MODEL_TEXT", json.dumps(get(rid)))
+                response = asyncio.run(post(RequestBody({"review_id": rid, "question": "q3", "offered_keys": keys})))
+                self.assertTrue(response["cached"])
+                self.assertNotIn("HISTORICAL_MODEL_TEXT", json.dumps(get(rid)))
+                cache = json.loads(store.read_text())
+                cache["q3"]["rejected"] = {"text": "HISTORICAL_MODEL_TEXT"}
+                cache["q3"]["model"] = "MODEL_METADATA"
+                store.write_text(json.dumps(cache))
+                self.assertNotIn("HISTORICAL_MODEL_TEXT", json.dumps(get(rid)))
+                self.assertNotIn("MODEL_METADATA", json.dumps(get(rid)))
+
+    def test_loop_and_reachable_auto_do_not_reuse_product_template(self):
+        _, offered = P.build_view_with_offered(REVIEW, CTX)
+        keys = S._offered_keys(offered)
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            with patch.object(S, "CACHE", root / "cache"), patch.object(S, "JOBS", root / "jobs"), \
+                 patch.object(S, "STATE", root / "state"), patch.object(S, "Jobs", FakeJobs), \
+                 patch.object(S, "load_parts", return_value=(REVIEW, CTX, {"private": False})), \
+                 patch.object(S, "verdicts_of", return_value={}), patch.object(S, "glimmer_up", return_value=True), \
+                 patch.object(S, "eval_locked", return_value=False):
+                app = S.create_app()
+                endpoint = next(r.endpoint for r in app.routes if getattr(r, "path", None) == "/api/explain"
+                                and "POST" in getattr(r, "methods", set()))
+                request = RequestBody({"review_id": "showcase-1", "question": "q3", "offered_keys": keys})
+                with patch.object(S, "EXPLAIN_MODE", "template"):
+                    self.assertTrue(asyncio.run(endpoint(request))["cached"])
+                for mode in ("loop", "auto"):
+                    app.state.jobs.files = None
+                    with patch.object(S, "EXPLAIN_MODE", mode):
+                        self.assertEqual(S.load_view("showcase-1")["explanations"], {})
+                        self.assertEqual(asyncio.run(endpoint(request))["job_id"], "synthetic-job")
+                        self.assertIsNotNone(app.state.jobs.files)
+                        self.assertIn(":loop:", app.state.jobs.key)
+
+    def test_engineering_template_fallback_remains_reusable_in_same_mode(self):
+        _, offered = P.build_view_with_offered(REVIEW, CTX)
+        keys = S._offered_keys(offered)
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            with patch.object(S, "CACHE", root / "cache"), patch.object(S, "JOBS", root / "jobs"), \
+                 patch.object(S, "STATE", root / "state"), patch.object(S, "Jobs", FakeJobs), \
+                 patch.object(S, "EXPLAIN_MODE", "loop"), \
+                 patch.object(S, "load_parts", return_value=(REVIEW, CTX, {"private": False})), \
+                 patch.object(S, "verdicts_of", return_value={}):
+                app = S.create_app()
+                post = next(r.endpoint for r in app.routes if getattr(r, "path", None) == "/api/explain"
+                            and "POST" in getattr(r, "methods", set()))
+                request = RequestBody({"review_id": "showcase-1", "question": "q3", "offered_keys": keys})
+                self.assertEqual(asyncio.run(post(request))["job_id"], "synthetic-job")
+                job = root / "fallback-job"
+                job.mkdir()
+                (job / "explain.json").write_text(json.dumps({"final": "template", "requested_mode": "loop",
+                                                                 "rendered": {"text": "fallback"}}))
+                self.assertEqual(app.state.jobs.on_done({"dir": job}), "q3")
+                self.assertTrue(asyncio.run(post(request))["cached"])
+                self.assertEqual(S.load_view("showcase-1")["explanations"]["q3"]["rendered"]["text"], "fallback")
+                with patch.object(S, "EXPLAIN_MODE", "template"):
+                    self.assertEqual(S.load_view("showcase-1")["explanations"], {})
+
+    def test_ui_wait_and_provenance_describe_actual_mode(self):
+        js = (Path(__file__).parent / "static" / "app.js").read_text()
+        initial = js.split("function load(q) {", 1)[1].split('api("/api/explain"', 1)[0]
+        self.assertNotIn("spinner", initial)
+        self.assertNotIn("waiting(", initial)
+        self.assertIn('lv.explain_mode === "template"', js)
+        self.assertIn("fixed application code supplies the words", js)
+        self.assertNotIn("Muse Glimmer runs here as open weights", js)
+
+    def test_template_failure_does_not_submit_a_model_job(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            with patch.object(S, "CACHE", root / "cache"), patch.object(S, "JOBS", root / "jobs"), \
+                 patch.object(S, "STATE", root / "state"), patch.object(S, "Jobs", FakeJobs), \
+                 patch.object(S, "EXPLAIN_MODE", "template"), \
+                 patch.object(S, "load_parts", return_value=(REVIEW, CTX, {"private": False})), \
+                 patch.object(S, "verdicts_of", return_value={}), \
+                 patch.object(S, "_template_explanation", return_value=None):
+                app = S.create_app()
+                endpoint = next(r.endpoint for r in app.routes if getattr(r, "path", None) == "/api/explain"
+                                and "POST" in getattr(r, "methods", set()))
+                _, offered = P.build_view_with_offered(REVIEW, CTX)
+                response = asyncio.run(endpoint(RequestBody({"review_id": "showcase-1", "question": "q3",
+                                                              "offered_keys": S._offered_keys(offered)})))
+                self.assertEqual(response.status_code, 503)
+                self.assertIsNone(app.state.jobs.files)
+
+    def test_real_review_and_showcase_routes_use_temporary_state(self):
+        showcase_file = S.SHOWCASES / "showcase-1.explain.json"
+        original = showcase_file.read_bytes()
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            with patch.object(S, "CACHE", root / "cache"), patch.object(S, "JOBS", root / "jobs"), \
+                 patch.object(S, "STATE", root / "state"), patch.object(S, "Jobs", FakeJobs), \
+                 patch.object(S, "EXPLAIN_MODE", "template"), patch.object(S, "glimmer_up", return_value=True):
+                app = S.create_app()
+                rid = S.store_review("a" * 64, REVIEW, CTX)
+                review_endpoint = next(r.endpoint for r in app.routes if getattr(r, "path", None) == "/api/review/{rid}")
+                explain_endpoint = next(r.endpoint for r in app.routes if getattr(r, "path", None) == "/api/explain"
+                                        and "POST" in getattr(r, "methods", set()))
+                for review_id in (rid, "showcase-1"):
+                    view = review_endpoint(review_id)
+                    keys = [{"turn": d["turn"], "k": d["k"]} for d in view["disagreements"]]
+                    for qid in ("q1", "q2", "q3"):
+                        response = asyncio.run(explain_endpoint(RequestBody({"review_id": review_id,
+                                                    "question": qid, "offered_keys": keys})))
+                        self.assertTrue(response["cached"])
+                    view = review_endpoint(review_id)
+                    self.assertEqual([view["explanations"][q]["final"] for q in ("q1", "q2", "q3")],
+                                     ["template"] * 3)
+                self.assertIsNone(app.state.jobs.files)
+                self.assertEqual(showcase_file.read_bytes(), original)
+
+    def test_model_job_key_is_mode_scoped_and_late_model_result_is_withheld(self):
+        _, offered = P.build_view_with_offered(REVIEW, CTX)
+        keys = S._offered_keys(offered)
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            with patch.object(S, "CACHE", root / "cache"), patch.object(S, "JOBS", root / "jobs"), \
+                 patch.object(S, "STATE", root / "state"), patch.object(S, "Jobs", FakeJobs), \
+                 patch.object(S, "EXPLAIN_MODE", "loop"), \
+                 patch.object(S, "load_parts", return_value=(REVIEW, CTX, {"private": False})), \
+                 patch.object(S, "verdicts_of", return_value={}):
+                app = S.create_app()
+                endpoint = next(r.endpoint for r in app.routes if getattr(r, "path", None) == "/api/explain"
+                                and "POST" in getattr(r, "methods", set()))
+                result = asyncio.run(endpoint(RequestBody({"review_id": "showcase-1", "question": "q3",
+                                                           "offered_keys": keys})))
+                self.assertEqual(result["job_id"], "synthetic-job")
+                self.assertIn(":loop:", app.state.jobs.key)
+                job = root / "late"
+                job.mkdir()
+                (job / "explain.json").write_text(json.dumps({"final": "glimmer_raw", "rendered": {"text": "late"}}))
+                with patch.object(S, "EXPLAIN_MODE", "template"):
+                    self.assertEqual(app.state.jobs.on_done({"dir": job}), "withheld")
+                self.assertFalse(S.explain_store("showcase-1").exists())
+
+    def test_static_showcase_uses_templates_and_exact_offered(self):
+        _, offered = P.build_view_with_offered(REVIEW, CTX)
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            (root / "index.json").write_text(json.dumps({"showcases": [{"id": "showcase-1"}]}))
+            (root / "showcase-1.review.json").write_text(json.dumps(REVIEW))
+            (root / "showcase-1.ctx.json").write_text(json.dumps(CTX))
+            (root / "showcase-1.explain.json").write_text(json.dumps({"q3": {"final": "glimmer_raw",
+                                                                          "rendered": {"text": "MODEL LEAK"}}}))
+            S._agent("explain")
+            model = sys.modules["explain"]
+            with patch.object(static_export, "SHOW", root), \
+                 patch.object(sys, "argv", ["static_export.py", "--showcases", "--out", str(root / "out.html")]), \
+                 patch.object(model, "run", wraps=model.run) as run:
+                static_export.main()
+            html = (root / "out.html").read_text()
+            self.assertNotIn("MODEL LEAK", html)
+            self.assertEqual(len(run.call_args_list), 3)
+            self.assertTrue(all(call.kwargs["mode"] == "template" and call.kwargs["offered"] == offered
+                                for call in run.call_args_list))
+            data = json.loads(html.split("window.HARDREAD_STATIC = ", 1)[1].split(";\nif (!location.hash)", 1)[0])
+            self.assertEqual([x["final"] for x in data["views"]["showcase-1"]["explanations"].values()],
+                             ["template"] * 3)
+
+
+class ReadContextTests(unittest.TestCase):
+    def verdict(self, belief):
+        return {"turn": 2, "k": 0, "X": "switch ragingbolt", "chosen": "swordsdance",
+                "verdict": "Misplay", "mean_delta_U": 0.08, "mean_delta_R": 0.07,
+                "delta_U": [0.08, 0.09, 0.07], "delta_R": [0.07, 0.06, 0.08],
+                "margin": 0.08, "ok_margin": 0.02, "seeds": [11, 12, 13], "iterations": 60000,
+                "worlds": 4, "reference": "engine", "stated": {"sets": belief.get("sets", {})},
+                "app_belief": belief, "cache_identity_sha256": "unchanged-receipt"}
+
+    def render(self, card):
+        script = r"""
+const fs = require('fs'), vm = require('vm');
+const source = fs.readFileSync(process.argv[1], 'utf8');
+const helpers = source.slice(source.indexOf('  function h(tag, attrs)'), source.indexOf('  function clear(el)'));
+const body = source.slice(source.indexOf('  var VERDICT_GLYPH'), source.indexOf('  // ------------------------------------------------------------------ share'));
+function element(tag) { return { tag, attrs: {}, children: [], style: { setProperty() {} },
+  setAttribute(k, v) { this.attrs[k] = v; }, addEventListener() {}, appendChild(c) { this.children.push(c); },
+  set textContent(v) { this.children = [{text: String(v)}]; }, get textContent() { return ''; } }; }
+const context = {document: {createElement: element, createElementNS: (_, tag) => element(tag),
+  createTextNode: (text) => ({text})}, SVGNS: 'svg', MINUS: '−', STATIC: false};
+vm.createContext(context); vm.runInContext(helpers + body, context);
+const card = JSON.parse(fs.readFileSync(0, 'utf8'));
+const output = context.verdictCard(card, 'r123', 'receipt123');
+process.stdout.write(JSON.stringify(output));
+"""
+        result = subprocess.run(["node", "-e", script, str(Path(__file__).parent / "static" / "app.js")],
+                                input=json.dumps(card), text=True, capture_output=True, check=True)
+        return json.loads(result.stdout)
+
+    def test_confidence_only_retains_engine_values_and_renders_neutral_context(self):
+        raw = self.verdict({"sets": {}, "confidence": "guess"})
+        before = json.loads(json.dumps(raw))
+        card = P.verdict_card(raw, CTX, REVIEW)
+        self.assertEqual(raw, before)
+        self.assertFalse(card["has_stated_hypothesis"])
+        self.assertIn("In this engine comparison", card["headline"])
+        self.assertEqual(card["verdict"], "Misplay")
+        self.assertEqual(card["delta_U"], [8.0, 9.0, 7.0])
+        self.assertEqual(card["delta_R"], [7.0, 6.0, 8.0])
+        self.assertEqual((card["margin_pts"], card["runs"], card["iterations"], card["worlds"]), (8, 3, 60000, 4))
+        rendered = json.dumps(self.render(card))
+        self.assertIn("No testable read was recorded", rendered)
+        self.assertIn("Engine baseline", rendered)
+        self.assertNotIn("under your read", rendered)
+        self.assertIn("receipt123", rendered)
+
+    def test_substantive_set_and_action_show_conditional_and_checked(self):
+        belief = {"sets": {"Pikachu": {"item": "lightball"}},
+                  "expects_action": {"kind": "move", "move": "shadowball"}, "confidence": "think"}
+        card = P.verdict_card(self.verdict(belief), CTX, REVIEW)
+        self.assertTrue(card["has_stated_hypothesis"])
+        self.assertIn("In this engine comparison", card["headline"])
+        self.assertEqual(card["read_check"]["status"], "checked")
+        rendered = json.dumps(self.render(card))
+        self.assertIn("under your read", rendered)
+        self.assertIn('"data-read-check-status": "checked"', rendered)
+        self.assertNotIn("No testable read was recorded", rendered)
+
+    def test_no_opponent_choice_and_missing_data_never_claim_checked_action(self):
+        belief = {"sets": {}, "expects_action": {"kind": "move", "move": "shadowball"}}
+        review = json.loads(json.dumps(REVIEW))
+        review["decisions"][0]["opponent_policy_top"] = [["No Move", 1.0]]
+        card = P.verdict_card(self.verdict(belief), CTX, review)
+        self.assertEqual(card["read_check"]["status"], "no_opponent_choice")
+        rendered = json.dumps(self.render(card))
+        self.assertIn("no real choice", rendered)
+        self.assertNotIn('"data-read-check-status": "checked"', rendered)
+        self.assertNotIn("Even if your read were right", rendered)
+        card = P.verdict_card(self.verdict(belief), CTX, None)
+        self.assertIn("expected opponent action could not be checked", json.dumps(self.render(card)))
+
+    def test_action_only_checked_and_no_choice_plot_engine_baseline(self):
+        belief = {"sets": {}, "expects_action": {"kind": "move", "move": "shadowball"}}
+        no_choice = json.loads(json.dumps(REVIEW))
+        no_choice["decisions"][0]["opponent_policy_top"] = [["No Move", 1.0]]
+        for review, status in ((REVIEW, "checked"), (no_choice, "no_opponent_choice")):
+            card = P.verdict_card(self.verdict(belief), CTX, review)
+            self.assertTrue(card["has_stated_hypothesis"])
+            self.assertFalse(card["has_retained_set_hypothesis"])
+            self.assertEqual(card["read_check"]["status"], status)
+            dom = self.render(card)
+            text = json.dumps(dom)
+            self.assertIn('"text": "Engine baseline"', text)
+            self.assertIn("Engine baseline 8, 9, 7", text)
+            self.assertNotIn("under your read", text)
+            self.assertIn('"data-read-check-status": "' + status + '"', text)
+
+    def test_removed_set_uses_baseline_plot(self):
+        belief = {"sets": {"Pikachu": {"item": "lightball"}}}
+        verdict = self.verdict(belief)
+        verdict["stated"] = {"sets": {}}
+        card = P.verdict_card(verdict, CTX, REVIEW)
+        self.assertFalse(card["has_retained_set_hypothesis"])
+        rendered = json.dumps(self.render(card))
+        self.assertIn("Engine baseline", rendered)
+        self.assertIn("In this engine comparison", rendered)
+        self.assertNotIn("Even if your read were right", rendered)
+        verdict["info_third_option"] = {"option": "rapidspin"}
+        rendered = json.dumps(self.render(P.verdict_card(verdict, CTX, REVIEW)))
+        self.assertIn("In this engine comparison", rendered)
+        self.assertNotIn("Under your read", rendered)
+
+    def test_empty_or_invalid_details_do_not_count_as_hypotheses(self):
+        for belief in ({"sets": {"Pikachu": {"item": "  ", "moves_has": [""]}}},
+                       {"sets": {"": {"item": "lightball"}}},
+                       {"expects_action": {"kind": "move", "move": ""}},
+                       {"expects_action": {"kind": "invalid"}}):
+            self.assertEqual(P._stated_hypotheses(belief), (False, False))
+        for belief in ({"expects_action": {"kind": "switch"}},
+                       {"expects_action": {"kind": "tera"}},
+                       {"sets": {"Pikachu": {"moves_not": ["thunderbolt"]}}}):
+            self.assertTrue(any(P._stated_hypotheses(belief)))
 
 
 if __name__ == "__main__":

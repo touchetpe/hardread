@@ -52,7 +52,7 @@ LLM_URL = os.environ.get("HARDREAD_LLM_URL", "http://127.0.0.1:18131").rstrip("/
 GLIMMER_URL = LLM_URL + "/v1/chat/completions"
 EVAL_LOCK = HARDREAD / "scratch_ds" / "agent" / "EVAL_LOCK"   # present = a recorded evaluation is running: no calls
 LLM_GATE = threading.Lock()   # at most one model call in flight from this app (the server runs --parallel 1)
-EXPLAIN_MODE = os.environ.get("HARDREAD_EXPLAIN_MODE", "auto")   # auto | loop | prefetch | template | off
+EXPLAIN_MODE = os.environ.get("HARDREAD_EXPLAIN_MODE", "template")   # auto | loop | prefetch | template | off
 EXPLANATION_POLICY_VERSION = "offered-scope-v2"
 VERDICTS_ON = os.environ.get("HARDREAD_DISABLE_VERDICT", "") != "1"
 
@@ -366,7 +366,7 @@ def _engine_runtime_provenance():
 
 
 def explain_store(rid):
-    return (cache_dir(rid) / "explain.json") if cache_dir(rid) else (SHOWCASES / f"{rid}.explain.json")
+    return (cache_dir(rid) / "explain.json") if cache_dir(rid) else (STATE / "showcase-explanations" / f"{rid}.json")
 
 
 def explain_key_store(rid):
@@ -387,18 +387,37 @@ def _explanation_offered(review, ctx, provided_keys):
     return view, offered, keys
 
 
-def _save_explain_keys(rid, qid, keys):
+TEMPLATE_CACHE_VERSION = "deterministic-template-v1"
+
+
+def _effective_explain_mode():
+    if EXPLAIN_MODE != "auto":
+        return EXPLAIN_MODE
+    return "loop" if eval_locked() or glimmer_up() else "template"
+
+
+def _save_explain_keys(rid, qid, keys, mode):
     path = explain_key_store(rid)
     current = _jsonfile(path, {}) or {}
-    current[qid] = {"offered_keys": keys, "policy_version": EXPLANATION_POLICY_VERSION}
+    current[qid] = {"offered_keys": keys, "policy_version": EXPLANATION_POLICY_VERSION, "mode": mode}
     path.parent.mkdir(parents=True, exist_ok=True)
     _write_json(path, current)
 
 
-def _explanation_cache_current(explanation, identity, offered_keys):
-    expected = {"offered_keys": offered_keys, "policy_version": EXPLANATION_POLICY_VERSION}
+def _explanation_cache_current(explanation, identity, offered_keys, mode):
+    expected = {"offered_keys": offered_keys, "policy_version": EXPLANATION_POLICY_VERSION, "mode": mode}
     return (isinstance(explanation, dict) and explanation.get("policy_version") == EXPLANATION_POLICY_VERSION
-            and identity == expected)
+            and identity == expected and (mode != "template" or
+                (explanation.get("final") == "template" and explanation.get("requested_mode") == "template"
+                 and explanation.get("template_cache_version") == TEMPLATE_CACHE_VERSION)))
+
+
+def _public_explanation(explanation, mode):
+    if mode != "template":
+        return explanation
+    # Product templates expose only fields created by the deterministic path.
+    return {key: explanation[key] for key in ("question", "final", "rendered", "policy_version")
+            if key in explanation}
 
 
 def _visible_verdicts(offered, verdicts):
@@ -425,8 +444,9 @@ def load_view(rid):
     cached = _jsonfile(explain_store(rid), {}) or {}
     saved_keys = _jsonfile(explain_key_store(rid), {}) or {}
     keys = _offered_keys(offered)
-    view["explanations"] = {q: ex for q, ex in cached.items()
-                             if _explanation_cache_current(ex, saved_keys.get(q), keys)}
+    mode = _effective_explain_mode()
+    view["explanations"] = {q: _public_explanation(ex, mode) for q, ex in cached.items()
+                             if _explanation_cache_current(ex, saved_keys.get(q), keys, mode)}
     view["questions"] = QUESTIONS
     return view
 
@@ -817,47 +837,50 @@ def create_app(concurrency=1, processes=4):
         key_store = explain_key_store(rid)
         have = _jsonfile(store, {}) or {}
         saved_keys = _jsonfile(key_store, {}) or {}
-        if qid in have and _explanation_cache_current(have[qid], saved_keys.get(qid), offered_keys):
+        mode = await run_in_threadpool(_effective_explain_mode)
+        if qid in have and _explanation_cache_current(have[qid], saved_keys.get(qid), offered_keys, mode):
             return {"ok": True, "cached": True}
-        identity = {"offered_keys": offered_keys, "policy_version": EXPLANATION_POLICY_VERSION}
+        identity = {"offered_keys": offered_keys, "policy_version": EXPLANATION_POLICY_VERSION, "mode": mode}
         key_digest = hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()[:16]
-        key = f"explain:{rid}:{qid}:{EXPLANATION_POLICY_VERSION}:{key_digest}"
+        key = f"explain:{rid}:{qid}:{EXPLANATION_POLICY_VERSION}:{mode}:{key_digest}"
         visible_verdicts = _visible_verdicts(offered, verdicts_of(rid))
         template = await run_in_threadpool(_template_explanation, review, QUESTIONS[qid], visible_verdicts, offered)
-        jid = jobs.existing(key)
-        if jid:
-            return {"ok": True, "job_id": jid, "template": template}
         ok, _ = jobs.allow(client_of(request), "explain")
         if not ok:
             return err(429, "Too many explanation requests this hour.")
-        if EXPLAIN_MODE != "auto":
-            mode = EXPLAIN_MODE
-        elif eval_locked():
-            mode = "loop"   # queued until the evaluation lock is gone; the template is shown meanwhile
-        else:
-            mode = "loop" if await run_in_threadpool(glimmer_up) else "template"
-        if mode == "template" and template is not None:   # nothing to wait for
+        if mode == "template" and template is None:
+            return err(503, "The template explanation could not be generated.")
+        if mode == "template":   # nothing to wait for
             cur = _jsonfile(store, {}) or {}
-            cur[qid] = dict(template, policy_version=EXPLANATION_POLICY_VERSION)
+            cur[qid] = dict(template, policy_version=EXPLANATION_POLICY_VERSION,
+                             template_cache_version=TEMPLATE_CACHE_VERSION)
+            store.parent.mkdir(parents=True, exist_ok=True)
             _write_json(store, cur)
-            _save_explain_keys(rid, qid, offered_keys)
+            _save_explain_keys(rid, qid, offered_keys, mode)
             return {"ok": True, "cached": True}
+
+        jid = jobs.existing(key)
+        if jid:
+            return {"ok": True, "job_id": jid, "template": template}
 
         def cmd(jd, mode=mode):
             return [sys.executable, str(APP / "explain_worker.py"), str(jd), "--mode", mode, "--url", GLIMMER_URL,
                     "--lock", str(EVAL_LOCK)]
 
         def done(j, store=store, qid=qid, review=review, offered=offered, offered_keys=offered_keys,
-                 visible_verdicts=visible_verdicts):
+                 visible_verdicts=visible_verdicts, mode=mode):
             res = json.loads((j["dir"] / "explain.json").read_text())
             if res.get("pending_eval_lock"):   # stopped by an evaluation lock: not cached, a later visit retries
                 return "pending"
+            if EXPLAIN_MODE == "template":
+                return "withheld"
             res = wording_guard(res, review, QUESTIONS[qid], visible_verdicts, offered)
             res["policy_version"] = EXPLANATION_POLICY_VERSION
             cur = _jsonfile(store, {}) or {}
             cur[qid] = res
+            store.parent.mkdir(parents=True, exist_ok=True)
             _write_json(store, cur)
-            _save_explain_keys(rid, qid, offered_keys)
+            _save_explain_keys(rid, qid, offered_keys, mode)
             return qid
         files = {"review.json": json.dumps(review), "question.txt": QUESTIONS[qid],
                  "verdicts.json": json.dumps(visible_verdicts), "offered.json": json.dumps(offered),

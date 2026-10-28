@@ -609,6 +609,30 @@ def clean_belief(b):
     return out
 
 
+def _stated_hypotheses(belief):
+    """Identify substantive recorded set and action details, excluding confidence alone."""
+    if not isinstance(belief, dict):
+        return False, False
+    def nonempty(value):
+        return isinstance(value, str) and bool(value.strip())
+    sets = belief.get("sets")
+    has_set = False
+    if isinstance(sets, dict):
+        for species, details in sets.items():
+            if not nonempty(species) or not isinstance(details, dict):
+                continue
+            if any(nonempty(details.get(key)) for key in ("item", "ability", "tera")):
+                has_set = True
+            for key in ("moves_has", "moves_not"):
+                moves = details.get(key)
+                if isinstance(moves, list) and any(nonempty(move) for move in moves):
+                    has_set = True
+    action = belief.get("expects_action")
+    has_action = (isinstance(action, dict) and action.get("kind") in ("switch", "move", "tera")
+                  and (action.get("kind") != "move" or nonempty(action.get("move"))))
+    return has_set, has_action
+
+
 def verdict_card(v, ctx, review=None):
     """verdict.py output -> the card the UI shows (display names, points, the three runs, receipts)."""
     names = ctx.get("names") or {}
@@ -619,15 +643,22 @@ def verdict_card(v, ctx, review=None):
     ref_label = {"later": "revealed later in the game", "truth": "the true sets",
                  "engine": "the engine's estimate"}.get(ref, "the engine's estimate")
     verdict = v.get("verdict")
+    has_set, has_action = _stated_hypotheses(v.get("app_belief"))
+    has_hypothesis = has_set or has_action
+    has_retained_set, _ = _stated_hypotheses({"sets": (v.get("stated") or {}).get("sets", {})})
+    rc = read_check(review, v["turn"], v["k"], v.get("app_belief") or {}) if review else None
     mean_u, mean_r = v.get("mean_delta_U"), v.get("mean_delta_R")
     if verdict == "Misplay":
-        headline = f"Even if your read were right, {xg} was better by {round(100 * mean_u)} points."
-    elif verdict == "Misread":
+        headline = f"In this engine comparison, {xg} was better by {round(100 * mean_u)} points."
+    elif verdict == "Misread" and has_set:
         why = "wrong (revealed later)" if ref == "later" else "unlikely (the engine's estimate)"
         headline = (f"Your move fit your read; the read was {why}: under {ref_label}, {xg} was better by "
                     f"{round(100 * mean_r)} points.")
+    elif verdict == "Misread":
+        headline = f"Under {ref_label}, {xg} was better by {round(100 * mean_r)} points."
     elif verdict == "Defensible":
-        headline = "Your move holds up under your read and under the reference."
+        headline = ("Your move holds up under your read and under the reference." if has_set
+                    else "Your move holds up under the engine baseline and under the reference.")
     else:
         headline = "Within noise: the three runs do not agree enough to call it either way."
     third = v.get("info_third_option")
@@ -640,7 +671,6 @@ def verdict_card(v, ctx, review=None):
             stated.append(f"{sp}: has {pretty_action(m, names)}")
         for m in f.get("moves_not") or []:
             stated.append(f"{sp}: no {pretty_action(m, names)}")
-    rc = read_check(review, v["turn"], v["k"], v.get("app_belief") or {}) if review else None
     return {"turn": v["turn"], "k": v["k"], "verdict": verdict, "headline": headline,
             "x": x, "chosen": chosen, "delta_U": pts(v.get("delta_U")), "delta_R": pts(v.get("delta_R")),
             "mean_U": None if mean_u is None else round(100 * mean_u, 1),
@@ -649,11 +679,13 @@ def verdict_card(v, ctx, review=None):
             "contradictions": [c.get("text") + (f": {c.get('field')} " if c.get("field") else "") +
                                (f"(you said {c.get('stated')}, the log showed {c.get('revealed')})"
                                 if c.get("revealed") else "") for c in v.get("contradictions") or []],
-            "third_option": None if not third else f"Under your read, {pretty_action(third['option'], names)} "
-                                                   f"looked even better.",
+            "third_option": None if not third else f"In this engine comparison, "
+                                                   f"{pretty_action(third['option'], names)} looked even better.",
             "margin_pts": round(100 * v.get("margin", 0.05)), "ok_margin_pts": round(100 * v.get("ok_margin", 0.02)),
             "runs": len(v.get("seeds") or []), "iterations": v.get("iterations"), "worlds": v.get("worlds"),
-            "seconds": v.get("seconds"), "wording": v.get("wording"), "read_check": rc}
+            "seconds": v.get("seconds"), "wording": v.get("wording"), "read_check": rc,
+            "has_stated_hypothesis": has_hypothesis, "has_expected_action": has_action,
+            "has_retained_set_hypothesis": has_retained_set}
 
 
 def read_check(review, turn, k, belief):

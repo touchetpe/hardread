@@ -36,19 +36,15 @@ QUESTIONS = {"q1": "Was this game decided by luck or by my choices?",
              "q3": "Where did the engine disagree most with my choices, and by how much?"}
 
 
-def explanations(review, glimmer_file=None):
-    """Glimmer's cached answers where they exist, else the deterministic templates (tools/agent/explain.py)."""
-    have = json.loads(glimmer_file.read_text()) if glimmer_file and glimmer_file.exists() else {}
-    try:
-        sys.path.insert(0, str(APP.parent / "tools" / "agent"))
-        import explain
-    except Exception:  # noqa: BLE001
-        return have
+def explanations(review, offered):
+    """Generate deterministic answers scoped to the visible offered decisions."""
+    sys.path.insert(0, str(APP.parent / "tools" / "agent"))
+    import explain
+    result = {}
     for q, text in QUESTIONS.items():
-        if q not in have:
-            res = explain.run(review, text, mode="template")
-            have[q] = {"question": text, "final": "template", "rendered": res.get("rendered")}
-    return have
+        res = explain.run(review, text, mode="template", offered=offered)
+        result[q] = {"question": text, "final": "template", "rendered": res.get("rendered")}
+    return result
 
 
 def main():
@@ -64,9 +60,9 @@ def main():
         for sc in showcases:
             review = json.loads((SHOW / f"{sc['id']}.review.json").read_text())
             ctx = json.loads((SHOW / f"{sc['id']}.ctx.json").read_text())
-            v = P.build_view(review, ctx)
+            v, offered = P.build_view_with_offered(review, ctx)
             v.update(id=sc["id"], showcase=True, private=False)
-            v["explanations"] = explanations(review, SHOW / f"{sc['id']}.explain.json")
+            v["explanations"] = explanations(review, offered)
             v["questions"], v["features"] = QUESTIONS, {"explain": True, "verdict": False, "share": False}
             views[sc["id"]] = v
     if a.review:
