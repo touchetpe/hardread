@@ -4,11 +4,48 @@ import json
 import math
 from decimal import Decimal, localcontext
 
-BUILD_ENABLED = False
+BUILD_ENABLED = True
 MAX_PAIRS = 100_000
+T2_BUILD_SCOPE = 'one guarded local T2 DPO pair build'
 
 class PairError(ValueError):
     pass
+
+def _validate_pair_authorizations(root, runtime, base_ref, dpo_ref, dpo_spec_ref,
+                                  dpo_review_ref, index_sha256, output_dir):
+    """Require the new T2-only base approval and its separately bound DPO approval."""
+    for ref in (base_ref, dpo_ref):
+        if not isinstance(ref, dict) or set(ref) != {'commit', 'path', 'sha256'}:
+            raise PairError('committed build authorization missing')
+    try:
+        base = json.loads(runtime._committed(root, base_ref['commit'], base_ref['path'], base_ref['sha256']))
+        dpo = json.loads(runtime._committed(root, dpo_ref['commit'], dpo_ref['path'], dpo_ref['sha256']))
+    except (ValueError, UnicodeError) as exc:
+        raise PairError('committed build authorization malformed') from exc
+    if not isinstance(base, dict) or any((
+        base.get('status') != 'approved',
+        base.get('purpose') != 'build',
+        base.get('scope') != T2_BUILD_SCOPE,
+        base.get('source_index_sha256') != index_sha256,
+        base.get('dpo_spec_sha256') != dpo_spec_ref.get('sha256'),
+        base.get('output_dir') != output_dir,
+        type(base.get('max_pairs')) is not int or base.get('max_pairs') != MAX_PAIRS,
+        not isinstance(base.get('owner'), str) or not base['owner'].strip(),
+    )):
+        raise PairError('fresh T2 pair-build authorization differs')
+    if not isinstance(dpo, dict) or any((
+        dpo.get('status') != 'approved',
+        dpo.get('purpose') != 'dpo_build',
+        dpo.get('spec_sha256') != dpo_spec_ref.get('sha256'),
+        dpo.get('source_review_sha256') != dpo_review_ref.get('sha256'),
+        dpo.get('base_approval_sha256') != base_ref.get('sha256'),
+        dpo.get('source_index_sha256') != index_sha256,
+        dpo.get('output_dir') != output_dir,
+        type(dpo.get('max_pairs')) is not int or dpo.get('max_pairs') != MAX_PAIRS,
+        not isinstance(dpo.get('owner'), str) or not dpo['owner'].strip(),
+    )):
+        raise PairError('DPO pair-build authorization differs')
+    return base, dpo
 
 def canonical(value):
     return json.dumps(value, sort_keys=True, separators=(',', ':'), ensure_ascii=False, allow_nan=False).encode()
@@ -175,14 +212,11 @@ def build(root, spec_ref, card_ref, approval_ref, index_ref, index_review_ref, d
     reviewed = json.loads(R._committed(root,dpo_review_ref['commit'],dpo_review_ref['path'],dpo_review_ref['sha256']))
     if not isinstance(reviewed,dict) or reviewed.get('status')!='accepted' or reviewed.get('spec_sha256')!=dpo_spec_ref['sha256'] or not isinstance(reviewed.get('reviewer'),str) or not reviewed['reviewer'].strip():
         raise PairError('DPO source review differs')
-    if not isinstance(dpo_approval_ref,dict) or set(dpo_approval_ref)!={'commit','path','sha256'}:
-        raise PairError('DPO build authorization missing')
-    approval=json.loads(R._committed(root,dpo_approval_ref['commit'],dpo_approval_ref['path'],dpo_approval_ref['sha256']))
-    if not isinstance(approval,dict) or approval.get('status')!='approved' or approval.get('purpose')!='dpo_build' or approval.get('spec_sha256')!=dpo_spec_ref['sha256'] or approval.get('source_review_sha256')!=dpo_review_ref['sha256'] or not isinstance(approval.get('owner'),str) or not approval['owner'].strip():
-        raise PairError('DPO build authorization differs')
     expected_plan='9d6d411405d1120165597b9e57b2d6ec9b934411534e9afa4d729331287880c4'
     if not isinstance(dpo_spec,dict) or dpo_spec.get('status')!='FROZEN_FOR_REVIEW' or dpo_spec.get('plan_sha256')!=expected_plan or dpo_spec.get('source_index_sha256')!=index_ref.get('sha256') or dpo_spec.get('output_dir')!=destination or dpo_spec.get('max_pairs')!=MAX_PAIRS:
         raise PairError('DPO prospective specification differs')
+    _validate_pair_authorizations(root, R, approval_ref, dpo_approval_ref,
+                                  dpo_spec_ref, dpo_review_ref, index_ref.get('sha256'), destination)
     code=dpo_spec.get('code_sha256')
     required={'tools/sft/build_dpo.py','tools/sft/data_admission.py','tools/sft/data_admission_runtime.py','tools/sft/build_sft.py','tools/sft/serialize.py','tools/sft/glimmer_chat.py','tools/sft/dex.json','tools/dataset/extract.py','tools/belief/roster_hash.py','tools/human/parse_replays.py','azure/student/p6_trainonly_inspect.py'}
     if not isinstance(code,dict) or not required.issubset(code) or Path(__file__).resolve()!=(Path(root)/'tools/sft/build_dpo.py').resolve():
@@ -294,6 +328,8 @@ def build(root, spec_ref, card_ref, approval_ref, index_ref, index_review_ref, d
         fd=os.open(tmp/'manifest.json',os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
         with os.fdopen(fd,'wb') as out:
             out.write(canonical(manifest)+b'\n'); out.flush(); os.fsync(out.fileno())
+        _validate_pair_authorizations(root, R, approval_ref, dpo_approval_ref,
+                                      dpo_spec_ref, dpo_review_ref, index_ref.get('sha256'), destination)
         R.authorize(root,spec_ref,card_ref,approval_ref,'build',execute=True)
         if R._read_ref(root,dpo_spec_ref)!=dpo_spec_raw: raise PairError('DPO specification changed')
         for name,pin in code.items():
