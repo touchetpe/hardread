@@ -161,6 +161,8 @@ Concurrency was conservative, so C1t1 and C2 may gain ≈20–40% when tuned (no
   - Base Glimmer Q4_K_M through the HardRead policy hook: **9–20 (31%)**, **31% illegal** (268/863). Every illegal move is the 1,024-token cap hit while reasoning. p50 / p95 latency 14.7 / 17.8 s.
 - **Prompt parity:** the play-time prompt equals the training prompt on 863/863 decisions.
 
+<a id="src-student-v2-model"></a>
+
 ### Student (`tools/student/`, commit 36f6858; lever in Foul Play `fb80f6f`)
 - **Model:** a 24.9M-parameter transformer: 12 Pokémon tokens, field, 16 recent public events, one token per legal action. Heads: policy, search value, win probability, opponent next action.
 - **Training data:** 1,100 C1t1 games (92k decisions), held out by roster hash.
@@ -189,6 +191,8 @@ Concurrency was conservative, so C1t1 and C2 may gain ≈20–40% when tuned (no
   - always the first menu item: 26%.
 - **Diagnosis:** only 1–2 of about 57 target tokens carry the decision.
 - **Next (v0):** target = search argmax, choice-token loss weighting, soft-target distillation on the choice token, 50k examples.
+
+<a id="src-luck-v2-self-play"></a>
 
 ## 2026-10-26 ≈22:00 UTC: luck meter v2 passes (`tools/review/`, commit above)
 - **Root cause of v1's failure:** poke-engine's MCTS scores a position as sigmoid(eval(leaf) − root eval). Branch values from separate searches therefore had no common reference, and a KO's gain was subtracted out.
@@ -388,6 +392,8 @@ Concurrency was conservative, so C1t1 and C2 may gain ≈20–40% when tuned (no
 | Lever belief resample λ 1 | 50.00 ± 9.28 | 80 |
 | Early C1t1 A/A, seat A | 49.71 ± 3.46 (A3 rule: pass) | 680 |
 
+<a id="src-voi-full-revelation"></a>
+
 ## 2026-10-27 ≈02:00 UTC: VoI final (600 games per level) and official G-24h (fails on win rate)
 - **Value of information, final.** `hrvoi-20261026-p{100,050,025}-a5fb` all Completed: 15 chunks × 40 games = 600 games per level, 300 side-swapped pairings on `hr_val`, C1t1, oracle seat alternating. Analysis: `tools/analysis/voi.py` (undecided games excluded) and `tools/analysis/attribute_failures.py --mode oracle` (pre-registered failure rule).
 
@@ -450,6 +456,8 @@ These rules are fixed now. The dev-A screens end at 08:00 UTC (argmax, value, do
 4. **G2 order on dev set B (`hr_val`):** the combo first only if its dev-A estimate ≥ F1's; otherwise `value` first. At most 2 candidates on dev B.
 5. **G2 rules:** ≥ 1,000 games; markers valid; pre-registered win rate ≥ 52.0 → PASS. A G2 FAIL is not a blocker: the better candidate is frozen anyway, and the sealed run always runs.
 6. **Timing:** G2 runs on D1 only if amendment A3a (draft: `handoff/drafts/A3a.md`, owner decision OD-2) is approved. Otherwise G2 runs on D4 as registered.
+
+<a id="src-bridge-draft-b"></a>
 
 ## 2026-10-27 ≈04:45 UTC: bridge module and validation (research/28 S1.5, E6) — PASS
 - **Files:** `tools/review/bridge.py` (new; pure Python, one implementation for the product and its validation), `tools/review/validate_bridge.py` (moved from `tools/review/proposed/`, rewritten to the 27 §4.2 CLI: inputs, `--cal`, `--gate-file`, `--json`; exit 0 iff every acceptance row passes on the gate file), `tools/review/test_bridge.py` (new). `review.py` now adds `meta.end_reason`/`meta.end_turn` (from the log) and a `bridge` block (`bridge.from_review`) to its output; the UI reads `bridge.s/l/c` and `bridge.labels` from there.
@@ -779,6 +787,8 @@ Root independently rederived the result from all 184 raw rows and verified uncha
 The next permitted stage is a separately checked 60,000-iteration run of the same 184 cases, seeds 11/12/13, four worlds, margin .08 and 12 workers from the pinned worktree. It has not started at this record. No decisive product or demo claim is supported.
 
 
+<a id="src-vt1-60k-08"></a>
+
 ## 2026-10-27 18:13 UTC — VT1 registered 60k/.08 fallback: PASS
 
 The same fixed 184 offered decisions completed at 60,000 iterations, margin .08, four worlds and seeds 11/12/13 (`stated=none`, `reference=engine`, `absolute_human`, 12 Mac workers). Pinned HardRead `4bf7aeb` and fork `c04b38e` were clean at launch; independent Git anchors let main remain editable. The run started 17:49:57 UTC and ended 17:54:44.419 UTC, exit 0, **286.55 seconds**. No case was dropped or replaced, and there were **zero errors**.
@@ -832,6 +842,8 @@ Main dev loss (`pol + 0.5*vsearch`) was bfef 1.840206051959429, lr 1.82894520373
 V1 descriptive reference: main roster test 54.5% / KL .411 / Brier .176; separate-pool 55.3% / .415 / .171; control roster top-1 53.3%. V1 used 2,699 label games, about 37,600 roster-test decisions and a 440-game separate pool; v2 uses larger cohorts shown above. The gap is descriptive, not paired or a significance claim. The selected v2 main exceeds its same-run control by only about 0.19 top-1 points; no significant main-control advantage is established. These percentages measure offline engine-choice agreement, not battle wins.
 
 Fresh Sol accepted comparability, selection chronology, checkpoint bytes and complete reporting. Filtered report SHA-256 `c55132620a29e90cddb1eab7bd45e3c28db781e08dcf8cf915d1dc318f473760`; checkpoint-lock SHA `5d7de931026c26147eb4da705ee4c5213bd5ef5293591432cd1796572dfee01c`. Raw artifacts and reviews remain private under `scratch_ds/codex/training-roadmap/r2-input-audit/`. No offline CI/p-value was computed from these aggregate reports. The selected-model 200-game arena, legality and latency measurement remain pending; the old 32/40 heuristic arena is a small earlier pilot, not a v2 result. No new arena or T3 job was submitted by this readout.
+
+<a id="src-s22-calibration-fail"></a>
 
 ## 2026-10-27 20:53 UTC — C8 Draft-B calibration: overall FAIL; current calibrator retained
 
@@ -920,6 +932,8 @@ The historical HardRead snapshot commit `55b65062d7ab6cab052a714a67590550e64f818
 ONNX, ONNX Runtime, and ExecuTorch were absent in the existing runtime. No dependency was installed and no Android-format export was attempted; that gate remains **PENDING/UNTESTED**. The 200-game side-swapped arena remains **PENDING**. Full T3 acceptance is not complete; the registered roster and trained-latency gates have failed, while arena outcome is still unmeasured.
 
 Evidence: `scratch_ds/codex/training-roadmap/t3-readout-private/t3-dev-checkpoint-lock-v1-20261027T223852Z.json`; `scratch_ds/codex/training-roadmap/t3-readout-private/stage2/t3-heldout-readout-20261027T224339Z.private.json`; `scratch_ds/codex/training-roadmap/t3-readout-private/stage2/t3-trained-mac-timing-20261027T224703Z.private.json`; `scratch_ds/codex/training-roadmap/t3-readout-private/stage2/sol-t3-readout-review-v1.private.md`.
+
+<a id="src-student-v2-arena"></a>
 
 ## 2026-10-27 23:16 UTC — Selected student v2 battle arena: 86.50% on development teams
 
@@ -1315,6 +1329,8 @@ Technical diagnosis source SHA-256 `a0795c892303d4b8bff9df408b9902504a4c7188bf73
 
 
 <a id="a1-base-v2-completed-20261028"></a>
+
+<a id="src-a1-v2-owner-pending"></a>
 
 ## 2026-10-28 16:19:20 UTC — Base A1 v2 completed; blind audit point thresholds met, owner verification pending
 

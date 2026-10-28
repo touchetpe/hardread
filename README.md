@@ -1,6 +1,31 @@
-# HardRead: engine lane
+# HardRead: engine-backed decision review
 
-Working repo for the plan in [research/22-final-comparison.md](../research/22-final-comparison.md): the N1-lite route, with the v5.2-lean SOTA spine plus an asynchronous "Hax or You" replay review.
+HardRead reviews finished competitive Pokémon replays. It uses Foul Play search to estimate chance, inspect selected decisions and test a player's stated read against engine alternatives. The current product explains cited results with labeled templates while live model prose awaits its final checks.
+
+Foul Play is pmariglia’s independent GPL-3.0 open-source search bot and winner of the [2025 PokéAgent Gen 9 OU tournament](https://pokeagent.github.io/leaderboard.html) ([upstream project](https://github.com/pmariglia/foul-play)). HardRead builds the retrospective review, luck and stated-read layers around that credited baseline; the tournament result belongs to Foul Play, not HardRead.
+
+**Fan-made, not affiliated with Nintendo, The Pokémon Company or Game Freak. 18+.**
+
+
+## How HardRead differs from a typical AI analyzer
+
+The comparator is the one-prompt wrapper described in the owner-relayed Q10 ruling. This is a product-shape comparison, not a measured benchmark of every AI analyzer. [Q10](handoff/NOW.md)
+
+| | One-prompt AI analyzer | HardRead |
+|---|---|---|
+| Who does the analysis | An LLM responds from a prompt. | Foul Play's independent search engine samples possible hidden sets and continuations. HardRead adds finished-replay review, luck estimation and stated-read testing. [Foul Play](foul-play/) |
+| Where the numbers come from | The model generates answer text. | The engine computes underlying values. In the accepted D1 flow, application code fills displayed numeric slots from cited tool fields, and a verifier rejects uncited numeric claims. This checks provenance, not whether every estimate or sentence is correct. [D1](RESULTS.md#d1-template-ui-20261028) |
+| What has been measured | No comparison result is asserted here for generic analyzers. | On the registered 60k/.08 offered-decision cohort, false decisive verdicts were **18/184 = 9.78%** (Wilson 95% CI **6.28–14.93%**); separate bot self-play luck mirror correlation was **−0.81**; the shipped bridge passed its Draft-B gate on **292 game-sides**; and the S2.2 calibration upgrade **failed** and was not switched on. [VT1](RESULTS.md#src-vt1-60k-08) [LUCK-SP](RESULTS.md#src-luck-v2-self-play) [BRIDGE](RESULTS.md#src-bridge-draft-b) [S2.2](RESULTS.md#src-s22-calibration-fail) |
+| What the player can test | A free-form question. | In the selected review flow, a player can enter a stated read with a team export and compare a chosen move with engine alternatives using three seeded searches and a within-noise verdict rule. D1 passed three selected template-based engineering flows; this is not human accuracy or a general end-to-end rate. [D1](RESULTS.md#d1-template-ui-20261028) [VT1](RESULTS.md#src-vt1-60k-08) |
+| Role of Muse Glimmer | The model supplies the analysis. | Base Muse Glimmer selects read-only engine evidence and can propose editable fields from a player's note. Current product explanations use labeled templates while full C10 and live-prose checks remain pending. A1 v2 recorded **59/60** answers after at most one repair; among 60 sampled from 120 sentences, **3/60** were flagged; **15 owner labels** and `bound_score` remain pending, so this is not a live-prose ship PASS. A separately fine-tuned Glimmer policy is game-playing research, not the review explainer. [A1-V2](RESULTS.md#src-a1-v2-owner-pending) |
+
+D1 §3 accepted three selected template-based engineering UI flows, with **42 primary screenshots plus two camera-only supplements, 24 clicked citations and 12 matching numeric values**. This is not a blind quality rate, acceptance of the original fixed C10/P3 cohort's **2/3** result, or a live-prose/Agentic PASS. [D1](RESULTS.md#d1-template-ui-20261028)
+
+Separate game-playing research: a **24.9M-parameter Student v2** scored **173/200 = 86.50%** against PokéChamp’s Abyssal heuristic bot (Wilson 95% CI **81.07–90.55%**) on partly seen development teams, with a timeout counted as a loss. It is not an unseen-team or general-strength claim, and it is not the review explainer. [STUDENT-V2 model](RESULTS.md#src-student-v2-model) [STUDENT-V2 arena](RESULTS.md#src-student-v2-arena)
+
+Pokémon is the testbed; the method is decision review under hidden information.
+
+The owner relayed the Oct 28 organizer ruling: HardRead is fair game as a real engine-backed tool, conditional on actual owner usefulness and clear README/demo differentiation from a one-prompt wrapper. This addresses the sports-analyzer example only; other submission, ownership, privacy, model and publication gates remain. [Q10](handoff/NOW.md)
 
 ## What's installed (2026-10-26)
 
