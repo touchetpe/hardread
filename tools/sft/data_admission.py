@@ -107,14 +107,23 @@ def project_holdouts(index,examples,expected_counts,decision_to_game):
 
 def game_exclusion_flags(index,key,hold,heldout_rosters,reserved_names,reserved_rosters,heldout_names=frozenset()):
     g=index['games'][key];names=set(g['team_names']);rosters=set(g['roster_digests'])
-    kind=g.get('source_kind');a=g.get('rc_a');b=g.get('rc_b');bad=g.get('p5_nonzero_process_rc')
-    if kind not in ('P5','P6') or type(a) is not int or type(b) is not int or type(bad) is not bool or bad!=(kind=='P5' and (a!=0 or b!=0)) or (kind=='P6' and (a!=0 or b!=0)):raise AdmissionError('source process RC identity differs')
-    return {'p5_nonzero_process_rc':bad,
+    kind=g.get('source_kind');a=g.get('rc_a');b=g.get('rc_b');bad=g.get('p5_nonzero_process_rc');incomplete=g.get('p5_incomplete_game');status=g.get('source_status');decided=g.get('decided')
+    typed=type(a) is int and type(b) is int
+    if kind not in ('P5','P6') or type(bad) is not bool or type(incomplete) is not bool or type(decided) is not bool or bad!=(kind=='P5' and typed and (a!=0 or b!=0)) or incomplete!=(kind=='P5' and (status!='ok' or not decided or not typed)) or (kind=='P6' and (not typed or a!=0 or b!=0 or not decided)):raise AdmissionError('source process health identity differs')
+    return {'p5_incomplete_game':incomplete,'p5_nonzero_process_rc':bad,
+        'tombstone_team_name':bool(names&hold.get('tombstone_names',set())),
+        'tombstone_roster':bool(rosters&hold.get('tombstone_rosters',set())),
         'holdout_game':bool(index['components'][key] in hold['components'] or game_tokens(g)&hold['tokens']),
         'holdout_team_name':bool(names&(hold['team_names']|heldout_names)),
         'holdout_roster':bool(rosters&hold['rosters']),
         'reserved_team_name':bool(names&reserved_names),
         'excluded_roster':bool(rosters&(heldout_rosters|reserved_rosters))}
+
+def primary_exclusion(game,flags):
+    # The approved typed-nonzero rule covers status-ok games even if undecided.
+    # Timeout and missing-return cases remain under the new incomplete rule.
+    if flags['p5_nonzero_process_rc'] and game.get('source_status')=='ok':return 'p5_nonzero_process_rc'
+    return next((name for name,active in flags.items() if active),None)
 
 def partition_games(index,hold,heldout_rosters,reserved_names,reserved_rosters,*,heldout_names=frozenset(),expected_heldout=596):
     if not isinstance(heldout_names,(set,frozenset)) or any(not isinstance(x,set) for x in (heldout_rosters,reserved_names,reserved_rosters)) or not hold.get('components') or not hold.get('rosters') or not heldout_rosters or not reserved_names or not reserved_rosters:raise AdmissionError('exclusion pool missing')
@@ -122,7 +131,7 @@ def partition_games(index,hold,heldout_rosters,reserved_names,reserved_rosters,*
     kept=[];counts=Counter()
     for key in index['games']:
         flags=game_exclusion_flags(index,key,hold,heldout_rosters,reserved_names,reserved_rosters,heldout_names)
-        reason=next((name for name,active in flags.items() if active),None)
+        reason=primary_exclusion(index['games'][key],flags)
         if reason is None:kept.append(key)
         else:counts[reason]+=1
     return kept,dict(counts)
@@ -208,13 +217,14 @@ def real_dataset_build(*args,**kwargs):
 
 def verify_zero_overlap(index,kept,hold,heldout_rosters,reserved_names,reserved_rosters,decision_ids,example_ids,*,heldout_names=frozenset()):
     if not isinstance(decision_ids,set) or not isinstance(example_ids,set) or not hold.get('example_ids') or not hold.get('decision_ids'):raise AdmissionError('decision or holdout ID set missing')
-    counts={'canonical_game':0,'team_name':0,'roster_digest':0,'decision_id':0,'example_id':0,'p5_nonzero_process_rc':0}
+    counts={'canonical_game':0,'team_name':0,'roster_digest':0,'decision_id':0,'example_id':0,'p5_nonzero_process_rc':0,'p5_incomplete_game':0}
     for key in kept:
         game=index['games'][key]
         counts['p5_nonzero_process_rc']+=int(game.get('p5_nonzero_process_rc') is True)
+        counts['p5_incomplete_game']+=int(game.get('p5_incomplete_game') is True)
         counts['canonical_game']+=int(index['components'][key] in hold['components'] or bool(game_tokens(game)&hold['tokens']))
-        counts['team_name']+=int(bool(set(game['team_names'])&(hold['team_names']|heldout_names|reserved_names)))
-        counts['roster_digest']+=int(bool(set(game['roster_digests'])&(hold['rosters']|heldout_rosters|reserved_rosters)))
+        counts['team_name']+=int(bool(set(game['team_names'])&(hold['team_names']|hold.get('tombstone_names',set())|heldout_names|reserved_names)))
+        counts['roster_digest']+=int(bool(set(game['roster_digests'])&(hold['rosters']|hold.get('tombstone_rosters',set())|heldout_rosters|reserved_rosters)))
     counts['decision_id']=len(decision_ids&hold['decision_ids'])
     counts['example_id']=len(example_ids&hold['example_ids'])
     if any(counts.values()):raise AdmissionError('nonzero overlap')

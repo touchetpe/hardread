@@ -18,7 +18,7 @@ def game(i,rosters=None):
             'log':log,'source_log_bytes':raw,'log_sha256':hashlib.sha256(raw).hexdigest(),'player_a':'p1','player_names':['player-a','player-b'],'source_player_a':'player-a',
             'team_names':[f'gen9/hr_train/team{i}a',f'gen9/hr_train/team{i}b'],
             'joined_team_names':[f'gen9/hr_train/team{i}a',f'gen9/hr_train/team{i}b'],
-            'joined_rosters':rosters,'roster_digests':[roster_digest(r) for r in rosters], 'source_kind':'P5','rc_a':0,'rc_b':0,'p5_nonzero_process_rc':False,'decision_count':1}
+            'joined_rosters':rosters,'roster_digests':[roster_digest(r) for r in rosters], 'source_kind':'P5','rc_a':0,'rc_b':0,'source_status':'ok','decided':True,'p5_incomplete_game':False,'p5_nonzero_process_rc':False,'decision_count':1}
 
 def make_index(gs):
     teams={name:{'split':'dev','roster_digest':digest} for g in gs for name,digest in zip(g['team_names'],g['roster_digests'])}
@@ -150,7 +150,7 @@ class ArchiveAdapterTests(unittest.TestCase):
     import extract
     with tempfile.TemporaryDirectory() as d:
         path=Path(d)/'sample.tar.gz';g=game(70);rosters=g['joined_rosters'];
-        game_row={'game':1,'a':'player-a','b':'player-b','team_a':g['team_names'][0],'team_b':g['team_names'][1],'winner':'A','cfg_a':'C1t1','cfg_b':'C1t1','rc_a':0,'rc_b':0}
+        game_row={'game':1,'a':'player-a','b':'player-b','team_a':g['team_names'][0],'team_b':g['team_names'][1],'winner':'A','status':'ok','cfg_a':'C1t1','cfg_b':'C1t1','rc_a':0,'rc_b':0}
         replay=json.loads(g['source_log_bytes']);dec=[]
         for side,choice in (('a','a'),('b','b')):
             drow={'v':2,'turn':1,'choice':choice,'worlds':[{'chance':1,'side_one':[{'m':'a','v':4,'s':0},{'m':'b','v':6,'s':0}]}]}
@@ -168,22 +168,23 @@ class ArchiveAdapterTests(unittest.TestCase):
         source={'kind':'P5','run_id':'sample','sha256':digest,'producer':'job','chunk':0,'seed':100,'game_count':1,'decision_log_versions':[2]}
         teams={n:{'split':'dev','roster_digest':r} for n,r in zip(g['team_names'],g['roster_digests'])}
         identity=lambda uid,log,sanitizer:{'replay_sha256':H('raw'),'normalized_replay_sha256':H('normal')}
-        games,rows,hashes=R.extract_joined_archive(path,digest,source,teams,None,extract,identity)
+        games,rows,hashes,tombs=R.extract_joined_archive(path,digest,source,teams,None,extract,identity)
         self.assertEqual((len(games),len(rows),len(hashes)),(1,2,2));self.assertEqual(rows[0]['uid'],'sample/g0001/A/000')
         write(malformed=True);digest=hashlib.sha256(path.read_bytes()).hexdigest();source['sha256']=digest
         with patch.object(extract,'history_cuts',return_value=[None]):
-            indexed,bad_rows,_=R.extract_joined_archive(path,digest,source,teams,None,extract,identity)
+            indexed,bad_rows,_,tombs=R.extract_joined_archive(path,digest,source,teams,None,extract,identity)
         self.assertIsNone(bad_rows[0]['history_end']);self.assertEqual(bad_rows[0]['worlds'][0]['side_one'],[{'m':'a'}])
         with self.assertRaisesRegex(A.AdmissionError,'history cut'):A.teacher_row(bad_rows[0],indexed[0],set(),set())
         for rc_a,rc_b in ((0,1),(3,2)):
             write(rc_a=rc_a,rc_b=rc_b);digest=hashlib.sha256(path.read_bytes()).hexdigest();source['sha256']=digest
-            indexed,bad_rows,_=R.extract_joined_archive(path,digest,source,teams,None,extract,identity)
+            indexed,bad_rows,_,tombs=R.extract_joined_archive(path,digest,source,teams,None,extract,identity)
             self.assertTrue(indexed[0]['p5_nonzero_process_rc']);self.assertEqual(indexed[0]['decision_count'],2);self.assertEqual(len(bad_rows),2)
         for rc_a,rc_b in ((None,0),(True,0),('0',0)):
             write(rc_a=rc_a,rc_b=rc_b);digest=hashlib.sha256(path.read_bytes()).hexdigest();source['sha256']=digest
-            with self.assertRaisesRegex(R.RuntimeErrorClosed,'RC type'):R.extract_joined_archive(path,digest,source,teams,None,extract,identity)
+            joined,_,_,_=R.extract_joined_archive(path,digest,source,teams,None,extract,identity)
+            self.assertTrue(joined[0]['p5_incomplete_game'])
         write(rc_a=0,rc_b=1);digest=hashlib.sha256(path.read_bytes()).hexdigest();source['sha256']=digest;source['kind']='P6'
-        with self.assertRaisesRegex(R.RuntimeErrorClosed,'P6 process RC'):R.extract_joined_archive(path,digest,source,teams,None,extract,identity)
+        with self.assertRaisesRegex(R.RuntimeErrorClosed,'P6 source health'):R.extract_joined_archive(path,digest,source,teams,None,extract,identity)
         source['kind']='P5'
         write(True);digest=hashlib.sha256(path.read_bytes()).hexdigest()
         with self.assertRaisesRegex(R.RuntimeErrorClosed,'unsafe'):R.read_archive(path,digest)
@@ -304,7 +305,7 @@ class ReviewedAuthorizationTests(unittest.TestCase):
     root=Path(__file__).resolve().parents[2]
     required=['tools/sft/data_admission.py','tools/sft/data_admission_runtime.py','tools/sft/build_sft.py','tools/sft/serialize.py','tools/sft/dex.json','tools/sft/glimmer_chat.py','tools/dataset/extract.py','tools/belief/roster_hash.py','tools/human/parse_replays.py','azure/student/p6_trainonly_inspect.py']
     code={f:hashlib.sha256((root/f).read_bytes()).hexdigest() for f in required}
-    spec={'status':'FROZEN_FOR_REVIEW','contract_sha256':'8547147630b68a0dd78689b3222515bdf48b5469f13d8f49af0eaeec8e1a2b33','amendment_sha256':'77b82491c07e5d212bfa81403b88a73c8f3f84783f6ca5befec1fdbfe1ebd2e7','code_sha256':code}
+    spec={'status':'FROZEN_FOR_REVIEW','contract_sha256':'8547147630b68a0dd78689b3222515bdf48b5469f13d8f49af0eaeec8e1a2b33','amendment_sha256':'77b82491c07e5d212bfa81403b88a73c8f3f84783f6ca5befec1fdbfe1ebd2e7','source_health_amendment_sha256':'4a06e7f14df2dad26d8f1472691a3cc9af23e049f8497d685a29ec56a4d02326','code_sha256':code}
     raw=json.dumps(spec).encode();sref={'path':'spec','sha256':hashlib.sha256(raw).hexdigest()}
     card={'commit':'a'*40,'path':'card','sha256':H('card')};approval={'commit':'b'*40,'path':'approval','sha256':H('approval')}
     approved={'status':'approved','purpose':'index','card_commit':card['commit'],'card_sha256':card['sha256'],'spec_sha256':sref['sha256'],'owner':'owner'}
@@ -330,12 +331,12 @@ class BoundedMemoryTests(unittest.TestCase):
  def test_derive_index_state_has_no_teacher_rows(self):
     import data_admission_runtime as R
     g=game(605);g['key']=g['uid'];r=row(g);r['worlds']=[{'large':'x'*2000000}];r['view']={'large':'x'*2000000}
-    source={'path':'synthetic','kind':'P5','sha256':g['archive_sha256'],'producer':g['producer'],'chunk':g['chunk'],'seed':g['seed']}
+    source={'path':'synthetic','run_id':g['run_id'],'kind':'P5','sha256':g['archive_sha256'],'producer':g['producer'],'chunk':g['chunk'],'seed':g['seed']}
     teams={n:{'split':'dev','roster_digest':d} for n,d in zip(g['team_names'],g['roster_digests'])}
     frozen={'v1_val':{'sha256':'aed05c91f3140fbffb4b37b429baa4d456a8ba75e0da85888c4c0c3081cb384e'},'v1_eval':{'sha256':'7ea29968fe36c61bd7283f8f72b770a5eeb0074d4829f04cd2fa2550160abb10'},'fixed_v0':{'sha256':'3b0ba8fa2e2db60b9149d4ac03f1ae5bcbcb152745c4fa8fe1bf54fcc5e06276'}}
     spec={'source_refs':{k:{} for k in ('public_pool','sealed_metadata','team_split','validated_teams')},'frozen_refs':frozen}
     hold={k:set() for k in ('components','tokens','rosters','team_names','example_ids','decision_ids')}
-    with patch.object(R,'_load_runtime_modules',return_value=(None,None,None)),patch.object(R,'authenticated_catalog',return_value=[source]),patch.object(R,'_read_ref',return_value=b'{}'),patch.object(R,'roster_metadata',return_value=(teams,set(),set(),set(),set())),patch.object(R,'verified_archive_batch',return_value=([g],[r],[H('content')])),patch.object(R,'verify_source_census'),patch.object(R,'_path',return_value='unused'),patch.object(R,'read_identity_file',return_value=[]),patch.object(R,'holdout_projection',return_value=hold),patch.object(R,'select_fixed400_ids',return_value=[]),patch.object(A,'partition_games',return_value=([g['uid']],{})):
+    with patch.object(R,'_load_runtime_modules',return_value=(None,None,None)),patch.object(R,'authenticated_catalog',return_value=[source]),patch.object(R,'_read_ref',return_value=b'{}'),patch.object(R,'roster_metadata',return_value=(teams,set(),set(),set(),set())),patch.object(R,'verified_archive_batch',return_value=([g],[r],[H('content')],[])),patch.object(R,'verify_source_census'),patch.object(R,'_path',return_value='unused'),patch.object(R,'read_identity_file',return_value=[]),patch.object(R,'holdout_projection',return_value=hold),patch.object(R,'select_fixed400_ids',return_value=[]),patch.object(A,'partition_games',return_value=([g['uid']],{})):
         receipt,state=R.derive_index('.',spec,H('spec'))
     self.assertEqual(receipt['decision_count'],1);self.assertNotIn('rows',state);self.assertNotIn('worlds',repr(state));self.assertNotIn('x'*1000,repr(state));self.assertNotIn('log',state['index']['games'][g['uid']])
  def test_spool_exactly_matches_legacy_shuffle(self):
@@ -348,9 +349,9 @@ class BoundedMemoryTests(unittest.TestCase):
         self.assertEqual(actual.getvalue(),expected);self.assertEqual(hashlib.sha256(actual.getvalue()).hexdigest(),hashlib.sha256(expected).hexdigest())
  def test_second_pass_tamper_blocks_before_yield(self):
     import data_admission_runtime as R
-    g=game(602);g['key']=g['uid'];r=row(g);source={'sha256':g['archive_sha256']};record={'archive_sha256':source['sha256'],'game_count':1,'decision_count':1,'decision_ids_sha256':A.digest([r['uid']]),'decision_content_sha256':A.digest([H('expected')])}
+    g=game(602);g['key']=g['uid'];r=row(g);source={'sha256':g['archive_sha256']};record={'archive_sha256':source['sha256'],'game_count':1,'decision_count':1,'decision_ids_sha256':A.digest([r['uid']]),'decision_content_sha256':A.digest([H('expected')]),'tombstone_sha256':A.digest([])}
     state={'catalog':[source],'teams':{},'index':{'games':{g['uid']:R.compact_game(g)}}};receipt={'archive_records':[record]}
-    with patch.object(R,'_load_runtime_modules',return_value=(None,None,None)),patch.object(R,'verified_archive_batch',return_value=([g],[r],[H('tampered')])):
+    with patch.object(R,'_load_runtime_modules',return_value=(None,None,None)),patch.object(R,'verified_archive_batch',return_value=([g],[r],[H('tampered')],[])):
         with self.assertRaisesRegex(R.RuntimeErrorClosed,'second-pass archive decisions differ'):list(R.iter_verified_batches('.',state,receipt))
 
 
@@ -367,7 +368,7 @@ class P5ReturnCodeAmendmentTests(unittest.TestCase):
     kept,counts=A.partition_games(idx,hold,{H('held')},{'reserved'},{H('reserved')},expected_heldout=1)
     self.assertIn(gs[0]['uid'],idx['games']);self.assertIn(idx['components'][gs[0]['uid']],hold['components'])
     self.assertNotIn(gs[0]['uid'],kept);self.assertNotIn(gs[1]['uid'],kept);self.assertEqual(counts['p5_nonzero_process_rc'],2)
-    records=[{'archive_sha256':g['archive_sha256'],'game_count':1,'decision_count':g['decision_count']} for g in gs]
+    records=[{'archive_sha256':g['archive_sha256'],'game_count':1,'decision_count':g['decision_count'],'raw_game_lines':1,'missing_log_tombstones':0,'tombstone_side_lines':0} for g in gs]
     total,flags=R.reconcile_exclusions(idx,kept,hold,{H('held')},{'reserved'},{H('reserved')},set(),records)
     self.assertEqual(total['source_games'],4);self.assertEqual(total['source_raw_decisions'],18);self.assertEqual(total['primary_decision_counts']['p5_nonzero_process_rc'],7)
     self.assertTrue(flags[gs[0]['uid']]['flags']['holdout_game']);self.assertEqual(flags[gs[0]['uid']]['primary'],'p5_nonzero_process_rc')
@@ -382,12 +383,102 @@ class P5ReturnCodeAmendmentTests(unittest.TestCase):
     kept,_=A.partition_games(idx,hold,{H('held')},{'reserved'},{H('reserved')},expected_heldout=1)
     self.assertIn(gs[0]['key'],kept);self.assertIn(gs[1]['key'],kept)
     idx['games'][gs[1]['key']]['rc_a']=1
-    with self.assertRaisesRegex(A.AdmissionError,'RC identity'):A.partition_games(idx,hold,{H('held')},{'reserved'},{H('reserved')},expected_heldout=1)
+    with self.assertRaisesRegex(A.AdmissionError,'health identity'):A.partition_games(idx,hold,{H('held')},{'reserved'},{H('reserved')},expected_heldout=1)
  def test_second_pass_rc_tamper_blocks_before_yield(self):
     import data_admission_runtime as R
-    g=game(705);g['key']=g['uid'];r=row(g);source={'sha256':g['archive_sha256']};record={'archive_sha256':source['sha256'],'game_count':1,'decision_count':1,'decision_ids_sha256':A.digest([r['uid']]),'decision_content_sha256':A.digest([H('content')])}
+    g=game(705);g['key']=g['uid'];r=row(g);source={'sha256':g['archive_sha256']};record={'archive_sha256':source['sha256'],'game_count':1,'decision_count':1,'decision_ids_sha256':A.digest([r['uid']]),'decision_content_sha256':A.digest([H('content')]),'tombstone_sha256':A.digest([])}
     state={'catalog':[source],'teams':{},'index':{'games':{g['uid']:R.compact_game(g)}}};tampered=dict(g,rc_b=1,p5_nonzero_process_rc=True)
-    with patch.object(R,'_load_runtime_modules',return_value=(None,None,None)),patch.object(R,'verified_archive_batch',return_value=([tampered],[r],[H('content')])):
+    with patch.object(R,'_load_runtime_modules',return_value=(None,None,None)),patch.object(R,'verified_archive_batch',return_value=([tampered],[r],[H('content')],[])):
         with self.assertRaisesRegex(R.RuntimeErrorClosed,'game identity differs'):list(R.iter_verified_batches('.',state,{'archive_records':[record]}))
+
+
+class P5IncompleteTombstoneTests(unittest.TestCase):
+ def test_joined_timeout_and_missing_log_tombstone(self):
+    import io, tarfile
+    import data_admission_runtime as R
+    import extract
+    g=game(801);replay=json.loads(g['source_log_bytes']);names=g['team_names']
+    good={'game':1,'a':'player-a','b':'player-b','team_a':names[0],'team_b':names[1],'winner':'A','status':'ok','cfg_a':'C1t1','cfg_b':'C1t1','rc_a':0,'rc_b':0}
+    missing={'game':2,'a':'missing-a','b':'missing-b','team_a':names[0],'team_b':names[1],'winner':None,'status':'timeout','cfg_a':'C1t1','cfg_b':'C1t1','rc_a':None,'rc_b':None}
+    dec={'v':2,'turn':1,'choice':'a','worlds':[{'chance':1,'side_one':[{'m':'a','v':4,'s':0},{'m':'b','v':6,'s':0}]}]}
+    with tempfile.TemporaryDirectory() as d:
+        path=Path(d)/'sample.tar.gz'
+        def write(missing_record,include_log=False):
+            with tarfile.open(path,'w:gz') as tar:
+                summary={'run_id':'sample','seed':100,'games':2,'completed':1,'team_pool':'gen9/hr_train','cfg_a':'C1t1','cfg_b':'C1t1'}
+                members={'games.jsonl':(json.dumps(good)+'\n'+json.dumps(missing_record)+'\n').encode(),'summary.json':json.dumps(summary).encode(),'battlelogs/g1.log.json':json.dumps(replay).encode(),'g0001_a.decisions.jsonl':json.dumps(dec).encode()+b'\n','g0001_b.decisions.jsonl':json.dumps(dict(dec,choice='b')).encode()+b'\n','g0002_a.decisions.jsonl':b'partial-quarantined-side-line\n'}
+                if include_log:
+                    missing_log=dict(replay,p1='missing-a',p2='missing-b',log=['|different|','|turn|1'])
+                    members['battlelogs/g2.log.json']=json.dumps(missing_log).encode()
+                    members['g0002_a.decisions.jsonl']=json.dumps(dict(dec,turn=2)).encode()+b'\n'
+                for name,body in members.items():
+                    info=tarfile.TarInfo('sample/'+name);info.size=len(body);tar.addfile(info,io.BytesIO(body))
+        teams={n:{'split':'dev','roster_digest':v} for n,v in zip(names,g['roster_digests'])}
+        source={'kind':'P5','run_id':'sample','producer':'job','chunk':0,'seed':100,'decision_log_versions':[2]}
+        identity=lambda uid,log,sanitizer:{'replay_sha256':H('raw'+uid),'normalized_replay_sha256':H('norm'+uid)}
+        write(missing);digest=hashlib.sha256(path.read_bytes()).hexdigest();source['sha256']=digest
+        joined,rows,hashes,tombs=R.extract_joined_archive(path,digest,source,teams,None,extract,identity)
+        self.assertEqual((len(joined),len(rows),len(tombs)),(1,2,1));self.assertEqual(tombs[0]['uid'],'sample/g0002');self.assertEqual(len(tombs[0]['side_ids']),1);self.assertNotIn('raw_replay_sha256',tombs[0]);self.assertEqual(tombs[0]['roster_digests'],g['roster_digests'])
+        with self.assertRaisesRegex(R.RuntimeErrorClosed,'holdout references'):R.verify_tombstone_holdout({tombs[0]['uid']},['sample/g0002/A/000/action'])
+        bad_teams=dict(teams);del bad_teams[names[0]]
+        with self.assertRaisesRegex(R.RuntimeErrorClosed,'roster missing'):R.extract_joined_archive(path,digest,source,bad_teams,None,extract,identity)
+        write(missing,include_log=True);digest=hashlib.sha256(path.read_bytes()).hexdigest();source['sha256']=digest
+        joined,rows,hashes,tombs=R.extract_joined_archive(path,digest,source,teams,None,extract,identity)
+        self.assertEqual((len(joined),len(tombs)),(2,0));self.assertTrue(joined[1]['p5_incomplete_game']);self.assertEqual(joined[1]['decision_count'],1)
+ def test_tombstone_uid_and_content_aliases_block(self):
+    import data_admission_runtime as R
+    tomb={'uid':'run/g0002','side_ids':['run/g0002/A/000'],'side_content_hashes':[H('side')]}
+    ids=set();index={'games':{}};decisions={};content=set()
+    R.add_tombstone(tomb,ids,index,decisions,content)
+    with self.assertRaisesRegex(R.RuntimeErrorClosed,'identity conflicts'):R.add_tombstone(tomb,ids,index,decisions,content)
+    with self.assertRaisesRegex(R.RuntimeErrorClosed,'identity conflicts'):R.add_tombstone(dict(tomb,uid='new/g0001'),set(),index,decisions,content)
+    with self.assertRaisesRegex(R.RuntimeErrorClosed,'identity conflicts'):R.add_tombstone(tomb,set(),{'games':{tomb['uid']:{}}},decisions,set())
+ def test_tombstone_name_roster_barrier_and_25_24_census(self):
+    import data_admission_runtime as R
+    gs=[game(i) for i in range(900,924)];idx=make_index(gs)
+    refs={gs[0]['uid']+'/A/000':gs[0]['key']};hold=A.project_holdouts(idx,{'v1':[projection(gs[0])],'fixed400':[projection(gs[0])]},{'v1':1,'fixed400':1},refs)
+    hold['tombstone_names']={gs[1]['team_names'][0]};hold['tombstone_rosters']={gs[2]['roster_digests'][0]}
+    kept,counts=A.partition_games(idx,hold,{H('held')},{'reserved'},{H('reserved')},expected_heldout=1)
+    self.assertNotIn(gs[1]['key'],kept);self.assertNotIn(gs[2]['key'],kept);self.assertEqual(counts['tombstone_team_name'],1);self.assertEqual(counts['tombstone_roster'],1)
+    for g in gs:g['archive_sha256']=H('one-archive')
+    records=[{'archive_sha256':H('one-archive'),'game_count':24,'decision_count':24,'raw_game_lines':25,'missing_log_tombstones':1,'tombstone_side_lines':2}]
+    total,_=R.reconcile_exclusions(idx,kept,hold,{H('held')},{'reserved'},{H('reserved')},set(),records)
+    self.assertEqual((total['raw_archive_game_lines'],total['source_games'],total['missing_log_tombstones'],total['tombstone_side_lines']),(25,24,1,2))
+    bad=[dict(records[0],raw_game_lines=26)]
+    with self.assertRaisesRegex(R.RuntimeErrorClosed,'raw versus joined'):R.reconcile_exclusions(idx,kept,hold,{H('held')},{'reserved'},{H('reserved')},set(),bad)
+
+
+class HistoricalCensusTests(unittest.TestCase):
+ def test_reconciled_raw_joined_decisions_and_health_counts(self):
+    import data_admission_runtime as R
+    names=['lab-n3-c015','lab-n3-c037','lab-n3-c043']+[f'synthetic-{i}' for i in range(261)]
+    records=[]
+    for i,name in enumerate(names):
+        tomb=int(i<3);records.append({'source':'P5','run_id':name,'raw_game_lines':25,'game_count':25-tomb,'missing_log_tombstones':tomb,'decision_count':551493 if i==0 else 0,'p5_health_counts':{'not_decided':13,'malformed_rc':9,'nonzero_rc':12,'status_not_ok':9,'status_ok_nonzero_undecided':4} if i==0 else {}})
+    records.extend({'source':'P6','raw_game_lines':20,'game_count':20,'missing_log_tombstones':0,'decision_count':172815 if i==0 else 0} for i in range(100))
+    R.verify_source_census(records)
+    records[1]['game_count']+=1
+    with self.assertRaisesRegex(R.RuntimeErrorClosed,'per-archive raw'):R.verify_source_census(records)
+
+
+class HealthPrecedenceTests(unittest.TestCase):
+ def test_nine_incomplete_and_four_status_ok_nonzero_reconcile(self):
+    import data_admission_runtime as R
+    gs=[game(i) for i in range(1100,1114)]
+    for g in gs:g['key']=g['uid']
+    for g in gs[:9]:g.update(source_status='timeout',decided=False,rc_a=None,rc_b=None,p5_incomplete_game=True,decision_count=2)
+    for g in gs[9:13]:g.update(source_status='ok',decided=False,rc_a=0,rc_b=1,p5_incomplete_game=True,p5_nonzero_process_rc=True,decision_count=3)
+    g=gs[13];idx=make_index(gs);ref={g['uid']+'/A/000':g['uid']}
+    hold=A.project_holdouts(idx,{'v1':[projection(g)],'fixed400':[projection(g)]},{'v1':1,'fixed400':1},ref)
+    kept,counts=A.partition_games(idx,hold,{H('held')},{'reserved'},{H('reserved')},expected_heldout=1)
+    self.assertEqual(counts['p5_incomplete_game'],9);self.assertEqual(counts['p5_nonzero_process_rc'],4)
+    records=[{'archive_sha256':x['archive_sha256'],'game_count':1,'decision_count':x['decision_count'],'raw_game_lines':1,'missing_log_tombstones':0,'tombstone_side_lines':0} for x in gs]
+    total,flags=R.reconcile_exclusions(idx,kept,hold,{H('held')},{'reserved'},{H('reserved')},set(),records)
+    self.assertEqual(total['primary_game_counts']['p5_incomplete_game'],9);self.assertEqual(total['primary_game_counts']['p5_nonzero_process_rc'],4)
+    self.assertEqual(total['primary_decision_counts']['p5_incomplete_game'],18);self.assertEqual(total['primary_decision_counts']['p5_nonzero_process_rc'],12)
+    self.assertTrue(flags[gs[9]['uid']]['flags']['p5_incomplete_game']);self.assertEqual(flags[gs[9]['uid']]['primary'],'p5_nonzero_process_rc')
+    self.assertEqual(total['source_games'],total['admitted_games']+total['excluded_games']);self.assertEqual(total['source_raw_decisions'],total['admitted_raw_decisions']+total['excluded_raw_decisions'])
+    timeout=dict(gs[9],source_status='timeout');f=A.game_exclusion_flags({'games':{timeout['uid']:timeout},'components':{timeout['uid']:H('component')}},timeout['uid'],hold,{H('held')},{'reserved'},{H('reserved')})
+    self.assertEqual(A.primary_exclusion(timeout,f),'p5_incomplete_game')
 
 if __name__=='__main__':unittest.main()
