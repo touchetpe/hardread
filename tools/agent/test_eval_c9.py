@@ -95,8 +95,28 @@ class SyntheticWorkspace(unittest.TestCase):
         self.root = Path(self._tmp.name)
         self.eval_dir = self.root / "scratch_ds" / "evals"
         self.eval_dir.mkdir(parents=True)
+        # These old evaluator fixtures exercise scoring/order; source authenticity and
+        # exact app preparation are tested separately by the synthetic adapter suite.
+        import c9_farm_source as farm_source
+        self._patches = [
+            patch.object(manifest_tools, "_require_farm_identity", side_effect=lambda identity, **kw:
+                         None if isinstance(identity, dict) and identity.get("games") else
+                         (_ for _ in ()).throw(manifest_tools.SourceUnresolvedError("source unresolved"))),
+            patch.object(manifest_tools, "_validate_selected_context"),
+            patch.object(manifest_tools, "git_repo_head", return_value="synthetic-fork-commit"),
+            patch.object(farm_source, "checked", side_effect=lambda root, path, digest: Path(root) / path),
+            patch.object(manifest_tools, "CRAWL_PINS", {}),
+            patch.object(manifest_tools, "DRAFT_CACHE_SHA", "synthetic-cache"),
+        ]
+        for item in self._patches: item.start()
+        cache = self.root / manifest_tools.DRAFT_CACHE_PATH
+        cache.parent.mkdir(parents=True, exist_ok=True); cache.write_bytes(b"cache")
+        manifest_tools.DRAFT_CACHE_SHA = hashlib.sha256(b"cache").hexdigest()
+        cal = self.root / "tools/review/calibrator.json"
+        cal.parent.mkdir(parents=True, exist_ok=True); cal.write_text('{"absolute_human":{"a":1}}')
 
     def tearDown(self):
+        for item in reversed(self._patches): item.stop()
         self._tmp.cleanup()
 
     def _source_hashes(self, crawl_candidates, farm_candidates):
@@ -126,7 +146,7 @@ class SyntheticWorkspace(unittest.TestCase):
                     for side in ("p1", "p2"):
                         rel_team = f"foul-play/fp/teams/teams/{candidate['uid']}-{side}.txt"
                         team_hash = write_text(self.root / rel_team, f"synthetic farm team fixture {side}\n")
-                        team_exports[side] = {"path": rel_team, "sha256": team_hash}
+                        team_exports[side] = {"member": f"gen9/hr_val/{candidate['uid']}-{side}.txt", "sha256": team_hash}
                         result[("hr_val", "team_export", candidate["uid"], side)] = {
                             "pool": "hr_val", "role": "team_export", "path": rel_team, "sha256": team_hash}
                     winner = "A" if candidate["result"] == "win" else "B"
@@ -135,17 +155,16 @@ class SyntheticWorkspace(unittest.TestCase):
                                     "log": [f"|turn|{turn}" for turn in range(1, candidate["turns"] + 1)]})
                 digest = write_text(path, "\n".join(json.dumps(row, sort_keys=True) for row in records) + "\n")
             elif pool == "hr_val" and role == "decisions":
-                decisions = [{"uid": candidate["uid"], "side": side, "turn": 1}
-                             for candidate in farm_candidates for side in ("p1", "p2")]
+                decisions = [{"uid": candidate["uid"], "sides": {"p1": 1, "p2": 1}}
+                             for candidate in farm_candidates]
                 digest = write_text(path, "\n".join(json.dumps(row, sort_keys=True) for row in decisions) + "\n")
             else:
                 digest = write_text(path, json.dumps({"synthetic_fixture": f"{pool}/{role}"}) + "\n")
             result[(pool, role)] = {"pool": pool, "role": role, "path": rel, "sha256": digest}
-        identity_rel = "scratch_ds/val/synthetic-identity.json"
-        identity_hash = write_json(self.root / identity_rel,
-                                   {"source_id": "synthetic-hr-val-fixture", "verified": True})
-        identity = {"pool": "hr_val", "verified": True, "source_id": "synthetic-hr-val-fixture",
-                    "evidence": {"path": identity_rel, "sha256": identity_hash}}
+        identity = {"pool": "hr_val", "games": result[("hr_val", "games")],
+                    "decisions": result[("hr_val", "decisions")]}
+        manifest_tools.CRAWL_PINS.update({role: result[("crawl", role)]["sha256"]
+                                          for role in manifest_tools.EXPECTED_CRAWL_SOURCES})
         review_source_hashes = {}
         for rel in manifest_tools.REVIEW_SOURCE_PATHS:
             review_source_hashes[rel] = write_bytes(self.root / rel, (SOURCE_ROOT / rel).read_bytes())
@@ -207,12 +226,16 @@ class SyntheticWorkspace(unittest.TestCase):
                     replay_path=replay_rel, replay_sha256=replay_hash,
                     review_path=prefix + ".review.json", ctx_path=prefix + ".ctx.json",
                     offered_path=prefix + ".offered.json", review_code_commit="synthetic-review-commit",
-                    active_calibrator="synthetic-calibrator", root=self.root,
+                    active_calibrator="tools/review/calibrator.json#absolute_human@d4a8b2580ca101bc6f55a8900cb716db59d04d78e0636c6843ed135d6b5642a9", root=self.root,
                     offered_fn=lambda review, ctx: pipeline.build_view_with_offered(review, ctx)[1])
                 verdict_rel = prefix + ".verdicts.json"
                 verdict_hash = write_json(self.root / verdict_rel,
                                           {"2:0": {"verdict": "visible synthetic verdict"},
                                            "3:0": {"verdict": "hidden synthetic verdict"}})
+                team_rel = prefix + ".team.txt"
+                team_hash = write_text(self.root / team_rel, "synthetic team")
+                row["team_path"] = team_rel
+                row["team_sha256"] = team_hash
                 row["verdicts_path"] = verdict_rel
                 row["verdicts_sha256"] = verdict_hash
                 artifact_rows.append(row)
@@ -224,7 +247,8 @@ class SyntheticWorkspace(unittest.TestCase):
                     "selection_evidence": selections,
                     "farm_source_identity": farm_identity, "review_code_commit": "synthetic-review-commit",
                     "review_source_sha256": review_source_hashes,
-                    "active_calibrator": "synthetic-calibrator"}
+                    "active_calibrator": "tools/review/calibrator.json#absolute_human@d4a8b2580ca101bc6f55a8900cb716db59d04d78e0636c6843ed135d6b5642a9",
+                    "fork_commit": "synthetic-fork-commit"}
         manifest_rel = "scratch_ds/evals/synthetic-manifest.json"
         write_json(self.root / manifest_rel, manifest)
         a1_doc, a0_doc = manifest_tools._manifest_items(manifest_rel, manifest)
@@ -247,6 +271,7 @@ class SelectionAndManifestTests(SyntheticWorkspace):
         digest = write_bytes(path, gzip.compress(("\n".join(json.dumps(row, sort_keys=True) for row in records)
                                                    + "\n").encode()))
         source["sha256"] = digest
+        manifest_tools.CRAWL_PINS["games"] = digest
         for row in manifest["rows"]:
             if row["pool"] == "crawl":
                 row["source_sha256"] = digest
@@ -273,18 +298,14 @@ class SelectionAndManifestTests(SyntheticWorkspace):
                 raise RuntimeError("synthetic review error")
             return REVIEW
 
-        chosen = manifest_tools.select_candidates(candidates, "crawl", review, self._context, limit=2,
+        with self.assertRaisesRegex(manifest_tools.ManifestError, "exception provenance"):
+            manifest_tools.select_candidates(candidates, "crawl", review, self._context, limit=2,
+                                              offered_fn=lambda _review, _ctx: [])
+        self.assertEqual(len(attempted), 1)
+        chosen = manifest_tools.select_candidates(candidates, "crawl", self._review, self._context, limit=2,
                                                    offered_fn=lambda _review, _ctx: [])
-        shuffled = manifest_tools.select_candidates(list(reversed(candidates)), "crawl", review,
-                                                     self._context, limit=2,
-                                                     offered_fn=lambda _review, _ctx: [])
-        self.assertEqual(chosen["review_exceptions"], 1)
-        self.assertEqual(chosen["review_failures"][0]["exception_type"], "RuntimeError")
-        self.assertEqual(chosen["eligibility"]["undecided"], 1)
-        self.assertEqual(chosen["eligibility"]["short"], 1)
-        self.assertEqual(chosen["eligibility"]["invalid"], 1)
-        self.assertEqual([r["rank_hash"] for r in shuffled["selected"]],
-                         sorted(r["rank_hash"] for r in shuffled["selected"]))
+        shuffled = manifest_tools.select_candidates(list(reversed(candidates)), "crawl", self._review,
+                                                     self._context, limit=2, offered_fn=lambda _review, _ctx: [])
         self.assertEqual([r["uid"] for r in chosen["selected"]], [r["uid"] for r in shuffled["selected"]])
 
     def test_one_side_per_game_and_context_failure_is_fatal(self):

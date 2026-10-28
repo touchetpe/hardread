@@ -32,8 +32,17 @@ EXPECTED_CRAWL_SOURCES = {
     "sets": "scratch_ds/human_broad/sets.jsonl.gz",
     "species_profiles": "scratch_ds/human_broad/species_profiles.json",
 }
+CRAWL_PINS = {"games": "338d1255fd4055fff86cf7ef6275a0feba856b7113d28f117f3953ce893a8750",
+              "sets": "e2ab9a263c38cdf88dddaebde98ac60a278012895a467bd9c115c2d2a047fa1e",
+              "species_profiles": "0584a121307abe129dc72b803f0d7771366414b21cf56f6aa7ca98f7dd55a878"}
+DRAFT_CACHE_PATH = "foul-play/fp/data/pkmn_sets_cache/gen9ou/pokemon_full_sets.json"
+DRAFT_CACHE_SHA = "e6129b38f2a605a5464d014a817ca3083986eae87617033a4f82266565b51772"
 REVIEW_SOURCE_PATHS = ("tools/review/review.py", "tools/review/reconstruct.py",
-                       "tools/review/calib_b.py", "tools/review/human_eval.py", "app/pipeline.py")
+                       "tools/review/calib_b.py", "tools/review/human_eval.py", "tools/review/luck.py",
+                       "tools/review/calibrate.py", "tools/review/select_offered.py", "tools/review/bridge.py",
+                       "tools/human/reconstruct_check.py", "tools/human/parse_replays.py",
+                       "tools/dataset/extract.py", "tools/agent/build_eval_manifest.py", "tools/agent/c9_farm_source.py",
+                       "tools/agent/construct_eval_c9.py", "app/pipeline.py", "app/bridge_adapter.py")
 
 
 class ManifestError(ValueError):
@@ -89,13 +98,25 @@ def keys_for_offered(offered):
     return keys
 
 
-def _require_farm_identity(identity):
-    evidence = identity.get("evidence") if isinstance(identity, dict) else None
-    if (not isinstance(identity, dict) or identity.get("pool") != "hr_val"
-            or identity.get("verified") is not True or not isinstance(identity.get("source_id"), str)
-            or not identity["source_id"].strip() or not isinstance(evidence, dict)
-            or not evidence.get("path") or not evidence.get("sha256")):
+def _require_farm_identity(identity, *, root=ROOT):
+    """Rerun the pinned raw-source adapter and compare every derived byte."""
+    if not isinstance(identity, dict) or identity.get("pool") != "hr_val":
         raise SourceUnresolvedError("source unresolved: exact hr_val identity is not proven")
+    import c9_farm_source
+    try:
+        data = c9_farm_source.output_bytes(root)
+        for key, expected in zip(("games", "decisions", "source_map"), data):
+            ref = identity.get(key)
+            if not isinstance(ref, dict) or not ref.get("path"):
+                raise SourceUnresolvedError("derived source reference missing")
+            source_path = _resolve_path(ref["path"], root)
+            if not source_path.is_relative_to((Path(root) / "scratch_ds" / "evals").resolve()):
+                raise SourceUnresolvedError("derived source must stay in private eval storage")
+            actual = source_path.read_bytes()
+            if actual != expected or ref.get("sha256") != digest_bytes(expected):
+                raise SourceUnresolvedError("derived source differs from pinned raw source")
+    except (OSError, ValueError, KeyError) as exc:
+        raise SourceUnresolvedError("source unresolved: raw farm proof failed") from exc
 
 
 def _read_source_jsonl(path, *, root=ROOT):
@@ -156,7 +177,7 @@ def _source_identity(candidate):
     return {key: candidate.get(key) for key in
             ("pool", "uid", "side", "source_path", "source_sha256", "source_record_index",
              "source_record_sha256", "result", "decided", "turns", "half", "both_seats_eligible",
-             "team_exports")}
+             "team_exports", "decision_coverage")}
 
 
 def _selected_attempt_digest(candidate, review, ctx, offered):
@@ -166,29 +187,18 @@ def _selected_attempt_digest(candidate, review, ctx, offered):
 
 
 def _farm_team_exports(record, *, root, source_by_path):
+    # Members are authenticated by the raw-source adapter rerun in validation.
     refs = record.get("team_exports")
     if not isinstance(refs, dict) or set(refs) != {"p1", "p2"}:
         return None
-    team_root = (Path(root) / "foul-play" / "fp" / "teams" / "teams").resolve()
-    resolved = {}
-    for side in ("p1", "p2"):
-        ref = refs[side]
-        if not isinstance(ref, dict) or not isinstance(ref.get("path"), str) \
-                or not isinstance(ref.get("sha256"), str):
+    for ref in refs.values():
+        if (not isinstance(ref, dict) or set(ref) != {"member", "sha256"}
+                or not isinstance(ref["member"], str)
+                or not re.fullmatch(r"gen9/hr_val/[^/]+", ref["member"])
+                or not isinstance(ref["sha256"], str)
+                or not re.fullmatch(r"[0-9a-f]{64}", ref["sha256"])):
             return None
-        source = source_by_path.get(ref["path"])
-        if source is None or source.get("pool") != "hr_val" or source.get("role") != "team_export" \
-                or source.get("sha256") != ref["sha256"]:
-            return None
-        target = _resolve_path(ref["path"], root)
-        try:
-            target.relative_to(team_root)
-        except ValueError:
-            return None
-        if not target.is_file() or target.stat().st_size == 0 or digest_file(target) != ref["sha256"]:
-            return None
-        resolved[side] = {"path": ref["path"], "sha256": ref["sha256"]}
-    return resolved
+    return refs
 
 
 def enumerate_source_candidates(pool, sources, *, root=ROOT):
@@ -213,10 +223,12 @@ def enumerate_source_candidates(pool, sources, *, root=ROOT):
         _verify_file(decision_source.get("path"), decision_source.get("sha256"), root)
         for _idx, decision, _record_hash in _read_source_jsonl(decision_source["path"], root=root):
             uid = _raw_game_uid(decision)
-            side = decision.get("side")
-            side = {"A": "p1", "B": "p2"}.get(side, side)
-            if uid and side in ("p1", "p2"):
-                decision_sides.setdefault(uid, set()).add(side)
+            sides = decision.get("sides")
+            if not uid or not isinstance(sides, dict) or any(side not in ("p1", "p2") or type(count) is not int or count <= 0 for side, count in sides.items()):
+                raise ManifestError("farm decision coverage malformed")
+            if uid in decision_sides:
+                raise ManifestError("duplicate farm decision coverage")
+            decision_sides[uid] = set(sides)
     census = []
     for line_index, record, record_hash in _read_source_jsonl(game_source["path"], root=root):
         uid = _raw_game_uid(record)
@@ -224,10 +236,10 @@ def enumerate_source_candidates(pool, sources, *, root=ROOT):
         turns = _raw_turn_count(record)
         team_exports = _farm_team_exports(record, root=root, source_by_path=source_by_path) if pool == "hr_val" else None
         both_eligible = (pool == "hr_val" and team_exports is not None
-                         and decision_sides.get(uid, set()) == {"p1", "p2"})
+                         and isinstance(record.get("log"), list) and bool(record["log"]))
         for side in ("p1", "p2"):
-            decided = winner_side in ("p1", "p2")
-            result = None if not decided else ("win" if winner_side == side else "loss")
+            decided = (winner_side in ("p1", "p2") or (pool == "hr_val" and record.get("log") is None and record.get("winner_recorded") in ("A", "B")))
+            result = None if winner_side not in ("p1", "p2") else ("win" if winner_side == side else "loss")
             candidate = {"pool": pool, "uid": uid, "side": side, "result": result,
                          "decided": decided, "turns": turns,
                          "source_path": game_source["path"], "source_sha256": game_source["sha256"],
@@ -237,6 +249,7 @@ def enumerate_source_candidates(pool, sources, *, root=ROOT):
             else:
                 candidate["both_seats_eligible"] = bool(both_eligible)
                 candidate["team_exports"] = team_exports
+                candidate["decision_coverage"] = sorted(decision_sides.get(uid, set()))
             candidate["rank_hash"] = rank_hash(uid, side) if uid else None
             candidate["exclusion_reason"] = _candidate_exclusion_reason(candidate, pool)
             census.append(candidate)
@@ -246,6 +259,8 @@ def enumerate_source_candidates(pool, sources, *, root=ROOT):
 def _candidate_exclusion_reason(candidate, pool):
     if not isinstance(candidate.get("uid"), str) or not candidate["uid"].strip():
         return "invalid_uid"
+    if candidate.get("decided") is True and type(candidate.get("turns")) is not int:
+        return "turn_count_unavailable"
     if candidate.get("decided") is not True or candidate.get("result") not in ("win", "loss"):
         return "undecided"
     if type(candidate.get("turns")) is not int:
@@ -299,7 +314,7 @@ def _candidate_eligibility(candidate, pool):
 
 def select_candidates(candidates, pool, review_fn, context_fn, *, limit=ROWS_PER_POOL,
                       farm_source_identity=None, offered_fn=None, review_code_commit=None,
-                      review_source_sha256=None):
+                      review_source_sha256=None, root=ROOT):
     """Rank eligible sides, count review exceptions, and keep the first unique-game successes.
 
     ``review_fn(candidate)`` returns a review mapping. A successful review whose context
@@ -308,7 +323,7 @@ def select_candidates(candidates, pool, review_fn, context_fn, *, limit=ROWS_PER
     if pool not in POOLS:
         raise ManifestError(f"unknown pool: {pool}")
     if pool == "hr_val":
-        _require_farm_identity(farm_source_identity)
+        _require_farm_identity(farm_source_identity, root=root)
     candidates = list(candidates)
     if type(limit) is not int or limit < 1:
         raise ManifestError("limit must be a positive integer")
@@ -336,12 +351,12 @@ def select_candidates(candidates, pool, review_fn, context_fn, *, limit=ROWS_PER
             continue
         try:
             review = review_fn(candidate)
-        except Exception as exc:  # each review failure is counted and selection advances
-            exceptions += 1
-            failed.append({"uid": candidate["uid"], "side": candidate["side"],
-                           "exception_type": type(exc).__name__})
-            attempts.append({**attempt, "outcome": "review_exception", "exception_type": type(exc).__name__})
-            continue
+        except ManifestError:
+            # App preparation failures and explicit integrity stops are never review exceptions.
+            raise
+        except Exception as exc:
+            # No separately accepted exception receipt exists: do not proceed to another rank.
+            raise ManifestError("candidate exception provenance is pending; selection stopped") from exc
         try:
             ctx = context_fn(candidate, review)
             if not isinstance(ctx, dict):
@@ -580,6 +595,32 @@ def _validate_candidate_census(manifest, sources, *, root):
     return expected
 
 
+def _validate_selected_context(row, derived, source_record, pool, uid, side, ctx, root, draft_rows, draft_profiles):
+    _verify_file(row.get("team_path"), row.get("team_sha256"), root)
+    raw_log = source_record.get("log")
+    raw_log = "\n".join(raw_log) if isinstance(raw_log, list) else raw_log
+    if str(ROOT) not in sys.path: sys.path.insert(0, str(ROOT))
+    from app import pipeline
+    rep = {"log": raw_log, "formatid": "gen9ou", "private": True}
+    team_data = _resolve_path(row["team_path"], root).read_bytes()
+    if pool == "hr_val":
+        from c9_farm_source import export_bytes
+        if row.get("team_exports") != derived.get("team_exports"):
+            raise ManifestError("selected team provenance differs from source")
+        if team_data != export_bytes(root, derived["team_exports"][side]):
+            raise ManifestError("selected team export differs from pinned pool")
+        lines, expected_ctx, _ = pipeline.prepare(rep, side, team_text=team_data.decode("utf-8"))
+    else:
+        lines, expected_ctx, job = pipeline.prepare(rep, side)
+        import human_eval
+        expected_team = human_eval.draft_team_smogon(draft_rows[(uid, side)], draft_profiles, job["genders"])
+        if team_data != expected_team.encode("utf-8"):
+            raise ManifestError("draft team differs from pinned Draft-B inputs")
+    replay = _read_json(row["replay_path"], root)
+    if replay != {"log": "\n".join(lines)} or canonical_json(ctx) != canonical_json(expected_ctx):
+        raise ManifestError("replay or app context differs from source")
+
+
 def validate_manifest(manifest, *, root=ROOT, app_offered_fn=None, require_evals_paths=False):
     """Recheck hashes, deterministic ordering, fixed sample and shipped app offered parity."""
     if not isinstance(manifest, dict) or manifest.get("schema") != "c9-selection-manifest-v1":
@@ -597,16 +638,30 @@ def validate_manifest(manifest, *, root=ROOT, app_offered_fn=None, require_evals
     if crawl_roles != set(EXPECTED_CRAWL_SOURCES):
         raise ManifestError("manifest does not bind all three Draft-B source files")
     for role, expected_path in EXPECTED_CRAWL_SOURCES.items():
-        if not any(s.get("pool") == "crawl" and s.get("role") == role and s.get("path") == expected_path
+        if not any(s.get("pool") == "crawl" and s.get("role") == role and s.get("path") == expected_path and s.get("sha256") == CRAWL_PINS[role]
                    for s in sources):
             raise ManifestError("manifest Draft-B source paths are incomplete")
     farm_sources = [s for s in sources if s.get("pool") == "hr_val"]
     if len(farm_sources) < 2 or {s.get("role") for s in farm_sources} < {"games", "decisions"}:
         raise ManifestError("manifest lacks verified hr_val game and decision sources")
-    _require_farm_identity(manifest.get("farm_source_identity"))
-    farm_identity = manifest["farm_source_identity"]
-    evidence_path = farm_identity["evidence"]["path"]
-    _verify_file(evidence_path, farm_identity["evidence"]["sha256"], root)
+    farm_identity = manifest.get("farm_source_identity")
+    _require_farm_identity(farm_identity, root=root)
+    for role in ("games", "decisions"):
+        ref = farm_identity[role]
+        if not any(src.get("pool") == "hr_val" and src.get("role") == role
+                   and src.get("path") == ref["path"] and src.get("sha256") == ref["sha256"]
+                   for src in sources):
+            raise SourceUnresolvedError("derived source reference differs from manifest")
+    from c9_farm_source import checked
+    if manifest.get("fork_commit") != git_repo_head(Path(root) / "foul-play"):
+        raise ManifestError("Foul Play source commit changed")
+    calibration_hash = "d4a8b2580ca101bc6f55a8900cb716db59d04d78e0636c6843ed135d6b5642a9"
+    calibration_path = "tools/review/calibrator.json"
+    checked(root, calibration_path, calibration_hash)
+    if not isinstance(_read_json(calibration_path, root).get("absolute_human"), dict):
+        raise ManifestError("active app calibrator is absent")
+    if manifest.get("active_calibrator") != f"{calibration_path}#absolute_human@{calibration_hash}":
+        raise ManifestError("active app calibrator identity changed")
     census_by_pool = _validate_candidate_census(manifest, sources, root=root)
     rows = manifest.get("rows")
     if not isinstance(rows, list) or len(rows) != 20:
@@ -616,6 +671,16 @@ def validate_manifest(manifest, *, root=ROOT, app_offered_fn=None, require_evals
     if [r.get("pool") for r in rows] != ["crawl"] * 10 + ["hr_val"] * 10:
         raise ManifestError("manifest order must be ten crawl reviews followed by ten hr_val reviews")
     per_pool = {p: [] for p in POOLS}
+    _verify_file(DRAFT_CACHE_PATH, DRAFT_CACHE_SHA, root)
+    from collections import defaultdict
+    draft_rows = defaultdict(list)
+    for _, record, _ in _read_source_jsonl(EXPECTED_CRAWL_SOURCES["sets"], root=root):
+        draft_rows[(record.get("uid"), record.get("player"))].append(record)
+    draft_profiles = _read_json(EXPECTED_CRAWL_SOURCES["species_profiles"], root)
+    source_records = {}
+    for pool in POOLS:
+        source = next(src for src in sources if src.get("pool") == pool and src.get("role") == "games")
+        source_records[pool] = {i: r for i, r, _ in _read_source_jsonl(source["path"], root=root)}
     seen = set()
     app_offered_fn = app_offered_fn or _build_offered
     for row in rows:
@@ -656,6 +721,8 @@ def validate_manifest(manifest, *, root=ROOT, app_offered_fn=None, require_evals
             _verify_file(row.get(f"{key}_path"), row.get(f"{key}_sha256"), root)
         review = _read_json(row["review_path"], root)
         ctx = _read_json(row["ctx_path"], root)
+        _validate_selected_context(row, derived, source_records[pool][row["source_record_index"]],
+                                   pool, uid, side, ctx, root, draft_rows, draft_profiles)
         offered = _read_json(row["offered_path"], root)
         if not isinstance(offered, list):
             raise ManifestError("frozen offered value must be a list, including []")
@@ -674,7 +741,7 @@ def validate_manifest(manifest, *, root=ROOT, app_offered_fn=None, require_evals
         if canonical_json(recomputed) != canonical_json(offered):
             raise ManifestError("frozen offered list differs from shipped app context")
         if require_evals_paths:
-            for key in ("review_path", "ctx_path", "offered_path"):
+            for key in ("review_path", "ctx_path", "offered_path", "replay_path", "team_path"):
                 try:
                     _resolve_path(row[key], root).relative_to((Path(root) / "scratch_ds" / "evals").resolve())
                 except ValueError as exc:
@@ -786,6 +853,15 @@ def git_head_for(path, root=ROOT):
                             capture_output=True, text=True, timeout=10, check=False)
     if result.returncode or not result.stdout.strip():
         raise ManifestError(f"cannot resolve current source commit for {path}")
+    return result.stdout.strip()
+
+
+def git_repo_head(path):
+    import subprocess
+    result = subprocess.run(["git", "-C", str(path), "rev-parse", "HEAD"],
+                            capture_output=True, text=True, timeout=10, check=False)
+    if result.returncode or not re.fullmatch(r"[0-9a-f]{40}", result.stdout.strip()):
+        raise ManifestError("cannot resolve Foul Play repository commit")
     return result.stdout.strip()
 
 

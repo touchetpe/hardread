@@ -29,6 +29,8 @@ This addendum binds implementation to the already shipped capability; it is not 
 
 **Exclusive server window (added 2026-10-27 ≈05:50 UTC, before any record; Coord decision).** The local llama-server is shared with the app (Ag-App). Every recorded run (A1, A0, parser eval) holds `scratch_ds/agent/EVAL_LOCK` (one line: `<UTC start> <expected end> Ag-LLM <what>`) for its whole duration; the app does not call the server while the file exists. The runners create and delete it themselves (`tools/agent/evallock.py`) and record the line in the output. Pilot latencies measured without the lock are labelled "shared server, upper bound".
 
+**Implementation clarification v1b — farm seat meaning (before first A1/A0 record).** In §3, “both seats eligible” means the same decided `hr_val` replay can be reviewed from p1 and p2 with each seat's authentic own-team export from the source-bound `gen9/hr_val` pool. Extracted farm decision-row coverage is recorded as a source diagnostic and is not an A1/A0 eligibility condition or model input. The ≥10-turn and decided-result rules, deterministic game-side ranking, first ten successful unique-game reviews per pool, exception accounting, 20/60/30 sample sizes, questions, audit, and ship thresholds remain unchanged. A missing or unprovable team export makes the game unreviewable under the existing both-seat rule; missing or partial decision rows do not. This clarification and its source fix are committed before the first record; any later change produces a separately reported v2 result.
+
 ## 2. Arms
 
 | Arm | System | Runs by default |
