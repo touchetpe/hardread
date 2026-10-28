@@ -1191,3 +1191,28 @@ The final mechanical S3.1 signal is now saved: `scratch_ds/codex/c11/root-freeze
 ## 2026-10-28 12:12 UTC — Linux synthetic probe failed before runtime proof
 
 Own one-node job `hrt1probe-20261028-linux-7846756a` failed at import/startup: `ModuleNotFoundError: poke_engine`, line11. Exact1021-byte stdlog SHA `9c7c975433f73c530bba1f2d09bf82ca0393d1b8122e6dbe3ce4ddccb0c0824a` is retained under `scratch_ds/codex/training-roadmap/t1-linux-probe/terminal-diagnostics-20261028T115905Z/`. No model/data was mounted, no real review occurred and no valid runtime proof resulted. The source acceptance remains distinct from this runtime failure. No automatic retry or install; a finite plan using an already approved runtime is being checked.
+
+
+<a id="s1-fixed-v0-final-20261028"></a>
+
+## 2026-10-28 12:36:53 UTC — Selected XL6 fixed-v0 final readout (S1)
+
+The validation-selected XL6 adapter was evaluated after selection commit0f8904c on the same400 fixed-v0 action identities used by e1 and bold. Exact job `hrsft-20261028-s1-xl6-fixed400-dcf05ed8` Completed. Root recomputed400 unique ordered IDs, **223/400 top-1(55.75%)**, **336/400 top-3(84.00%)**, mean CE **1.593645290891526** using math.fsum. Selected-ID LF-join SHA `dcf05ed82eaf7b487df1741f27c091c581aa65aa1af6869fb1153bd44225c545` matches the registered fixed-v0 cohort. Eval/evaluator source pins match the earlier S1 record. Independent readout ACCEPT SHA `e7fc41d14a6c4705cb33a3dbc96d1272c470e0945e85d7f7dde35adc53ed5bd6`.
+
+| Same fixed-v0 cohort | Top-1 | Top-3 | Mean CE |
+|---|---:|---:|---:|
+| e1 |200/400(50.00%)|331/400(82.75%)|1.6327556288156122|
+| XL6, selected |223/400(55.75%)|336/400(84.00%)|1.593645290891526|
+| bold |73/400(18.25%)|238/400(59.50%)|1.9369344775662443|
+
+These are teacher-forced fixed-test metrics; they are separate from battle wins and from the2428-position engine-target validation used for selection. Historical fixed-v0 v0ddpres remains47.0%; XL6's different producer-default-v1 result remains separately labelled. E2 checkpoint fixed-v0 is pending. No test-driven model reselection. XL6 output JSON SHA `69e6b01ba6deda535737d2cff4f6629e8e47379f7701349768c8706be3714085`; rows SHA `93b4408cf83fad5c9ec9625dee614315878f1d72a4eea84762851a34cab45e99`.
+
+<a id="student-v2-local-foul-play-matched40-20261028"></a>
+
+## 2026-10-28 12:36:53 UTC — Student v2 against Foul Play: terminal local40-game arm
+
+The prospectively fixed local benchmark ran40 scheduled identities,20 side-swapped team pairings, team seed6200, with20 games per treatment seat. Opponent is untreated Foul Play F1 at100ms/search,2parallel searches,1thread. Team pool is partly seen; Showdown event RNG is uncontrolled. Student source NPZ SHA `a3f1b4b3c1cc15a4f812a0a39d9c2e4e99246dfef9ae7f556287237bea758d09`. This is a separate protocol from the earlier200-game Abyssal arena and early-student7/40 Foul Play pilot.
+
+All40 identities launched;39 completed. Raw outcomes: **13wins,0draws,26losses,1unknown**. Fixture0 failed after model load because the harness used a relative policy-log path; original artifacts were preserved and no fixture was replayed. Under the prospective launched-failure-as-loss rule, primary **13/40=32.5%**, Wilson95% **[20.0843%,47.9825%]**. The completed-only decisive secondary is **13/39=33.3333%**. The unknown is a harness failure, not an observed battle defeat.
+
+Across1660 observed Student decisions, zero fallback, server rejection, illegal action or invalid policy rows; nearest-rank policy latency p50 **0.024s**, p95 **0.082s**. These timings belong to this local protocol. Root reproduced counts from the immutable continuation ledger SHA `73e68d3372490cc47bbea35906bf1f02878278094b998df95b57846931a196a4`. Independent terminal readout ACCEPT SHA `619540657cbe8fe593c581dacc48d9dca3f57c7e9a131b82ed179d2eb0fef351`; counts SHA `4386cee26353da2c9d55f4a217310fef96f79a14e397683984149c39c4ab8def`. No XL6 comparison result or paired difference is available yet.
