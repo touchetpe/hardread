@@ -285,10 +285,24 @@ def exclusive_bytes(path, data):
         f.write(data); f.flush(); os.fsync(f.fileno())
     if file_sha(path)!=hashlib.sha256(data).hexdigest(): raise DPOError('published bytes differ')
 
+RUNTIME_NAMES=frozenset(('torch','transformers','peft','bitsandbytes','accelerate','tokenizers','safetensors','jinja2'))
+QUALIFICATION_UNKNOWN=frozenset(('accelerate','tokenizers','safetensors','jinja2'))
+
+def environment_pin(config, qualification):
+    versions=config['versions']; unknown=config.get('unresolved_versions')
+    if any(not isinstance(k,str) or not isinstance(v,str) or not v.strip() for k,v in versions.items()): raise DPOError('invalid environment package pin')
+    if unknown is not None:
+        if not qualification or not isinstance(unknown,list) or unknown!=sorted(QUALIFICATION_UNKNOWN) or set(versions)!=RUNTIME_NAMES-QUALIFICATION_UNKNOWN: raise DPOError('invalid unresolved package set')
+        return fingerprint({'environment_id':config['environment_id'],'versions':versions,'unresolved_versions':unknown})
+    if not RUNTIME_NAMES.issubset(versions) or (qualification and set(versions)!=RUNTIME_NAMES): raise DPOError('environment package pins missing')
+    return fingerprint({'environment_id':config['environment_id'],'versions':versions})
+
 def runtime_config(config, *, config_sha, qualification=False):
     """Validate reviewable fixed parameters and evidence pins before model load."""
     required={'schema','status','code_files','base_files','adapter_files','source_index_sha256','pair_manifest_sha256','pairs_sha256','tokenizer_sha256','template_sha256','environment_sha256','environment_id','versions','run_name','pad_id','eot_id','timing_proof','smoke_proof','max_seconds','source_review_sha256','xl6_selection_sha256','job_resources'}
-    if qualification: required-={'timing_proof','smoke_proof'}
+    if qualification:
+        required-={'timing_proof','smoke_proof'}
+        if isinstance(config,dict) and 'unresolved_versions' in config: required.add('unresolved_versions')
     schema='hardread.dpo.qualification/v1' if qualification else 'hardread.dpo.job/v1'
     if not isinstance(config,dict) or set(config)!=required or config['schema']!=schema or config['status']!='approved': raise DPOError('job config missing')
     if config['source_index_sha256']!=SOURCE_INDEX_SHA256: raise DPOError('source index differs')
@@ -301,7 +315,7 @@ def runtime_config(config, *, config_sha, qualification=False):
     for k in ('code_files','base_files','adapter_files','versions'):
         if not isinstance(config[k],dict) or not config[k]: raise DPOError('missing pinned inventory')
     if not {'azure/sft/train_dpo.py','tools/sft/build_dpo.py','tools/sft/serialize.py','tools/sft/glimmer_chat.py','tools/sft/data_admission.py','tools/sft/data_admission_runtime.py','tools/sft/build_sft.py','tools/sft/dex.json','tools/dataset/extract.py','tools/belief/roster_hash.py','tools/human/parse_replays.py','azure/student/p6_trainonly_inspect.py','azure/sft/submit_dpo.py','azure/sft/submit_dpo.sh','azure/sft/dpo_job.yml.template','azure/sft/qualify_dpo.py','azure/sft/submit_qualification.py','azure/sft/qualification_job.yml.template','azure/absolute_deadline.sh'}.issubset(config['code_files']): raise DPOError('source closure missing')
-    if not {'torch','transformers','peft','bitsandbytes','accelerate','tokenizers','safetensors','jinja2'}.issubset(config['versions']): raise DPOError('environment package pins missing')
+    environment_pin(config,qualification)
     if not {'adapter_model.safetensors','adapter_config.json'}.issubset(config['adapter_files']): raise DPOError('XL6 adapter files missing')
     resources=config['job_resources']
     expected_resources={'compute','pairs_uri','base_uri','xl6_uri','timing_uri','smoke_uri','selection_uri','output_uri','resource_group','workspace','approval_uri'}
@@ -337,7 +351,7 @@ def load_inputs(config_path, config_sha, code_root, data_dir, base_dir, adapter_
     verify_file_pins(code_root,cfg['code_files'])
     if Path(__file__).resolve()!=(Path(code_root)/'azure/sft/train_dpo.py').resolve(): raise DPOError('loaded source differs')
     base_hash=verify_tree(base_dir,cfg['base_files']); adapter_hash=verify_tree(adapter_dir,cfg['adapter_files'])
-    if fingerprint({'environment_id':cfg['environment_id'],'versions':cfg['versions']})!=cfg['environment_sha256']: raise DPOError('environment fingerprint differs')
+    if environment_pin(cfg,qualification)!=cfg['environment_sha256']: raise DPOError('environment fingerprint differs')
     for name,version in cfg['versions'].items():
         try: actual=importlib.metadata.version(name)
         except importlib.metadata.PackageNotFoundError as e: raise DPOError('environment package missing') from e

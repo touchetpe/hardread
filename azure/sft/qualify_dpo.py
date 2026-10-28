@@ -70,6 +70,40 @@ def check_approval(path,expected_sha,config_sha,code_sha=None):
     return T.check_root_approval(path,expected_sha,config_sha,'single_h100_qualification',code_sha)
 
 
+def verify_runtime_receipt(path,expected_sha,cfg,config_sha,binding):
+    if Path(path).is_symlink() or T.file_sha(path)!=expected_sha: raise T.DPOError('runtime inventory bytes differ')
+    doc=json.loads(Path(path).read_bytes())
+    if not isinstance(doc,dict) or doc.get('schema')!='hardread.dpo.runtime-inventory/v1' or doc.get('config_sha256')!=config_sha or doc.get('code_sha256')!=binding['code_sha256'] or doc.get('environment_id')!=cfg['environment_id']: raise T.DPOError('runtime inventory identity differs')
+    versions=doc.get('versions')
+    if not isinstance(versions,dict) or set(versions)!=T.RUNTIME_NAMES or any(not isinstance(v,str) or not v.strip() for v in versions.values()) or any(versions.get(k)!=v for k,v in cfg['versions'].items()):raise T.DPOError('runtime inventory versions differ')
+    if doc.get('environment_sha256')!=T.fingerprint({'environment_id':cfg['environment_id'],'versions':versions}):raise T.DPOError('runtime inventory fingerprint differs')
+    return doc
+
+
+def capture_runtime_receipt(output,cfg,config_sha,binding):
+    """Capture exact package inventory, durably, before any model load."""
+    import importlib.metadata
+    import platform
+    versions={}
+    for name in sorted(T.RUNTIME_NAMES):
+        try: value=importlib.metadata.version(name)
+        except importlib.metadata.PackageNotFoundError as e: raise T.DPOError('runtime package missing') from e
+        if not isinstance(value,str) or not value.strip():raise T.DPOError('runtime package version invalid')
+        if name in cfg['versions'] and cfg['versions'][name]!=value:raise T.DPOError('runtime package changed')
+        versions[name]=value
+    # Re-read all packages to detect changes during inventory capture.
+    for name in sorted(T.RUNTIME_NAMES):
+        try: again=importlib.metadata.version(name)
+        except importlib.metadata.PackageNotFoundError as e: raise T.DPOError('runtime package missing') from e
+        if again!=versions[name]:raise T.DPOError('runtime package changed during capture')
+    full_sha=T.fingerprint({'environment_id':cfg['environment_id'],'versions':versions})
+    receipt={'schema':'hardread.dpo.runtime-inventory/v1','config_sha256':config_sha,'code_sha256':binding['code_sha256'],'environment_id':cfg['environment_id'],'python':platform.python_version(),'versions':versions,'environment_sha256':full_sha}
+    path=Path(output)/'runtime-inventory.json';raw=T.canonical(receipt)+b'\n';T.exclusive_bytes(path,raw)
+    if path.is_symlink() or path.read_bytes()!=raw or json.loads(path.read_bytes())!=receipt:raise T.DPOError('runtime inventory readback differs')
+    digest=T.file_sha(path);verify_runtime_receipt(path,digest,cfg,config_sha,binding)
+    return receipt,digest
+
+
 def run(args):
     if not args.execute or __import__('os').environ.get('HARDREAD_DPO_QUALIFY')!='1':raise T.DPOError('qualification disabled pending explicit admission')
     import gc
@@ -88,7 +122,10 @@ def run(args):
     shard,bucket,hist=measurement_shard(pairs);ids=[p['pair_id'] for p in shard]
     output=Path(args.out)/cfg['run_name']
     if Path(args.out).is_symlink() or not Path(args.out).is_dir():raise T.DPOError('output mount invalid')
-    output.mkdir(mode=0o700);free,total=torch.cuda.mem_get_info(0);torch.cuda.reset_peak_memory_stats(0)
+    output.mkdir(mode=0o700)
+    runtime,runtime_sha=capture_runtime_receipt(output,cfg,args.config_sha256,binding)
+    binding=dict(binding,environment_sha256=runtime['environment_sha256'])
+    check();free,total=torch.cuda.mem_get_info(0);torch.cuda.reset_peak_memory_stats(0)
     times={'reference':[[] for _ in range(4)],'policy':[[] for _ in range(4)]}
     check();t=time.monotonic();ref=T.load_xl6(args.base,args.adapter,trainable=False,device=0);ref_load=time.monotonic()-t
     if ref.training or any(p.requires_grad for p in ref.parameters()):raise T.DPOError('reference must be frozen')
@@ -142,7 +179,7 @@ def run(args):
         if time.monotonic()+max(30.0,step_seconds)>=deadline:break
         backward(pair,1.0);optimizer.zero_grad(set_to_none=True)
     check();peaks={'peak_allocated_bytes':max(global_alloc,int(torch.cuda.max_memory_allocated(0))),'peak_reserved_bytes':max(global_reserved,int(torch.cuda.max_memory_reserved(0)))}
-    report={'schema':'hardread.dpo.single-h100-observation/v1','status':'observed','qualification_scope':'single_h100','binding':binding,'config_sha256':args.config_sha256,'approval_sha256':args.approval_sha256,'pair_count':len(pairs),'sample_ids_sha256':T.fingerprint(ids),'sample_ids':ids,'histogram':hist,'reference_longest_pair_peak':longest_peak,'policy_coverage':coverage,'longest_policy_pair_peak':next(x for x in coverage if x['pair_id']==longest_id),'reference_cache_sha256':cache_sha,'reference_load_seconds':ref_load,'policy_load_seconds':policy_load,'optimizer_step_seconds':step_seconds,'per_bucket_seconds':times,'device_name':torch.cuda.get_device_name(0),'device_free_before_bytes':int(free),'device_total_bytes':int(total),**peaks,'gradient_update_completed':True,'elapsed_seconds':time.monotonic()-started,'python':platform.python_version(),'versions':cfg['versions']}
+    report={'schema':'hardread.dpo.single-h100-observation/v1','status':'observed','qualification_scope':'single_h100','binding':binding,'config_sha256':args.config_sha256,'approval_sha256':args.approval_sha256,'pair_count':len(pairs),'sample_ids_sha256':T.fingerprint(ids),'sample_ids':ids,'histogram':hist,'reference_longest_pair_peak':longest_peak,'policy_coverage':coverage,'longest_policy_pair_peak':next(x for x in coverage if x['pair_id']==longest_id),'reference_cache_sha256':cache_sha,'reference_load_seconds':ref_load,'policy_load_seconds':policy_load,'optimizer_step_seconds':step_seconds,'per_bucket_seconds':times,'device_name':torch.cuda.get_device_name(0),'device_free_before_bytes':int(free),'device_total_bytes':int(total),**peaks,'gradient_update_completed':True,'elapsed_seconds':time.monotonic()-started,'python':platform.python_version(),'versions':runtime['versions'],'runtime_inventory_sha256':runtime_sha}
     if report['elapsed_seconds']>cfg['max_seconds']:raise T.DPOError('qualification deadline exceeded')
     T.exclusive_bytes(output/'observation.json',T.canonical(report)+b'\n')
     del policy,optimizer;return {'status':'observed','observation_sha256':T.file_sha(output/'observation.json')}
