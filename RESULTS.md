@@ -1501,3 +1501,15 @@ XL6 was selected using the original2,428validation identities atcommit0f8904c be
 `hrdpo-qual-20261028-n1-4f9c1a72` was created22:48:18UTC, reachedRunning, then was observedFailed22:51:40. The exact-file preflight raised `DPOError: tree inventory differs` before model loading or measurement. No runtime inventory, reference cache, fit/memory/gradient observation or timing projection was produced; six-node DPO was not launched. This is an infrastructure/input-binding failure, not a model-quality result.
 
 Read-only storage metadata has the12expected base files and the4expected selectedXL6 adapter files plus42additional objects in its prefix. The adapter prefix is the likely mismatch; the failed job's mounted tree was not directly inspected. Repair uses a clean four-file byte-identical mount while preserving strict inventory/source/selection checks. Two startup GPU samples were0% utilization/0MiB; these do not measure training. The original metadata upload/readback passed and no owner transfer approval is pending. Source/readout and independent runtimeHOLD are bound in [the failure card](experiments/cards/DPO-QUALIFICATION-ADD11-FAILED.json). The earlier successful launch observation remains historical; it is not ongoing Running status.
+
+
+<a id="dpo-r2-fit-timing-20261028"></a>
+## 2026-10-28T23:29:39.459910Z — DPO R2 fits, full-run timing fails
+
+The repaired one-H100 qualifier `hrdpo-qual-20261028-n1r2-6c8d70f1` was created at 23:13:08 UTC and observed **Completed at 23:21:29**. Its 48 preselected pairs passed the original longest/quartile coverage, finite reference-cache, optimizer-update and memory gates. Peak reserved memory was 83,233,865,728 bytes, leaving 16,715,939,840 bytes of device headroom. This is qualification evidence, not a trained DPO checkpoint or a benchmark gain. The first failed input-inventory attempt remains recorded separately.
+
+The unchanged pinned projection over all 100,000 pairs on six ranks is **83,839.45 seconds (23.29 hours) even with zero persistence reserve**, or **84,589.45 seconds (23.50 hours)** with a 600-second reserve. Both exceed the owner-applied **43,200-second / 12-hour** cap. Verdict: **single-H100 fit ACCEPT; six-node timing REJECT; full training not launched**. The requested one-hour launch target was missed. No quality scores were read.
+
+Eight one-minute native GPU samples, including startup idle, averaged **37% utilization, p10 0%**, with peak sampled memory **71,239 MiB**. These samples do not establish steady-state utilization. Source `b9be2cd` uses six ranks and accumulation eight (global 48 pairs per update); an earlier coordinator description of global batch 12 was wrong and did not change the source. The next repair will preserve the original objective, full data and source batch, and must pass a fresh actual runtime qualification.
+
+Evidence: `experiments/cards/DPO-QUALIFIER-R2-ACTUAL-READOUT.json`; independent actual review SHA-256 `0c9fe0c2e780edfa0b33dd605ae2a5771cd33ae88f729f4668bfdfe6d1e19ac3`, separate fit proof `263ca187…c8b06` and timing rejection `69618f7e…b1eb`. No statistical CI or p-value applies to this engineering qualification.
