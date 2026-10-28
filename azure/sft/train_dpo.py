@@ -9,6 +9,7 @@ LEARNING_RATE = 5e-6
 WORLD_SIZE = 6
 ACCUMULATION = 8
 MAX_SECONDS = 86400
+SOURCE_INDEX_SHA256 = "7b598b22b129c4a6cfcd11edcd23e3aeaa0f34e697388fa12b39a2a5ecab5438"
 
 class DPOError(ValueError):
     pass
@@ -284,11 +285,14 @@ def exclusive_bytes(path, data):
         f.write(data); f.flush(); os.fsync(f.fileno())
     if file_sha(path)!=hashlib.sha256(data).hexdigest(): raise DPOError('published bytes differ')
 
-def runtime_config(config, *, config_sha):
+def runtime_config(config, *, config_sha, qualification=False):
     """Validate reviewable fixed parameters and evidence pins before model load."""
     required={'schema','status','code_files','base_files','adapter_files','source_index_sha256','pair_manifest_sha256','pairs_sha256','tokenizer_sha256','template_sha256','environment_sha256','environment_id','versions','run_name','pad_id','eot_id','timing_proof','smoke_proof','max_seconds','source_review_sha256','xl6_selection_sha256','job_resources'}
-    if not isinstance(config,dict) or set(config)!=required or config['schema']!='hardread.dpo.job/v1' or config['status']!='approved': raise DPOError('job config missing')
-    if type(config['max_seconds']) is not int or not 0<config['max_seconds']<=MAX_SECONDS: raise DPOError('invalid job limit')
+    if qualification: required-={'timing_proof','smoke_proof'}
+    schema='hardread.dpo.qualification/v1' if qualification else 'hardread.dpo.job/v1'
+    if not isinstance(config,dict) or set(config)!=required or config['schema']!=schema or config['status']!='approved': raise DPOError('job config missing')
+    if config['source_index_sha256']!=SOURCE_INDEX_SHA256: raise DPOError('source index differs')
+    if type(config['max_seconds']) is not int or not 0<config['max_seconds']<=(7200 if qualification else MAX_SECONDS): raise DPOError('invalid job limit')
     import re
     if not isinstance(config['run_name'],str) or not re.fullmatch(r'hrdpo-[a-z0-9][a-z0-9-]{0,63}',config['run_name']): raise DPOError('invalid output name')
     for k in ('source_index_sha256','pair_manifest_sha256','pairs_sha256','tokenizer_sha256','template_sha256','environment_sha256','source_review_sha256','xl6_selection_sha256'):
@@ -296,30 +300,40 @@ def runtime_config(config, *, config_sha):
     if type(config['pad_id']) is not int or config['pad_id']<0 or config['eot_id']!=200008: raise DPOError('invalid special tokens')
     for k in ('code_files','base_files','adapter_files','versions'):
         if not isinstance(config[k],dict) or not config[k]: raise DPOError('missing pinned inventory')
-    if not {'azure/sft/train_dpo.py','tools/sft/build_dpo.py','tools/sft/serialize.py','tools/sft/glimmer_chat.py','tools/sft/data_admission.py','tools/sft/data_admission_runtime.py','tools/sft/build_sft.py','tools/sft/dex.json','tools/dataset/extract.py','tools/belief/roster_hash.py','tools/human/parse_replays.py','azure/student/p6_trainonly_inspect.py','azure/sft/submit_dpo.py','azure/sft/submit_dpo.sh','azure/sft/dpo_job.yml.template'}.issubset(config['code_files']): raise DPOError('source closure missing')
+    if not {'azure/sft/train_dpo.py','tools/sft/build_dpo.py','tools/sft/serialize.py','tools/sft/glimmer_chat.py','tools/sft/data_admission.py','tools/sft/data_admission_runtime.py','tools/sft/build_sft.py','tools/sft/dex.json','tools/dataset/extract.py','tools/belief/roster_hash.py','tools/human/parse_replays.py','azure/student/p6_trainonly_inspect.py','azure/sft/submit_dpo.py','azure/sft/submit_dpo.sh','azure/sft/dpo_job.yml.template','azure/sft/qualify_dpo.py','azure/sft/submit_qualification.py','azure/sft/qualification_job.yml.template','azure/absolute_deadline.sh'}.issubset(config['code_files']): raise DPOError('source closure missing')
     if not {'torch','transformers','peft','bitsandbytes','accelerate','tokenizers','safetensors','jinja2'}.issubset(config['versions']): raise DPOError('environment package pins missing')
     if not {'adapter_model.safetensors','adapter_config.json'}.issubset(config['adapter_files']): raise DPOError('XL6 adapter files missing')
     resources=config['job_resources']
-    expected_resources={'compute','pairs_uri','base_uri','xl6_uri','timing_uri','smoke_uri','selection_uri','output_uri','resource_group','workspace'}
+    expected_resources={'compute','pairs_uri','base_uri','xl6_uri','timing_uri','smoke_uri','selection_uri','output_uri','resource_group','workspace','approval_uri'}
+    if qualification: expected_resources=expected_resources-{'timing_uri','smoke_uri'}
     if not isinstance(resources,dict) or set(resources)!=expected_resources or any(not isinstance(v,str) or not v for v in resources.values()): raise DPOError('job resource pins missing')
     if not isinstance(config['environment_id'],str) or not config['environment_id']:
         raise DPOError('environment identity missing')
     if 'config.json' not in config['base_files'] or not any(x.endswith('.safetensors') for x in config['base_files']): raise DPOError('base weights missing')
     if 'tokenizer.json' not in config['base_files'] or 'chat_template.jinja' not in config['base_files'] or config['base_files']['tokenizer.json']!=config['tokenizer_sha256'] or config['base_files']['chat_template.jinja']!=config['template_sha256']:
         raise DPOError('base tokenizer pin differs')
-    for key in ('timing_proof','smoke_proof'):
+    for key in (() if qualification else ('timing_proof','smoke_proof')):
         item=config[key]
         if not isinstance(item,dict) or set(item)!={'sha256','status','binding_sha256'} or item['status']!='accepted' or not re.fullmatch('[0-9a-f]{64}',item['sha256']) or not re.fullmatch('[0-9a-f]{64}',item['binding_sha256']): raise DPOError('required preflight proof missing')
     if not isinstance(config_sha,str) or not re.fullmatch('[0-9a-f]{64}',config_sha): raise DPOError('config hash missing')
     return config
 
-def load_preflight(config_path, config_sha, code_root, data_dir, base_dir, adapter_dir, timing_path, smoke_path, selection_path):
+def check_root_approval(path, expected_sha, config_sha, purpose, code_sha=None):
+    from pathlib import Path
+    import re
+    if not isinstance(expected_sha,str) or not re.fullmatch('[0-9a-f]{64}',expected_sha) or file_sha(path)!=expected_sha: raise DPOError('root approval bytes differ')
+    doc=json.loads(Path(path).read_bytes())
+    if not isinstance(doc,dict) or doc.get('status')!='approved' or doc.get('purpose')!=purpose or doc.get('config_sha256')!=config_sha or not isinstance(doc.get('owner'),str) or not doc['owner'].strip() or not re.fullmatch('[0-9a-f]{64}',str(doc.get('code_sha256',''))): raise DPOError('root approval scope differs')
+    if code_sha is not None and doc['code_sha256']!=code_sha: raise DPOError('root approval source differs')
+    return doc
+
+def load_inputs(config_path, config_sha, code_root, data_dir, base_dir, adapter_dir, selection_path, *, qualification=False):
     """Verify fixed bytes and operational evidence before the first model load."""
     import json
     import importlib.metadata
     from pathlib import Path
     if file_sha(config_path)!=config_sha: raise DPOError('job config bytes differ')
-    cfg=runtime_config(json.loads(Path(config_path).read_bytes()),config_sha=config_sha)
+    cfg=runtime_config(json.loads(Path(config_path).read_bytes()),config_sha=config_sha,qualification=qualification)
     verify_file_pins(code_root,cfg['code_files'])
     if Path(__file__).resolve()!=(Path(code_root)/'azure/sft/train_dpo.py').resolve(): raise DPOError('loaded source differs')
     base_hash=verify_tree(base_dir,cfg['base_files']); adapter_hash=verify_tree(adapter_dir,cfg['adapter_files'])
@@ -345,13 +359,22 @@ def load_preflight(config_path, config_sha, code_root, data_dir, base_dir, adapt
     selection=json.loads(Path(selection_path).read_bytes())
     if not isinstance(selection,dict) or selection.get('status')!='selected' or selection.get('adapter_model_sha256')!=binding['adapter_model_sha256'] or selection.get('adapter_config_sha256')!=binding['adapter_config_sha256']:
         raise DPOError('selected XL6 identity differs')
+    return cfg,pairs,binding
+
+def load_preflight(config_path, config_sha, code_root, data_dir, base_dir, adapter_dir, timing_path, smoke_path, selection_path):
+    from pathlib import Path
+    cfg,pairs,binding=load_inputs(config_path,config_sha,code_root,data_dir,base_dir,adapter_dir,selection_path)
     for key,path in (('timing_proof',timing_path),('smoke_proof',smoke_path)):
         claim=cfg[key]
         if file_sha(path)!=claim['sha256']: raise DPOError('preflight proof bytes differ')
         proof=json.loads(Path(path).read_bytes())
         if not isinstance(proof,dict) or proof.get('status')!='accepted' or proof.get('binding_sha256')!=fingerprint(binding) or claim['binding_sha256']!=fingerprint(binding): raise DPOError('preflight proof binding differs')
         if key=='timing_proof' and (type(proof.get('projected_seconds')) not in (int,float) or not math.isfinite(proof['projected_seconds']) or not 0<proof['projected_seconds']<=cfg['max_seconds']): raise DPOError('full epoch exceeds time budget')
-        if key=='smoke_proof' and (proof.get('six_rank_collective') is not True or proof.get('adapter_load_update') is not True or proof.get('memory_headroom') is not True): raise DPOError('GPU smoke incomplete')
+        if key=='smoke_proof':
+            if proof.get('six_rank_collective') is not None and proof.get('six_rank_collective') is not False: raise DPOError('single-GPU proof cannot assert six ranks')
+            if proof.get('qualification_scope')!='single_h100' or proof.get('adapter_load_update') is not True or proof.get('memory_headroom') is not True: raise DPOError('GPU smoke incomplete')
+            total=proof.get('device_total_bytes');peak=proof.get('peak_reserved_bytes');headroom=proof.get('required_headroom_bytes');observed=proof.get('observed_receipt_sha256')
+            if any(type(x) is not int or x<=0 for x in (total,peak,headroom)) or total-peak<headroom or not isinstance(observed,str) or len(observed)!=64 or any(c not in '0123456789abcdef' for c in observed): raise DPOError('GPU headroom proof invalid')
     return cfg,pairs,binding
 
 def trainable_fingerprint(model):
@@ -365,9 +388,52 @@ def trainable_fingerprint(model):
     if not count: raise DPOError('no trainable tensors')
     return h.hexdigest()
 
+
+def validate_collective_reports(reports, result):
+    if len(reports)!=WORLD_SIZE or any(not isinstance(x,dict) for x in reports): raise DPOError('collective report count differs')
+    if sorted(x.get('rank') for x in reports)!=list(range(WORLD_SIZE)): raise DPOError('collective ranks differ')
+    fields=('world_size','backend','pair_id_sha256','gradient_sha256','trainable_before_sha256','trainable_after_sha256','gradient_parameters','optimizer_step')
+    if any(any(x.get(k)!=result.get(k) for k in fields) for x in reports): raise DPOError('collective rank gradient or weight mismatch')
+    if result.get('backend')!='nccl' or result.get('world_size')!=WORLD_SIZE or result.get('optimizer_step') is not False or result.get('trainable_before_sha256')!=result.get('trainable_after_sha256') or type(result.get('gradient_parameters')) is not int or result['gradient_parameters']<=0: raise DPOError('collective evidence invalid')
+
+
+def six_rank_startup_collective(ddp,policy,pair,reference,rank,device,pad_id,output,deadline_check,deadline):
+    """Real NCCL DDP forward/backward barrier; no optimizer update is permitted."""
+    import os
+    import torch
+    import torch.distributed as dist
+    from pathlib import Path
+    if not dist.is_initialized() or dist.get_backend()!='nccl' or dist.get_world_size()!=WORLD_SIZE or not torch.cuda.is_available():raise DPOError('six-rank NCCL runtime required')
+    if rank!=dist.get_rank() or not 0<=rank<WORLD_SIZE:raise DPOError('collective rank differs')
+    before=trainable_fingerprint(policy);ddp.train();disable_dropout(ddp);ddp.zero_grad(set_to_none=True)
+    deadline_check(deadline)
+    chosen,rejected=score_pair(ddp,pair,device,pad_id);ref=reference[pair['pair_id']]
+    loss=dpo_loss(chosen,rejected,torch.tensor(ref['chosen'],device=device),torch.tensor(ref['rejected'],device=device))
+    if not bool(torch.isfinite(loss)):raise DPOError('collective loss nonfinite')
+    loss.backward()
+    h=hashlib.sha256();nonzero=False;finite=True;count=0
+    for name,param in sorted(policy.named_parameters()):
+        if not param.requires_grad:continue
+        grad=param.grad
+        if grad is None:finite=False;continue
+        finite=finite and bool(torch.isfinite(grad).all());nonzero=nonzero or bool(torch.count_nonzero(grad));count+=1
+        h.update(canonical([name,list(grad.shape),str(grad.dtype)]));h.update(b'\0');h.update(grad.detach().contiguous().cpu().view(torch.uint8).numpy().tobytes())
+    valid=torch.tensor([int(finite and nonzero and count>0)],device=device,dtype=torch.int32)
+    dist.all_reduce(valid,op=dist.ReduceOp.MIN)
+    if int(valid.item())!=1:raise DPOError('collective gradient is missing, nonfinite or zero')
+    gradient_sha=h.hexdigest();ddp.zero_grad(set_to_none=True);after=trainable_fingerprint(policy)
+    if before!=after:raise DPOError('collective changed policy weights')
+    result={'rank':rank,'world_size':WORLD_SIZE,'backend':'nccl','pair_id_sha256':hashlib.sha256(pair['pair_id'].encode()).hexdigest(),'gradient_sha256':gradient_sha,'trainable_before_sha256':before,'trainable_after_sha256':after,'gradient_parameters':count,'optimizer_step':False}
+    reports=[None]*WORLD_SIZE;dist.all_gather_object(reports,result)
+    validate_collective_reports(reports,result)
+    exclusive_bytes(Path(output)/('collective-rank-%d.json'%rank),canonical(result)+b'\n')
+    dist.barrier();deadline_check(deadline)
+    if rank==0:exclusive_bytes(Path(output)/'collective.json',canonical({'schema':'hardread.dpo.six-rank-collective/v1','status':'complete','reports':reports})+b'\n')
+    dist.barrier();return reports
+
 def execute_job(args):
     """One bounded six-rank job, publishing only a complete cache and final epoch."""
-    if not TRAIN_ENABLED: raise DPOError('DPO training disabled pending review and admission')
+    if not getattr(args,'execute',False) or __import__('os').environ.get('HARDREAD_DPO_TRAIN')!='1': raise DPOError('DPO training disabled pending review and admission')
     import os
     import gc
     import time
@@ -377,6 +443,7 @@ def execute_job(args):
     import torch.distributed as dist
     from torch.nn.parallel import DistributedDataParallel as DDP
     os.environ.update(HF_HUB_OFFLINE='1',TRANSFORMERS_OFFLINE='1',HF_HUB_DISABLE_TELEMETRY='1',WANDB_MODE='offline',NCCL_IB_DISABLE='1')
+    approval=check_root_approval(args.approval,args.approval_sha256,args.config_sha256,'six_h100_full_epoch')
     rank=int(os.environ['RANK']); size=int(os.environ['WORLD_SIZE']); local=int(os.environ['LOCAL_RANK'])
     if size!=WORLD_SIZE or local!=0 or not 0<=rank<size or not torch.cuda.is_available() or torch.cuda.device_count()!=1: raise DPOError('expected one H100 per six ranks')
     torch.cuda.set_device(local)
@@ -385,6 +452,7 @@ def execute_job(args):
     dist.init_process_group(backend='nccl',timeout=timedelta(seconds=600))
     try:
         cfg,pairs,binding=load_preflight(args.config,args.config_sha256,args.code_root,args.data,args.base,args.adapter,args.timing,args.smoke,args.selection)
+        check_root_approval(args.approval,args.approval_sha256,args.config_sha256,'six_h100_full_epoch',binding['code_sha256'])
         deadline=started+cfg['max_seconds']
         def deadline_check(limit):
             expired=torch.tensor([int(time.monotonic()>=limit)],device=local)
@@ -422,6 +490,7 @@ def execute_job(args):
         params=[p for p in policy.parameters() if p.requires_grad]
         if not params or any('lora_' not in n for n,p in policy.named_parameters() if p.requires_grad): raise DPOError('unexpected trainable parameters')
         ddp=DDP(policy,device_ids=[local],output_device=local,find_unused_parameters=False,broadcast_buffers=False)
+        collective=six_rank_startup_collective(ddp,policy,pairs[0],reference,rank,local,cfg['pad_id'],output,deadline_check,deadline)
         optimizer=torch.optim.AdamW(params,lr=LEARNING_RATE)
         report=train_epoch(ddp,optimizer,pairs,reference,rank,local,pad_id=cfg['pad_id'],deadline=deadline,collective_deadline=deadline_check)
         report.update(rank=rank,cache_sha256=digest_box[0],pair_manifest_sha256=cfg['pair_manifest_sha256'],trainable_sha256=trainable_fingerprint(policy))
@@ -441,7 +510,7 @@ def execute_job(args):
             terminal={'schema':'hardread.dpo.terminal/v1','status':'complete','epochs':1,'pair_count':len(pairs),
                       'updates':report['updates'],'beta':BETA,'learning_rate':LEARNING_RATE,'world_size':size,
                       'config_sha256':args.config_sha256,'binding':binding,'reference_cache_sha256':digest_box[0],
-                      'final_files':files,'rank_reports':reports,'elapsed_seconds':time.monotonic()-started}
+                      'final_files':files,'rank_reports':reports,'collective_sha256':file_sha(output/'collective.json'),'elapsed_seconds':time.monotonic()-started}
             if terminal['elapsed_seconds']>cfg['max_seconds']: raise DPOError('deadline exceeded before terminal')
             exclusive_bytes(output/'terminal.json',canonical(terminal)+b'\n')
         dist.barrier()
@@ -452,8 +521,9 @@ def execute_job(args):
 def main(argv=None):
     import argparse
     parser=argparse.ArgumentParser(description=__doc__)
-    for name in ('config','config-sha256','code-root','data','base','adapter','timing','smoke','selection','out'):
+    for name in ('config','config-sha256','code-root','data','base','adapter','timing','smoke','selection','approval','approval-sha256','out'):
         parser.add_argument('--'+name,required=True)
+    parser.add_argument('--execute',action='store_true')
     args=parser.parse_args(argv)
     execute_job(args)
 

@@ -4,14 +4,15 @@ display_name: __NAME__
 experiment_name: hardread-dpo
 code: ./code
 command: >-
-  python azure/sft/train_dpo.py --config job-config.json --config-sha256 __CONFIG_SHA__
+  python azure/sft/train_dpo.py --execute --config job-config.json --config-sha256 __CONFIG_SHA__
   --code-root . --data ${{inputs.pairs}} --base ${{inputs.base}}
   --adapter ${{inputs.xl6}} --timing ${{inputs.timing}} --smoke ${{inputs.smoke}}
-  --selection ${{inputs.selection}}
+  --selection ${{inputs.selection}} --approval ${{inputs.approval}} --approval-sha256 __APPROVAL_SHA__
   --out ${{outputs.artifacts}}
 compute: __COMPUTE__
 environment: __ENVIRONMENT__
 environment_variables:
+  HARDREAD_DPO_TRAIN: "1"
   HF_HUB_OFFLINE: "1"
   TRANSFORMERS_OFFLINE: "1"
   HF_HUB_DISABLE_TELEMETRY: "1"
@@ -42,6 +43,10 @@ inputs:
   smoke:
     type: uri_file
     path: __SMOKE_URI__
+    mode: ro_mount
+  approval:
+    type: uri_file
+    path: __APPROVAL_URI__
     mode: ro_mount
 outputs:
   artifacts:

@@ -1,0 +1,52 @@
+$schema: https://azuremlschemas.azureedge.net/latest/commandJob.schema.json
+name: __NAME__
+display_name: __NAME__
+experiment_name: hardread-dpo-qualification
+code: ./code
+command: >-
+  bash azure/absolute_deadline.sh __HARD_END__ python azure/sft/qualify_dpo.py --execute --config job-config.json --config-sha256 __CONFIG_SHA__
+  --code-root . --data ${{inputs.pairs}} --base ${{inputs.base}} --adapter ${{inputs.xl6}}
+  --selection ${{inputs.selection}} --approval ${{inputs.approval}} --approval-sha256 __APPROVAL_SHA__
+  --out ${{outputs.artifacts}}
+compute: __COMPUTE__
+environment: __ENVIRONMENT__
+environment_variables:
+  HARDREAD_DPO_QUALIFY: "1"
+  HF_HUB_OFFLINE: "1"
+  TRANSFORMERS_OFFLINE: "1"
+  HF_HUB_DISABLE_TELEMETRY: "1"
+  WANDB_MODE: offline
+inputs:
+  pairs:
+    type: uri_folder
+    path: __PAIRS_URI__
+    mode: ro_mount
+  base:
+    type: uri_folder
+    path: __BASE_URI__
+    mode: ro_mount
+  xl6:
+    type: uri_folder
+    path: __XL6_URI__
+    mode: ro_mount
+  selection:
+    type: uri_file
+    path: __SELECTION_URI__
+    mode: ro_mount
+  approval:
+    type: uri_file
+    path: __APPROVAL_URI__
+    mode: ro_mount
+outputs:
+  artifacts:
+    type: uri_folder
+    path: __OUTPUT_URI__
+    mode: rw_mount
+limits:
+  timeout: __TIMEOUT__
+resources:
+  instance_count: 1
+  shm_size: 128g
+tags:
+  project: pokemon-rl-research
+  lane: hardread-dpo-qualification
