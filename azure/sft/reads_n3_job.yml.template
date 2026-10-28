@@ -1,0 +1,22 @@
+# Inert prospective template. Root must pin every URI, config, code and source review.
+$schema: https://azuremlschemas.azureedge.net/latest/commandJob.schema.json
+name: __REVIEWED_UNIQUE_NAME__
+code: ./code
+command: >-
+  setsid python azure/sft/eval_reads_n3.py --config config.json --config-sha256 __CONFIG_SHA__
+  --prompts ${{inputs.prompts}} --cohort ${{inputs.cohort}} --review ${{inputs.review}}
+  --selection ${{inputs.selection}} --base ${{inputs.base}} --adapter ${{inputs.adapter}}
+  --out ${{outputs.results}} --code-root . --execute
+compute: __REVIEWED_H100_COMPUTE__
+environment: __REVIEWED_ENVIRONMENT__
+inputs:
+  prompts: {type: uri_file, path: __PINNED_PROMPT_ONLY_URI__, mode: ro_mount}
+  cohort: {type: uri_file, path: __PINNED_COHORT_MANIFEST_URI__, mode: ro_mount}
+  review: {type: uri_file, path: __PINNED_SOURCE_REVIEW_URI__, mode: ro_mount}
+  selection: {type: uri_file, path: __PINNED_SELECTION_URI__, mode: ro_mount}
+  base: {type: uri_folder, path: __PINNED_BASE_URI__, mode: ro_mount}
+  adapter: {type: uri_folder, path: __PINNED_SELECTED_ADAPTER_URI__, mode: ro_mount}
+outputs:
+  results: {type: uri_folder, path: __PINNED_OUTPUT_URI__, mode: rw_mount}
+limits: {timeout: 10800}
+resources: {instance_count: 1}
