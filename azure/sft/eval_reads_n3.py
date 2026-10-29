@@ -9,7 +9,7 @@ import re
 import time
 
 INFERENCE_ENABLED=os.environ.get('HARDREAD_N3_INFERENCE_ENABLED')=='1'
-MAX_SECONDS=10800
+MAX_SECONDS=14400
 EXPECTED_NATIVE_LORA_TENSORS=728
 LORA_PARAMETER_MARKERS={'lora_A','lora_B','lora_embedding_A','lora_embedding_B'}
 class N3RunError(ValueError):pass
