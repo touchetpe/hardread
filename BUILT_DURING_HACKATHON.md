@@ -4,6 +4,7 @@ This provenance ledger is generated from pinned Git history. It describes the ca
 
 - Repositories: `hardread` (branch `main`, captured HEAD `9f69f1a30c6c75bd687e2a61974cbd309f8bb373`) and `hardread-foulplay` (branch `hardread`, captured HEAD `f061e63d3d588f30e72af2f4a7d12d3101896d02`); fork-only commits are those after upstream `8f541f80f91f960603673796559f796b10ccf0fb`.
 - The source plan preserved these point-in-time refs but not their capture timestamp. Generated 2026-10-29 10:29:15 UTC from those fixed refs. The main history has advanced since this snapshot; refresh the ledger for the final release candidate.
+- Append-only main-history extension prepared 2026-10-29 16:27:14 UTC, covering commits after 9f69f1a30c6c75bd687e2a61974cbd309f8bb373 through exact `hardread` main commit `2db38a9a921ca43ac90614cd4cefbcc81c66ab9f` (committer timestamp 2026-10-29 16:19:32 UTC). The original time-band counts, first-commit table, and pre-kickoff disclosure remain tied to the original snapshot above. This extension is not the final release-locked capture.
 - Git timestamps below are committer timestamps in UTC. Commit subjects are omitted from the per-commit ledger so operational identifiers in commit messages are not copied.
 
 ## Time bands
@@ -46,7 +47,7 @@ This provenance ledger is generated from pinned Git history. It describes the ca
 
 ## Commit ledger
 
-Each row is a commit reachable from the pinned refs. Subject text is intentionally omitted.
+Rows through `9f69f1a30c6c` are reachable from the original pinned refs. The append-only extension that follows records `hardread` main commits after `9f69f1a30c6c` through `2db38a9a921c`; the fork reference is unchanged. Subject text is intentionally omitted from this public per-commit ledger.
 
 | UTC | Repo | Commit |
 |---|---|---|
@@ -403,10 +404,45 @@ Each row is a commit reachable from the pinned refs. Subject text is intentional
 | 2026-10-29 09:28:11 | hardread | `bfa22f177a8f` |
 | 2026-10-29 09:53:22 | hardread | `9f69f1a30c6c` |
 
+## Append-only main-history extension through `2db38a9a921ca43ac90614cd4cefbcc81c66ab9f`
+
+| UTC | Repo | Commit |
+|---|---|---|
+| 2026-10-29 10:21:16 | hardread | `cf7a2a77c0f8` |
+| 2026-10-29 10:35:53 | hardread | `fcb7c4e26181` |
+| 2026-10-29 11:15:41 | hardread | `30d562137199` |
+| 2026-10-29 11:18:58 | hardread | `60cd8e7a2ad3` |
+| 2026-10-29 11:19:19 | hardread | `b7666ea07b07` |
+| 2026-10-29 11:30:51 | hardread | `209c6502095e` |
+| 2026-10-29 11:32:05 | hardread | `74215b97a443` |
+| 2026-10-29 11:35:36 | hardread | `a86a118f9dd4` |
+| 2026-10-29 11:58:41 | hardread | `097c9f60ddba` |
+| 2026-10-29 12:08:42 | hardread | `3cc042e37883` |
+| 2026-10-29 12:24:18 | hardread | `af94168aff37` |
+| 2026-10-29 12:34:09 | hardread | `f7d3da2985be` |
+| 2026-10-29 12:39:57 | hardread | `8a5a31ca52cc` |
+| 2026-10-29 13:00:18 | hardread | `612d8024b588` |
+| 2026-10-29 13:02:56 | hardread | `0a0b59507768` |
+| 2026-10-29 13:07:06 | hardread | `ccac1aa97753` |
+| 2026-10-29 13:24:29 | hardread | `072e9e0e5ff5` |
+| 2026-10-29 13:33:03 | hardread | `ace48512bd93` |
+| 2026-10-29 13:35:14 | hardread | `13851d2bcce8` |
+| 2026-10-29 13:38:18 | hardread | `2016e685f72c` |
+| 2026-10-29 13:55:49 | hardread | `b485067a1558` |
+| 2026-10-29 14:35:44 | hardread | `09c3029078c3` |
+| 2026-10-29 14:56:01 | hardread | `64e65cf379b0` |
+| 2026-10-29 15:13:56 | hardread | `d25b56802e1c` |
+| 2026-10-29 15:42:19 | hardread | `75ece7f26e0f` |
+| 2026-10-29 15:55:31 | hardread | `1a49ee501ad3` |
+| 2026-10-29 15:55:54 | hardread | `a526fc73291b` |
+| 2026-10-29 16:14:00 | hardread | `97223d063e24` |
+| 2026-10-29 16:19:32 | hardread | `2db38a9a921c` |
+
 ## Verify
 
 ```sh
 git -C hardread rev-list --count 9f69f1a30c6c75bd687e2a61974cbd309f8bb373
+git -C hardread log --reverse --format='%cI %H' 9f69f1a30c6c75bd687e2a61974cbd309f8bb373..2db38a9a921ca43ac90614cd4cefbcc81c66ab9f
 git -C hardread log --reverse --format='%h %cI %s' 9f69f1a30c6c75bd687e2a61974cbd309f8bb373 --before=2026-10-26T16:00:00Z
 git -C hardread log --reverse --format='%h %cI %s' 9f69f1a30c6c75bd687e2a61974cbd309f8bb373 --since=2026-10-26T16:00:00Z --before=2026-10-27T04:00:00Z
 git -C hardread log --reverse --format='%h %cI %s' 9f69f1a30c6c75bd687e2a61974cbd309f8bb373 --since=2026-10-27T04:00:00Z

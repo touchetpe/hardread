@@ -1786,3 +1786,8 @@ Handoffcommitd38aed1 aligns the private draft with that exact order and adds dis
 ## 2026-10-29T16:30:28.935062+00:00 — README local setup disclosure
 
 Integrated one reviewed paragraph distinguishing the dated development-Mac installation table from a fresh-machine recipe. Root checked exact source/patch/candidate bytes and the existing offline CLI documentation. Sol accepted one original changed-copy review. Fresh clone/isolated venv/local review acceptance remains false; the app quickstart remains in preparation. Evidence: `experiments/cards/README-LOCAL-SETUP-DISCLOSURE-20261029.json`. No dependency acquisition, install, build, model/engine call, source/A1 mutation, paid action or publication. All39model ledger entries unchanged/unfrozen.
+
+
+## 2026-10-29T16:37:01.627220+00:00 — Nonfinal build-history disclosure extension
+
+Added29 reachable main commits after the original9f69f1a snapshot through exact2db38a9, with actual committer UTCs and shortened hashes. Root independently matched all29 rows against Git metadata and preserved historical counts, the first-feature table and16-versus-14 pre-kickoff disclosure verbatim. V1's Markdown table split is retained; the formatting-only v2 adds a header, with no data change. One original public-copy/provenance review accepted v2. Evidence: `experiments/cards/BUILD-LEDGER-EXTENSION-20261029.json`. This is a bounded nonfinal capture, not final release-history/privacy or publication acceptance. No timestamp/history rewriting, experiment, protected data read, install or public action.
