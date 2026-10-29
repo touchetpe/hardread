@@ -1699,3 +1699,8 @@ Compared on identical rows, item and tera rates exceeded the usage reference by 
 | Exact hidden-move set | 309/1911 | 16.17% | 19.20% | 19.83% |
 
 Exact version, source/input/model/output hashes, all field intervals and baseline support counts: `experiments/cards/READS-N3-XL6-COMPLETE-EXPLORATORY-20261029.json`. Original independent result review6abe25af reproduced every count and paired interval exactly; maximum arithmetic error0. Earlier timing and pre-model failures remain separate and unscored.
+
+
+## 2026-10-29 — Student topup16 four-farm wave Running, no new eligibility result
+
+Four unchanged-recipe training-data farms13–16 were created once each at08:07:06–08:08:33UTC and are all **Running** in the08:16 snapshot. The prospective source/cost decision, permanent full200-seed blocks, exact rendered clocks, source rechecks, current node admission and identity-bound watchers passed before each create. Maximum exposure is24node-hours (four one-node jobs, six-hour AML timeout each); no dollar rate is invented. New chunks stop11:06–11:08UTC, workload guards are13:51–13:53 and watcher hard ends14:11–14:13. This is CPU engine data generation on existing H100 nodes, not Student training. Actual accepted NEW remains90,133,9,867 below100k. First-chunk health and the eventual whole-union eligible count remain pending. Exact jobs, guards, authority commits, source hashes and observed states are in `experiments/cards/STUDENT-V21-TOPUP16-FOUR-RUNNING-20261029.json`. No create retry, source-method amendment or public action occurred.
