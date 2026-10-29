@@ -5,6 +5,7 @@ HardRead reviews finished competitive Pokémon replays. It uses Foul Play search
 Foul Play is pmariglia’s independent GPL-3.0 open-source search bot and winner of the [2025 PokéAgent Gen 9 OU tournament](https://pokeagent.github.io/leaderboard.html) ([upstream project](https://github.com/pmariglia/foul-play)). HardRead builds the retrospective review, luck and stated-read layers around that credited baseline; the tournament result belongs to Foul Play, not HardRead.
 
 **Fan-made, not affiliated with Nintendo, The Pokémon Company or Game Freak. 18+.**
+[Open-weight evidence (status as of 2026-10-29)](OPEN_WEIGHTS.md)
 
 
 ## How HardRead differs from a typical AI analyzer
