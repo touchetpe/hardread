@@ -1613,3 +1613,18 @@ V2 gains seven cases (**+0.2883 percentage points**) and misses the prespecified
 This decision is recorded and committed before any registered fixed-v0 test-quality read for v2. A subsequent owner-12 candidate fixed-400 comparison is descriptive and cannot change selection. The producer's built-in400 rows are not that registered test. Training/five-stage/persistence completion and earlier failures remain separate records.
 
 [Original validation and selection card](experiments/cards/GLIMMER-V2-ORIGINAL-VAL-NOT-SELECTED-20261029.json). Independent original review SHA-256`c02f5483c441f1edace4edaf32854986b675e255535c11342ac2731070d43c30`; teacher rows SHA-256`716b56ad028a12d774b1a4b0ce619ae080bf65ce6cc8b1df55e3f15867ba5bce`; v2 adapter SHA-256`946a548b635db87ed304eb66d5a104c35d7c4787a29c9a3a87574e04dcbe57f3`. No fixed-v0 score, new arena outcome or DPO quality result was opened for this decision.
+
+<a id="engineering-operations-update-20261029T0354Z"></a>
+## 2026-10-29T03:54:11Z — Engineering and runtime updates; no new quality result
+
+The Glimmer v2 full-12 training run completed **3,497 steps** across five successful stages. Its persistence receipt lists **42 objects**, and the final five-file artifact readback passed at **795,101,549 bytes**. The separate original R1 validation and selection decision are recorded above; this engineering entry reports no validation metric.
+
+DPO full-six R2 failed before model execution because the YAML code directory did not match the intended configuration; all six source errors were job config bytes differ. R3 was still Running in its 03:02 UTC receipt. Its six ranks each had 21 utilization samples (mean range **80.67–80.86%**, latest **98–100%**, in the reference phase); optimizer updates and terminal completion were not proven.
+
+The three N3 native-BF16 starts failed before evaluation (quoted launch command, R1 cutoff guard, and R2 source-review binding). The three failed starts were **conservatively charged 300 seconds each**; that accounting is not measured compute consumption. No full-cohort score or quality result was produced.
+
+The hosting wheel-stage build missed its 90-minute hard deadline. The later Cargo emulation diagnostic stalled for 196 seconds at 0.02–0.05% CPU, with no rustc start and no output. It received a PermissionError reading /proc/<cargo>/syscall, leaving the precise cause unknown; no actual nativekit job, wheel, image, or smoke result is claimed.
+
+The farm 07/08 census is health-only: **15 archives**, **14 healthy**, **one whole chunk held**, and **22,990 raw decision rows**. Eligibility was not evaluated, so the prior **74,033** count-only new-source result remains unchanged and this union remains pending. No N1/B2 outcome is added here; those remain with their Benchmark-owned record.
+
+[Engineering operations update card](experiments/cards/ENGINEERING-OPS-UPDATE-20261029T0231-0354Z.json) records the source paths, hashes and scope limits.
