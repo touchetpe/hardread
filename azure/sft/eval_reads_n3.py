@@ -4,6 +4,7 @@ import json
 import math
 import os
 from pathlib import Path
+from datetime import datetime, timezone
 import re
 import time
 
@@ -56,6 +57,42 @@ def timing_allows(elapsed,completed,total,remaining):
     if completed!=20 or total!=440 or not math.isfinite(elapsed) or elapsed<=0 or not math.isfinite(remaining) or remaining<=0:
         raise N3RunError('timing projection inputs differ')
     return elapsed/completed*(total-completed)<remaining
+
+def utc_timestamp():
+    return datetime.now(timezone.utc).isoformat(timespec='microseconds').replace('+00:00','Z')
+
+def write_first20_timing(path,*,load_start,load_end,decode_start,checkpoint,deadline,checkpoint_epoch,
+                         load_start_utc,load_end_utc,decode_start_utc,checkpoint_utc,source_sha256,config_sha256):
+    monotonic=(load_start,load_end,decode_start,checkpoint)
+    if any(type(x) not in (int,float) or not math.isfinite(x) for x in monotonic):
+        raise N3RunError('timing checkpoint monotonic values differ')
+    if type(deadline) not in (int,float) or type(checkpoint_epoch) not in (int,float) or not math.isfinite(deadline) or not math.isfinite(checkpoint_epoch):
+        raise N3RunError('timing checkpoint wall values differ')
+    if load_end<load_start or decode_start<load_end or checkpoint<decode_start:
+        raise N3RunError('timing checkpoint event order differs')
+    for stamp in (load_start_utc,load_end_utc,decode_start_utc,checkpoint_utc):
+        if not isinstance(stamp,str): raise N3RunError('timing checkpoint UTC timestamp differs')
+        try: datetime.fromisoformat(stamp.replace('Z','+00:00'))
+        except ValueError: raise N3RunError('timing checkpoint UTC timestamp differs')
+    for digest in (source_sha256,config_sha256):
+        if not isinstance(digest,str) or not re.fullmatch('[0-9a-f]{64}',digest):
+            raise N3RunError('timing checkpoint source pin differs')
+    load_seconds=load_end-load_start
+    decode_seconds=checkpoint-decode_start
+    available_remaining=deadline-checkpoint_epoch
+    projected_remaining=decode_seconds/20*(440-20)
+    within_budget=timing_allows(decode_seconds,20,440,available_remaining)
+    record={'schema':'hardread.reads-n3.first20-timing/v1','source_sha256':source_sha256,
+            'config_sha256':config_sha256,'load_start_utc':load_start_utc,'load_end_utc':load_end_utc,
+            'decode_start_utc':decode_start_utc,'checkpoint_utc':checkpoint_utc,
+            'load_seconds':load_seconds,'first20_decode_seconds':decode_seconds,
+            'projected_remaining_seconds':projected_remaining,'available_remaining_seconds':available_remaining,
+            'completed_decisions':20,'within_budget':within_budget}
+    fd=os.open(path,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
+    with os.fdopen(fd,'w',encoding='utf-8') as f:
+        json.dump(record,f,sort_keys=True,separators=(',',':'))
+        f.write('\n');f.flush();os.fsync(f.fileno())
+    return record
 
 def load_model(base,adapter,device):
     import torch
@@ -133,7 +170,7 @@ def run(config_path,config_sha,prompt_path,cohort_path,review_path,selection_pat
         raise N3RunError('tokenizer/template differs')
     if any(p['tools']!=[S._reads_tool()] for p in prompts):raise N3RunError('reads schema differs')
     output=Path(output_parent)/cfg['run_name'];output.mkdir(mode=0o700)
-    started=time.monotonic();deadline=min(cfg['deadline_unix'],time.time()+cfg['max_seconds'])
+    deadline=min(cfg['deadline_unix'],time.time()+cfg['max_seconds'])
     stop=threading.Event();first_sample=threading.Event();sample_error=threading.Event()
     def sample_gpu():
         with open(output/'gpu-samples.log','x') as f:
@@ -149,12 +186,20 @@ def run(config_path,config_sha,prompt_path,cohort_path,review_path,selection_pat
     status='incomplete';count=0;reason='unexpected interruption'
     try:
         if not first_sample.wait(15) or sample_error.is_set():raise N3RunError('GPU sampling unavailable')
+        load_start_utc=utc_timestamp()
+        load_start=time.monotonic()
         model=load_model(base_path,adapter_path,0)
+        load_end=time.monotonic()
+        load_end_utc=utc_timestamp()
+        decode_start=None;decode_start_utc=None
         fd=os.open(output/'outputs.jsonl',os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
         with os.fdopen(fd,'w',encoding='utf-8') as out:
             for p in prompts:
                 if sample_error.is_set():reason='GPU sample failed';break
                 if time.time()>=deadline:reason='hard deadline';break
+                if count==0:
+                    decode_start_utc=utc_timestamp()
+                    decode_start=time.monotonic()
                 ids=gc.ids(p['prompt'])
                 if not ids or len(ids)>2048:reason='prompt length';break
                 x=torch.tensor([ids],device=0)
@@ -166,8 +211,18 @@ def run(config_path,config_sha,prompt_path,cohort_path,review_path,selection_pat
                 record={'duid':p['duid'],'raw':raw,'parse_status':'ok' if error is None else error,
                         'generated_tokens':len(tokens),'prompt_sha256':p['prompt_sha256'],'selection_sha256':cfg['selection_sha256'],'config_sha256':config_sha}
                 out.write(json.dumps(record,separators=(',',':'),ensure_ascii=False)+'\n');out.flush();count+=1
-                if count==20 and not timing_allows(time.monotonic()-started,20,440,deadline-time.time()):
-                    reason='20-decision timing projection exceeds deadline';break
+                if count==20:
+                    checkpoint=time.monotonic()
+                    checkpoint_epoch=time.time()
+                    checkpoint_utc=utc_timestamp()
+                    reason='20-decision timing receipt failed'
+                    timing=write_first20_timing(output/'timing.json',load_start=load_start,load_end=load_end,
+                            decode_start=decode_start,checkpoint=checkpoint,deadline=deadline,checkpoint_epoch=checkpoint_epoch,
+                            load_start_utc=load_start_utc,load_end_utc=load_end_utc,decode_start_utc=decode_start_utc,
+                            checkpoint_utc=checkpoint_utc,source_sha256=sha(Path(__file__).resolve()),config_sha256=config_sha)
+                    if not timing['within_budget']:
+                        reason='20-decision timing projection exceeds deadline';break
+                    reason='unexpected interruption'
             os.fsync(out.fileno())
         if count==440 and time.time()<=deadline:status='complete';reason=None
     finally:
