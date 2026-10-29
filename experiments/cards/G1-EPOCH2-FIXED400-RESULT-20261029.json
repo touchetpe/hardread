@@ -1,0 +1,90 @@
+{
+  "schema": "hardread-g1-epoch2-fixed400-descriptive-result/1",
+  "recorded_utc": "2026-10-29T22:27:56.395985+00:00",
+  "job_name": "hrval-20261029-g1e2-fixed400-405667bc",
+  "status": "ACCEPTED_COMPLETE_DESCRIPTIVE_RESULT",
+  "cloud_status": "Completed",
+  "completed_observed_utc": "2026-10-29T22:14:29Z",
+  "platform_end_utc": null,
+  "selection_commit_before_create": "06c276a",
+  "create_authority_commit": "fb5e3f5",
+  "create_record_commit": "bd17deb",
+  "model_sha256": "f48a310273789bda35c85266196e0b15459d9447b351787d3b9cf3fca87357cd",
+  "config_sha256": "0cd02e23b0dc47359148dac1340a156ca0afa7ad0218f572e1f8be1b97b51d66",
+  "data_sha256": "3b0ba8fa2e2db60b9149d4ac03f1ae5bcbcb152745c4fa8fe1bf54fcc5e06276",
+  "selected_id_lf_join_sha256": "dcf05ed82eaf7b487df1741f27c091c581aa65aa1af6869fb1153bd44225c545",
+  "metric": "recorded-choice top1 agreement",
+  "correct": 226,
+  "n": 400,
+  "percent": 56.5,
+  "prior_XL6": {
+    "correct": 223,
+    "n": 400,
+    "percent": 55.75,
+    "difference_cases": 3,
+    "difference_pp": 0.75
+  },
+  "first_epoch_v2": {
+    "correct": 227,
+    "n": 400,
+    "percent": 56.75,
+    "difference_cases": -1,
+    "difference_pp": -0.25,
+    "original_validation_decision": "NOTSELECTED6a9b7d6 unchanged"
+  },
+  "secondary": {
+    "tuned": {
+      "n": 400,
+      "correct": 226,
+      "top2_count": 309,
+      "top3_count": 346,
+      "policy_argmax_count": 224,
+      "ce_vs_policy": 1.5655950021549856
+    },
+    "base": {
+      "n": 400,
+      "correct": 101,
+      "top2_count": 168,
+      "top3_count": 228,
+      "policy_argmax_count": 109,
+      "ce_vs_policy": 3.35584456830693
+    }
+  },
+  "generation_n": 0,
+  "selection_changed_by_fixed400": false,
+  "DPO2_or_new_training_triggered": false,
+  "arena_result": null,
+  "arena_owner": "Existing Benchmark chat; original200games seed2000 only after its safety/source/cost/admission gates. Preserve owner-review PAUSED.",
+  "independent_original_review": {
+    "path": "scratch_ds/codex/training-roadmap/glimmer-v2-data-uri/g1-second-epoch-readout-inert-20261029-v2/fixed400-root-watch-20261029T2152Z/fixed400-terminal-readout-20261029T2218Z.private/SOL-ORIGINAL-G1-FIXED400-ACTUAL-RESULT-REVIEW.private.md",
+    "sha256": "5820c626ec37593aab610c01b73627ae1557b4242eaf7dd6d5f4495d3eac9523",
+    "verdict": "ACCEPT descriptive result"
+  },
+  "actual_acquisition_manifest": {
+    "path": "scratch_ds/codex/training-roadmap/glimmer-v2-data-uri/g1-second-epoch-readout-inert-20261029-v2/fixed400-root-watch-20261029T2152Z/fixed400-terminal-readout-20261029T2218Z.private/continuation-manifest.private.json",
+    "sha256": "fa526d16fc9f18e5e387ed4337a402651fe8db29cb925a369db91a1b77d7cc74",
+    "files": 3,
+    "bytes": 227692
+  },
+  "root_reprojection": {
+    "path": "scratch_ds/codex/training-roadmap/glimmer-v2-data-uri/g1-second-epoch-readout-inert-20261029-v2/fixed400-root-watch-20261029T2152Z/fixed400-terminal-readout-20261029T2218Z.private/root-result-check.private.json",
+    "sha256": "4df9209cc9bf02cafcf2f03ab8939207f275c8ebbf0377ca6d0349c59732a15e",
+    "scope": "Original fixed400 formulas, G1 paths/manifest shape; DPO231 gate removed. Pending-review field records initial projection phase; original review now accepted above."
+  },
+  "root_actual_binding": {
+    "path": "scratch_ds/codex/training-roadmap/glimmer-v2-data-uri/g1-second-epoch-readout-inert-20261029-v2/fixed400-root-watch-20261029T2152Z/fixed400-terminal-readout-20261029T2218Z.private/root-binding-check.private.json",
+    "sha256": "bead55430658758054352e5ed829880adcd61c4a345df1c6e4b1cab7105d8c8b"
+  },
+  "result_hashes": {
+    "summary.json": "21881ee2ba8f081c431d49cdd9f270a9b7bda84e99915f07206f5be073f85d62",
+    "eval_teacher.rows.jsonl": "f28bde44bae98f807c960fba4ccefb8482ce6c0edd493f6c66ba5d5769827220",
+    "eval_teacher.json": "7a19a22ff40cabd079e64ab621504d835390b40572f0bb32dbfeb257b325ea42"
+  },
+  "limits": [
+    "Offline descriptive recorded-choice agreement, not battle win rate, causal strength, paired significance or shipping evidence.",
+    "Selection was committed on original2428 validation before this test; no reselection.",
+    "Teacher-menu legal matches are not arena legal-action or p95 latency evidence.",
+    "Current video unchanged; arena-complete-by-Sat10UTC condition for model-number inclusion remains.",
+    "No service source byte, postread ETag stability, or periodic checkpoint claim."
+  ]
+}
