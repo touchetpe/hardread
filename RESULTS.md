@@ -1528,3 +1528,23 @@ No model load, native API/parity, memory-fit, reference cache or throughput obse
 The corrected offline import is cryptographically bound to the two approved image configurations and ordered layers. Docker29's inspect ID is a target manifest digest, rather than the expected configuration digest; exact local manifest payloads close that mapping. The resource-only probe passed the unchanged2CPU/4GiB/no-swap cgroup check using the approved script over stdin. An earlier host-bind probe failed before container creation and remains preserved.
 
 The single approved offline legacy build ran23:56:32–23:56:37 UTC and failed with `COPY failed: NotFound: parent snapshot <digest> does not exist`. No target image was created. No retry or BuildKit fallback ran, and the ten-replay container smoke was not run. No native ABI/install or deployment readiness is claimed. Working local app remains the fallback; missing a public link weakens the Demo and CommunityVote route. Final evidence index SHA `54dcd1b2ec2e4c9a86f701d8344841e1ffdc4b03cc89fc65fc8455616bb1fe69`.
+
+
+<a id="dpo-response-parity-r4-r5-20261029"></a>
+## 2026-10-29T00:30:08.396541Z — DPO optimized calculation fails the optimizer-update check
+
+The configuration-corrected R4 qualifier reached the actual model/cache stage and failed `dense/selected parity differs`. Runtime inventory and cache bindings passed, but no scalar metric was recorded; independent actual review declared NO-GO. R5 added only scalar diagnostics before the same guard and was created once at00:22:33UTC on one H100. Its actual receipt observed Finalizing at00:28:48, with the same parity exception and no fit/timing observation. This is engineering qualification, not an AI benchmark score.
+
+R5 measured identical reported log-probabilities and loss (absolute differences0), gradient cosine0.99998819 and relative L2 error0.00486513, all within their original limits. **AdamW update relative L2 error0.05494545 exceeds the unchanged0.01 limit. Full six-node DPO remains unlaunched.** The numerical cause remains under investigation; no tolerance or objective was changed. R5 six startup-inclusive minute samples averaged16.67% utilization,p10=0%,peak22281MiB. The one-hour launch target was missed. All own-storage transfers were authorized and verified; no upload approval is pending. [Actual record](experiments/cards/DPO-RESPONSE-PARITY-R4-R5-ACTUAL.json).
+
+<a id="reads-n3-incomplete-20261029"></a>
+## 2026-10-29T00:30:08.396541Z — Glimmer reads evaluation incomplete and unscored
+
+The first XL6 reads job stopped after20/440decisions: `20-decision timing projection exceeds deadline`; terminalFailed at23:58:39UTC. No top-1, log-score or paired-bootstrap result was computed, and the partial model-output file was left unread. The runner's projection included one-time loading; actual load/decode durations were not logged, so this does not establish whether a corrected full evaluation fits the three-hour cap. A prospective timing-only repair preserves the same440identities, model and decoding and must refresh source-bound metadata before a new call.
+
+Telemetry erratum: the native five-column CSV contains12samples, mean35.5833%,linear p10=38%,peak21459MiB including startup. The earlier no-samples report was a local parsing error and remains preserved. [Incomplete actual record](experiments/cards/READS-N3-XL6-INCOMPLETE-ACTUAL.json).
+
+<a id="student-v21-topup4-count-20261029"></a>
+## 2026-10-29T00:30:08.396541Z — Student v2.1 new-source count below the training gate
+
+The reviewed v5 derivation published a pending-review count of90,362selected/deduplicated/encodeddecisions, including **70,689eligibleNEWtrainingdecisions**:54,018legacy-P6 plus16,671four-farmtopup. The required100,000NEWtrainingdecisions is not met: **29,311short**. Raw226,655decisions are not eligibility. No Student training ran. Actual independent source/count review is pending; farms05/06 require a prospectively versioned producer/catalog admission before inclusion. [Count record](experiments/cards/STUDENT-V21-TOPUP4-ACTUAL-COUNT.json).
