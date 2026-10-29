@@ -25,6 +25,12 @@ HardRead builds on the open-source projects, open model weights and public data 
 
 The 0.128.8/0.39.0 local Mac app versions are historical. The isolated macOS CPython 3.13 deployment client has Modal 1.2.4, FastAPI 0.143.0 and Starlette 1.7.0 installed; it has no httpx or Uvicorn. The separate Linux hosting runtime versions are prospective lockfile pins, and `deploy/runtime.lock` does not pin Modal. These entries document source/dependency attribution, not a completed remote build, runtime smoke test, or deployment.
 
+
+## Prospective Mac clean-CLI package inputs
+
+The prospective Mac CPython 3.13 setup input set contains 9 wheels and 55 Rust crate archives, including target-specific crates. In the preserved one-shot setup attempt, all 64 package archives were downloaded and hash-verified before the data phase ended on HTTP 403; no package was installed and no build started. These separately acquired inputs are not bundled in this repository. The archive list is recorded in the [frozen package manifest](tools/setup/mac-cp313-arm64.artifacts.json) and [runtime](tools/setup/requirements-runtime-cp313-macos-arm64.candidate.lock) and [build-tool](tools/setup/requirements-build-tools-cp313-macos-arm64.candidate.lock) locks.
+
+The [package inventory](THIRD_PARTY_SETUP.md) reports declared wheel `METADATA` or Cargo.toml licence strings and whether each archive contains a licence/notice filename. It records metadata only; it does not determine licence compatibility, redistribution rights, adoption, or a completed clean setup. The literal `Dual License` declaration is retained as-is. Licence file contents were not reviewed.
 ## Models
 
 | Model | Source | Licence (file SHA-256) | How HardRead uses it | Shipped? |
