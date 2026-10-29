@@ -1781,3 +1781,8 @@ Evidence: `experiments/cards/VIDEO-PRIVATE-TEASER-S83-20261029.json`. Ordinary r
 A read-only existing browser session exposed the official submission modal:12fields/controls,8required,3optional, plus an unmarked Team Members control. No text limit was exposed; application/server limits remain unknown. Open Weights/Agentic controls were not observed in this modal; later steps remain unknown. No field values or account identity were retained, no fields/consent/submission were changed.
 
 Handoffcommitd38aed1 aligns the private draft with that exact order and adds distinct Meta-use and Meta-importance answers after one original public-copy review. Root rechecked source/patch/draft hashes, all labels/markers and unchanged v5 short/long descriptions. Evidence: `experiments/cards/SUBMISSION-OBSERVED-FORM-ALIGNMENT-20261029.json`. This closes field-discovery preparation only: actual owner details, public URLs, final video/release and permission/submission remain pending. No model call, new science score or change to39ledger entries/selection.
+
+
+## 2026-10-29T16:30:28.935062+00:00 — README local setup disclosure
+
+Integrated one reviewed paragraph distinguishing the dated development-Mac installation table from a fresh-machine recipe. Root checked exact source/patch/candidate bytes and the existing offline CLI documentation. Sol accepted one original changed-copy review. Fresh clone/isolated venv/local review acceptance remains false; the app quickstart remains in preparation. Evidence: `experiments/cards/README-LOCAL-SETUP-DISCLOSURE-20261029.json`. No dependency acquisition, install, build, model/engine call, source/A1 mutation, paid action or publication. All39model ledger entries unchanged/unfrozen.

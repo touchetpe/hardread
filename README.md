@@ -29,6 +29,8 @@ Pokémon is the testbed; the method is decision review under hidden information.
 
 The owner relayed the Oct 28 organizer ruling: HardRead is fair game as a real engine-backed tool, conditional on actual owner usefulness and clear README/demo differentiation from a one-prompt wrapper. This addresses the sports-analyzer example only; other submission, ownership, privacy, model and publication gates remain. [Q10](#organizer-ruling)
 
+> **Local setup status.** The installation table below records the development Mac as of 2026-10-26; it is not a fresh-machine install recipe. The offline review command is documented in `tools/review/README.md`, but a fresh clone and isolated venv have not yet completed a local review. A clean run still needs the pinned Foul Play fork, a Mac-compatible native `poke-engine` build, its Python packages, and four Foul Play data inputs acquired afresh. The app quickstart is in preparation; use the local CLI only after its dependencies and data have been verified.
+
 ## What's installed (2026-10-26)
 
 | Component | Where | Pin |
