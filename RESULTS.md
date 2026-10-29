@@ -1513,3 +1513,18 @@ The unchanged pinned projection over all 100,000 pairs on six ranks is **83,839.
 Eight one-minute native GPU samples, including startup idle, averaged **37% utilization, p10 0%**, with peak sampled memory **71,239 MiB**. These samples do not establish steady-state utilization. Source `b9be2cd` uses six ranks and accumulation eight (global 48 pairs per update); an earlier coordinator description of global batch 12 was wrong and did not change the source. The next repair will preserve the original objective, full data and source batch, and must pass a fresh actual runtime qualification.
 
 Evidence: `experiments/cards/DPO-QUALIFIER-R2-ACTUAL-READOUT.json`; independent actual review SHA-256 `0c9fe0c2e780edfa0b33dd605ae2a5771cd33ae88f729f4668bfdfe6d1e19ac3`, separate fit proof `263ca187…c8b06` and timing rejection `69618f7e…b1eb`. No statistical CI or p-value applies to this engineering qualification.
+
+
+<a id="dpo-response-preflight-failed-20261028"></a>
+## 2026-10-29T00:01:42.471347Z — Response-only DPO qualifier fails before model load
+
+`hrdpo-qual-20261029-response-2d5ca35c` was created23:51:47 UTC, reached Running, then was observed Failed23:55:46. Input preflight deliberately rejected `pair source review differs`: the coordinator's new config placed the independent code-review hash in the field for the original admitted-pair source review. The frozen pair manifest and data did not change. Independent final-render acceptance was withdrawn for this configuration; the separately accepted response-only source remains unchanged.
+
+No model load, native API/parity, memory-fit, reference cache or throughput observation was obtained. Two startup GPU samples were0%/0MiB. This is an engineering failure, with no AI quality conclusion. The prospective repair restores the manifest's original admitted-pair review and regenerates the config/approval/YAML/resource pins in a new stage and exact-name job. All100k pairs,6ranks/8accumulation/global48 and12h full-training cap remain. Full six-node training has not started. Evidence: `experiments/cards/DPO-RESPONSE-QUALIFIER-FAILED-PREFLIGHT.json`; independent actual failure gate SHA `0133934570fc76e60f65c9881ac86f6c56097eab4401aa747238207cdaa16189`.
+
+<a id="w2-offline-build-failed-20261028"></a>
+## 2026-10-29T00:01:42.471347Z — Hosting image identity and resource proof pass; offline build fails
+
+The corrected offline import is cryptographically bound to the two approved image configurations and ordered layers. Docker29's inspect ID is a target manifest digest, rather than the expected configuration digest; exact local manifest payloads close that mapping. The resource-only probe passed the unchanged2CPU/4GiB/no-swap cgroup check using the approved script over stdin. An earlier host-bind probe failed before container creation and remains preserved.
+
+The single approved offline legacy build ran23:56:32–23:56:37 UTC and failed with `COPY failed: NotFound: parent snapshot <digest> does not exist`. No target image was created. No retry or BuildKit fallback ran, and the ten-replay container smoke was not run. No native ABI/install or deployment readiness is claimed. Working local app remains the fallback; missing a public link weakens the Demo and CommunityVote route. Final evidence index SHA `54dcd1b2ec2e4c9a86f701d8344841e1ffdc4b03cc89fc65fc8455616bb1fe69`.
