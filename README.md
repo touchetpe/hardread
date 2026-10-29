@@ -9,11 +9,11 @@ Foul Play is pmariglia’s independent GPL-3.0 open-source search bot and winner
 
 ## How HardRead differs from a typical AI analyzer
 
-The comparator is the one-prompt wrapper described in the owner-relayed Q10 ruling. This is a product-shape comparison, not a measured benchmark of every AI analyzer. [Q10](handoff/NOW.md)
+The comparator is the one-prompt wrapper described in the owner-relayed Q10 ruling. This is a product-shape comparison, not a measured benchmark of every AI analyzer. [Q10](#organizer-ruling)
 
 | | One-prompt AI analyzer | HardRead |
 |---|---|---|
-| Who does the analysis | An LLM responds from a prompt. | Foul Play's independent search engine samples possible hidden sets and continuations. HardRead adds finished-replay review, luck estimation and stated-read testing. [Foul Play](foul-play/) |
+| Who does the analysis | An LLM responds from a prompt. | Foul Play's independent search engine samples possible hidden sets and continuations. HardRead adds finished-replay review, luck estimation and stated-read testing. [Foul Play](https://github.com/pmariglia/foul-play) |
 | Where the numbers come from | The model generates answer text. | The engine computes underlying values. In the accepted D1 flow, application code fills displayed numeric slots from cited tool fields, and a verifier rejects uncited numeric claims. This checks provenance, not whether every estimate or sentence is correct. [D1](RESULTS.md#d1-template-ui-20261028) |
 | What has been measured | No comparison result is asserted here for generic analyzers. | On the registered 60k/.08 offered-decision cohort, false decisive verdicts were **18/184 = 9.78%** (Wilson 95% CI **6.28–14.93%**); separate bot self-play luck mirror correlation was **−0.81**; the shipped bridge passed its Draft-B gate on **292 game-sides**; and the S2.2 calibration upgrade **failed** and was not switched on. [VT1](RESULTS.md#src-vt1-60k-08) [LUCK-SP](RESULTS.md#src-luck-v2-self-play) [BRIDGE](RESULTS.md#src-bridge-draft-b) [S2.2](RESULTS.md#src-s22-calibration-fail) |
 | What the player can test | A free-form question. | In the selected review flow, a player can enter a stated read with a team export and compare a chosen move with engine alternatives using three seeded searches and a within-noise verdict rule. D1 passed three selected template-based engineering flows; this is not human accuracy or a general end-to-end rate. [D1](RESULTS.md#d1-template-ui-20261028) [VT1](RESULTS.md#src-vt1-60k-08) |
@@ -25,7 +25,9 @@ Separate game-playing research: a **24.9M-parameter Student v2** scored **173/20
 
 Pokémon is the testbed; the method is decision review under hidden information.
 
-The owner relayed the Oct 28 organizer ruling: HardRead is fair game as a real engine-backed tool, conditional on actual owner usefulness and clear README/demo differentiation from a one-prompt wrapper. This addresses the sports-analyzer example only; other submission, ownership, privacy, model and publication gates remain. [Q10](handoff/NOW.md)
+<a id="organizer-ruling"></a>
+
+The owner relayed the Oct 28 organizer ruling: HardRead is fair game as a real engine-backed tool, conditional on actual owner usefulness and clear README/demo differentiation from a one-prompt wrapper. This addresses the sports-analyzer example only; other submission, ownership, privacy, model and publication gates remain. [Q10](#organizer-ruling)
 
 ## What's installed (2026-10-26)
 
