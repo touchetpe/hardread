@@ -131,3 +131,22 @@ The scripts in `azure/` read the workspace settings from environment variables: 
   - Setup: llama.cpp `f8def7fe` built with CUDA for sm_90; pinned Q4_K_M GGUF downloaded with its hash checked.
   - Replays 31 real battle requests with reasoning low vs off, 1 vs 4 slots.
 - **Attempts** (staged code, `job.yml`, create responses) are kept under `azure/attempts/<job>/`.
+
+### Clean local CLI on Mac arm64 / CPython 3.13
+
+This procedure needs a completed replay log and its matching own-team export, an existing approved engine sdist, the pinned Rust 1.89 toolchain, and a separate local Foul Play Git checkout containing commit `f061e63d3d588f30e72af2f4a7d12d3101896d02`. Foul Play is not included in this repository. The engine sdist must have SHA-256 `070010686f2aedff11e25137e696e301ccd80fd57c805d255464067fc905ca12`. Use the directly installed Rust/Cargo 1.89 binaries pinned by the setup helper; a rustup installer shim does not satisfy this requirement.
+
+Set these variables to absolute paths to your local inputs before running the commands below: `PYTHON`, `RUST_BIN`, `ENGINE_SDIST`, `FOULPLAY_SOURCE`, `REPLAY`, `TEAM`, and `HARDREAD_SOURCE`. `HARDREAD_SOURCE` is the local HardRead Git checkout whose current commit contains these setup instructions. Use a private output location. This performs one attempt, bounded to 30 minutes, with new isolated environments and no shared dependency cache.
+
+```sh
+: "${PYTHON:?absolute path to CPython 3.13}" "${RUST_BIN:?absolute path to Rust 1.89 bin directory}" "${ENGINE_SDIST:?absolute path to approved engine sdist}" "${FOULPLAY_SOURCE:?absolute path to Foul Play git checkout}" "${REPLAY:?absolute path to completed replay}" "${TEAM:?absolute path to matching team export}" "${HARDREAD_SOURCE:?absolute path to HardRead git checkout}"
+umask 077
+BASE="$(mktemp -d "${TMPDIR:-/tmp}/hardread-clean.XXXXXXXX")"
+HARDREAD_COMMIT="$(git -C "$HARDREAD_SOURCE" rev-parse HEAD)"
+git clone --no-local --no-checkout "$HARDREAD_SOURCE" "$BASE/hardread"
+git -C "$BASE/hardread" checkout --detach "$HARDREAD_COMMIT"
+cd "$BASE/hardread"
+"$PYTHON" tools/setup/clean_cli.py --python "$PYTHON" --rust-bin "$RUST_BIN" --engine-sdist "$ENGINE_SDIST" --foulplay-source "$FOULPLAY_SOURCE" --replay "$REPLAY" --team "$TEAM" --side p2 --run "$BASE/run"
+```
+
+Select `--side p1` if your team was player one. The run records the checked-out source commit, data hashes, stage logs and resulting review in its private directory. It fetches exactly 64 pinned package/crate bodies totaling 32,411,866 bytes and four private upstream set-data bodies under a 32 MiB combined raw cap. The set-data licence is unverified; keep those bodies private and do not redistribute them. This uses local resources and no paid or cloud service. Downloads, installation and native compilation need your authorization. No previous data cache or compiled dependency is reused.

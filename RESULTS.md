@@ -1813,3 +1813,8 @@ The Teams section now identifies the reserve counts as the Oct26 split record an
 ## 2026-10-29T17:06:58.630084+00:00 — Open Weights citation fits planned public source selection
 
 One citation in `OPEN_WEIGHTS.md` now targets the existing clean/pooled G1 RESULTS anchor instead of an operational card excluded from the source proposal. Root verified the exact one-link delta and current/frozen468 anchor support; original narrow public-copy review ACCEPT. The next public selection must still add the page and carry the README link. No export was regenerated and no scan/publication, new measurement or overall release PASS occurred. Evidence: `experiments/cards/OPEN-WEIGHTS-EXPORT-LINK-20261029.json`.
+
+
+## 2026-10-29T17:25:42.482492+00:00 — Prospective portable clean CLI setup source
+
+The Mac arm64/CPython3.13 README procedure and `tools/setup/` now accept explicit local source/tool/input paths, fresh clones and isolated dependency/cache directories. The bounded installer records new product-input hashes, supports chunked transfers within caps, vendors Cargo offline and cleans up its own failed child stages. Root verified exact64artifact projections and ran9synthetic tests successfully; one original source/scope/public-step review ACCEPT. No dependency acquisition/install/build or actual fresh review occurred. S6.4 remains pending specific acquisition/install approval and the literal new review. Python socket denial is not OS-level native isolation. Existing engine science, source locks and39model scores unchanged. Evidence: `experiments/cards/CLEAN-CLI-PORTABLE-SOURCE-20261029.json`.

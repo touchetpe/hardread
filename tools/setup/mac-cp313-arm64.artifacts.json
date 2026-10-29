@@ -1,0 +1,456 @@
+{
+  "all_registry_checksums_match_lock": true,
+  "build_tool_candidate": {
+    "candidate": {
+      "filename": "maturin-1.15.0-py3-none-macosx_10_12_x86_64.macosx_11_0_arm64.macosx_10_12_universal2.whl",
+      "sha256": "cd35772633f489841132bc8e71d6fc7f842df30b9c05cd5cdf1ee1ddcb744cc7",
+      "size_bytes": 19416513,
+      "url": "https://files.pythonhosted.org/packages/eb/1f/2b431554e11687cdb1077e0cdadcc118c53f611086b3af00c8545a67c6a5/maturin-1.15.0-py3-none-macosx_10_12_x86_64.macosx_11_0_arm64.macosx_10_12_universal2.whl"
+    }
+  },
+  "native_engine": {
+    "approved_existing_sdist": {
+      "sha256": "070010686f2aedff11e25137e696e301ccd80fd57c805d255464067fc905ca12",
+      "size_bytes": 393495
+    }
+  },
+  "registry_packages": [
+    {
+      "crate_size_bytes": 30928,
+      "download_url": "https://crates.io/api/v1/crates/anstream/0.6.13/download",
+      "lock_checksum": "d96bd03f33fe50a863e394ee9718a706f988b9079b20c3784fb726e7678b62fb",
+      "name": "anstream",
+      "version": "0.6.13"
+    },
+    {
+      "crate_size_bytes": 14604,
+      "download_url": "https://crates.io/api/v1/crates/anstyle/1.0.6/download",
+      "lock_checksum": "8901269c6307e8d93993578286ac0edf7f195079ffff5ebdeea6a59ffb7e36bc",
+      "name": "anstyle",
+      "version": "1.0.6"
+    },
+    {
+      "crate_size_bytes": 24699,
+      "download_url": "https://crates.io/api/v1/crates/anstyle-parse/0.2.3/download",
+      "lock_checksum": "c75ac65da39e5fe5ab759307499ddad880d724eed2f6ce5b5e8a26f4f387928c",
+      "name": "anstyle-parse",
+      "version": "0.2.3"
+    },
+    {
+      "crate_size_bytes": 8739,
+      "download_url": "https://crates.io/api/v1/crates/anstyle-query/1.0.2/download",
+      "lock_checksum": "e28923312444cdd728e4738b3f9c9cac739500909bb3d3c94b43551b16517648",
+      "name": "anstyle-query",
+      "version": "1.0.2"
+    },
+    {
+      "crate_size_bytes": 11272,
+      "download_url": "https://crates.io/api/v1/crates/anstyle-wincon/3.0.2/download",
+      "lock_checksum": "1cd54b81ec8d6180e24654d0b371ad22fc3dd083b6ff8ba325b72e00c87660a7",
+      "name": "anstyle-wincon",
+      "version": "3.0.2"
+    },
+    {
+      "crate_size_bytes": 49082,
+      "download_url": "https://crates.io/api/v1/crates/bitflags/2.11.1/download",
+      "lock_checksum": "c4512299f36f043ab09a583e57bceb5a5aab7a73db1805848e8fef3c9e8c78b3",
+      "name": "bitflags",
+      "version": "2.11.1"
+    },
+    {
+      "crate_size_bytes": 7934,
+      "download_url": "https://crates.io/api/v1/crates/cfg-if/1.0.0/download",
+      "lock_checksum": "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd",
+      "name": "cfg-if",
+      "version": "1.0.0"
+    },
+    {
+      "crate_size_bytes": 55401,
+      "download_url": "https://crates.io/api/v1/crates/clap/4.5.4/download",
+      "lock_checksum": "90bc066a67923782aa8515dbaea16946c5bcc5addbd668bb80af688e53e548a0",
+      "name": "clap",
+      "version": "4.5.4"
+    },
+    {
+      "crate_size_bytes": 163566,
+      "download_url": "https://crates.io/api/v1/crates/clap_builder/4.5.2/download",
+      "lock_checksum": "ae129e2e766ae0ec03484e609954119f123cc1fe650337e155d03b022f24f7b4",
+      "name": "clap_builder",
+      "version": "4.5.2"
+    },
+    {
+      "crate_size_bytes": 29159,
+      "download_url": "https://crates.io/api/v1/crates/clap_derive/4.5.4/download",
+      "lock_checksum": "528131438037fd55894f62d6e9f068b8f45ac57ffa77517819645d10aed04f64",
+      "name": "clap_derive",
+      "version": "4.5.4"
+    },
+    {
+      "crate_size_bytes": 11915,
+      "download_url": "https://crates.io/api/v1/crates/clap_lex/0.7.0/download",
+      "lock_checksum": "98cc8fbded0c607b7ba9dd60cd98df59af97e84d24e49c8557331cfc26d301ce",
+      "name": "clap_lex",
+      "version": "0.7.0"
+    },
+    {
+      "crate_size_bytes": 6857,
+      "download_url": "https://crates.io/api/v1/crates/colorchoice/1.0.0/download",
+      "lock_checksum": "acbf1af155f9b9ef647e42cdc158db4b64a1b61f743629225fde6f3e0be2a7c7",
+      "name": "colorchoice",
+      "version": "1.0.0"
+    },
+    {
+      "crate_size_bytes": 42691,
+      "download_url": "https://crates.io/api/v1/crates/crossbeam-utils/0.8.21/download",
+      "lock_checksum": "d0a5c400df2834b80a4c3327b3aad3a4c4cd4de0629063962b03235697506a28",
+      "name": "crossbeam-utils",
+      "version": "0.8.21"
+    },
+    {
+      "crate_size_bytes": 24828,
+      "download_url": "https://crates.io/api/v1/crates/dashmap/6.1.0/download",
+      "lock_checksum": "5041cc499144891f3790297212f32a74fb938e5136a14943f338ef9e0ae276cf",
+      "name": "dashmap",
+      "version": "6.1.0"
+    },
+    {
+      "crate_size_bytes": 49493,
+      "download_url": "https://crates.io/api/v1/crates/getrandom/0.3.3/download",
+      "lock_checksum": "26145e563e54f2cadc477553f1ec5ee650b00862f0a58bcd12cbdc5f0ea2d2f4",
+      "name": "getrandom",
+      "version": "0.3.3"
+    },
+    {
+      "crate_size_bytes": 141498,
+      "download_url": "https://crates.io/api/v1/crates/hashbrown/0.14.5/download",
+      "lock_checksum": "e5274423e17b7c9fc20b6e7e208532f9b19825d82dfd615708b70edd83df41f1",
+      "name": "hashbrown",
+      "version": "0.14.5"
+    },
+    {
+      "crate_size_bytes": 11517,
+      "download_url": "https://crates.io/api/v1/crates/heck/0.5.0/download",
+      "lock_checksum": "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea",
+      "name": "heck",
+      "version": "0.5.0"
+    },
+    {
+      "crate_size_bytes": 743539,
+      "download_url": "https://crates.io/api/v1/crates/libc/0.2.155/download",
+      "lock_checksum": "97b3888a4aecf77e811145cadf6eef5901f4782c53886191b2f693f24761847c",
+      "name": "libc",
+      "version": "0.2.155"
+    },
+    {
+      "crate_size_bytes": 29249,
+      "download_url": "https://crates.io/api/v1/crates/lock_api/0.4.14/download",
+      "lock_checksum": "224399e74b87b5f3557511d98dff8b14089b3dadafcab6bb93eab67d3aace965",
+      "name": "lock_api",
+      "version": "0.4.14"
+    },
+    {
+      "crate_size_bytes": 34534,
+      "download_url": "https://crates.io/api/v1/crates/once_cell/1.21.3/download",
+      "lock_checksum": "42f5e15c9953c5e4ccceeb2e7382a716482c34515315f7b03532b8b4e8393d2d",
+      "name": "once_cell",
+      "version": "1.21.3"
+    },
+    {
+      "crate_size_bytes": 34110,
+      "download_url": "https://crates.io/api/v1/crates/parking_lot_core/0.9.12/download",
+      "lock_checksum": "2621685985a2ebf1c516881c026032ac7deafcda1a2c9b7850dc81e3dfcb64c1",
+      "name": "parking_lot_core",
+      "version": "0.9.12"
+    },
+    {
+      "crate_size_bytes": 145385,
+      "download_url": "https://crates.io/api/v1/crates/portable-atomic/1.7.0/download",
+      "lock_checksum": "da544ee218f0d287a911e9c99a39a8c9bc8fcad3cb8db5959940044ecfc67265",
+      "name": "portable-atomic",
+      "version": "1.7.0"
+    },
+    {
+      "crate_size_bytes": 22242,
+      "download_url": "https://crates.io/api/v1/crates/ppv-lite86/0.2.17/download",
+      "lock_checksum": "5b40af805b3121feab8a3c29f04d8ad262fa8e0561883e7653e024ae4479e6de",
+      "name": "ppv-lite86",
+      "version": "0.2.17"
+    },
+    {
+      "crate_size_bytes": 48958,
+      "download_url": "https://crates.io/api/v1/crates/proc-macro2/1.0.86/download",
+      "lock_checksum": "5e719e8df665df0d1c8fbfd238015744736151d4445ec0836b8e628aae103b77",
+      "name": "proc-macro2",
+      "version": "1.0.86"
+    },
+    {
+      "crate_size_bytes": 1241253,
+      "download_url": "https://crates.io/api/v1/crates/pyo3/0.29.0/download",
+      "lock_checksum": "cd274650b21d4bfc26a0a47587962c1edb425f69287324355cd040c3ea66071c",
+      "name": "pyo3",
+      "version": "0.29.0"
+    },
+    {
+      "crate_size_bytes": 39616,
+      "download_url": "https://crates.io/api/v1/crates/pyo3-build-config/0.29.0/download",
+      "lock_checksum": "c5e2a7d2f0d013342f295c048ad19237add5154a55b1c5a254c0ec93d4109078",
+      "name": "pyo3-build-config",
+      "version": "0.29.0"
+    },
+    {
+      "crate_size_bytes": 88184,
+      "download_url": "https://crates.io/api/v1/crates/pyo3-ffi/0.29.0/download",
+      "lock_checksum": "ca85c467da1bbc8d866eea5deff9cf29ea5f7785054a17da36e65bda9c05845b",
+      "name": "pyo3-ffi",
+      "version": "0.29.0"
+    },
+    {
+      "crate_size_bytes": 8915,
+      "download_url": "https://crates.io/api/v1/crates/pyo3-macros/0.29.0/download",
+      "lock_checksum": "9ac53762fd065daa3194dd09337a38bd793a188100fd1a9304c4ab312d901771",
+      "name": "pyo3-macros",
+      "version": "0.29.0"
+    },
+    {
+      "crate_size_bytes": 91943,
+      "download_url": "https://crates.io/api/v1/crates/pyo3-macros-backend/0.29.0/download",
+      "lock_checksum": "4ca3a1557399783172dc5bf39cfca835157732532cba56b71d2292161e53b362",
+      "name": "pyo3-macros-backend",
+      "version": "0.29.0"
+    },
+    {
+      "crate_size_bytes": 31564,
+      "download_url": "https://crates.io/api/v1/crates/quote/1.0.45/download",
+      "lock_checksum": "41f2619966050689382d2b44f664f4bc593e129785a36d6ee376ddf37259b924",
+      "name": "quote",
+      "version": "1.0.45"
+    },
+    {
+      "crate_size_bytes": 64532,
+      "download_url": "https://crates.io/api/v1/crates/r-efi/5.3.0/download",
+      "lock_checksum": "69cdb34c158ceb288df11e18b4bd39de994f6657d83847bdffdbd7f346754b0f",
+      "name": "r-efi",
+      "version": "5.3.0"
+    },
+    {
+      "crate_size_bytes": 99786,
+      "download_url": "https://crates.io/api/v1/crates/rand/0.9.4/download",
+      "lock_checksum": "44c5af06bb1b7d3216d91932aed5265164bf384dc89cd6ba05cf59a35f5f76ea",
+      "name": "rand",
+      "version": "0.9.4"
+    },
+    {
+      "crate_size_bytes": 18258,
+      "download_url": "https://crates.io/api/v1/crates/rand_chacha/0.9.0/download",
+      "lock_checksum": "d3022b5f1df60f26e1ffddd6c66e8aa15de382ae63b3a0c1bfc0e4d3e3f325cb",
+      "name": "rand_chacha",
+      "version": "0.9.0"
+    },
+    {
+      "crate_size_bytes": 24543,
+      "download_url": "https://crates.io/api/v1/crates/rand_core/0.9.3/download",
+      "lock_checksum": "99d9a13982dcf210057a8a78572b2217b667c3beacbf3a0d8b454f6f82837d38",
+      "name": "rand_core",
+      "version": "0.9.3"
+    },
+    {
+      "crate_size_bytes": 30747,
+      "download_url": "https://crates.io/api/v1/crates/redox_syscall/0.5.18/download",
+      "lock_checksum": "ed2bf2547551a7053d6fdfafda3f938979645c44812fbfcda098faae3f1a362d",
+      "name": "redox_syscall",
+      "version": "0.5.18"
+    },
+    {
+      "crate_size_bytes": 11619,
+      "download_url": "https://crates.io/api/v1/crates/scopeguard/1.2.0/download",
+      "lock_checksum": "94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49",
+      "name": "scopeguard",
+      "version": "1.2.0"
+    },
+    {
+      "crate_size_bytes": 38116,
+      "download_url": "https://crates.io/api/v1/crates/smallvec/1.15.1/download",
+      "lock_checksum": "67b1b7a3b5fe4f1376887184045fcf45c69e92af734b7aaddc05fb777b6fbd03",
+      "name": "smallvec",
+      "version": "1.15.1"
+    },
+    {
+      "crate_size_bytes": 13710,
+      "download_url": "https://crates.io/api/v1/crates/strsim/0.11.0/download",
+      "lock_checksum": "5ee073c9e4cd00e28217186dbe12796d692868f432bf2e97ee73bed0c56dfa01",
+      "name": "strsim",
+      "version": "0.11.0"
+    },
+    {
+      "crate_size_bytes": 268798,
+      "download_url": "https://crates.io/api/v1/crates/syn/2.0.76/download",
+      "lock_checksum": "578e081a14e0cefc3279b0472138c513f37b41a08d5a3cca9b6e4e8ceb6cd525",
+      "name": "syn",
+      "version": "2.0.76"
+    },
+    {
+      "crate_size_bytes": 28498,
+      "download_url": "https://crates.io/api/v1/crates/target-lexicon/0.13.3/download",
+      "lock_checksum": "df7f62577c25e07834649fc3b39fafdc597c0a3527dc1c60129201ccfcbaa50c",
+      "name": "target-lexicon",
+      "version": "0.13.3"
+    },
+    {
+      "crate_size_bytes": 42168,
+      "download_url": "https://crates.io/api/v1/crates/unicode-ident/1.0.12/download",
+      "lock_checksum": "3354b9ac3fae1ff6755cb6db53683adb661634f67557942dea4facebec0fee4b",
+      "name": "unicode-ident",
+      "version": "1.0.12"
+    },
+    {
+      "crate_size_bytes": 13435,
+      "download_url": "https://crates.io/api/v1/crates/utf8parse/0.2.1/download",
+      "lock_checksum": "711b9620af191e0cdc7468a8d14e709c3dcdb115b36f838e601583af800a370a",
+      "name": "utf8parse",
+      "version": "0.2.1"
+    },
+    {
+      "crate_size_bytes": 18219,
+      "download_url": "https://crates.io/api/v1/crates/wasi/0.14.7+wasi-0.2.4/download",
+      "lock_checksum": "883478de20367e224c0090af9cf5f9fa85bed63a95c1abf3afc5c083ebc06e8c",
+      "name": "wasi",
+      "version": "0.14.7+wasi-0.2.4"
+    },
+    {
+      "crate_size_bytes": 132087,
+      "download_url": "https://crates.io/api/v1/crates/wasip2/1.0.1+wasi-0.2.4/download",
+      "lock_checksum": "0562428422c63773dad2c345a1882263bbf4d65cf3f42e90921f787ef5ad58e7",
+      "name": "wasip2",
+      "version": "1.0.1+wasi-0.2.4"
+    },
+    {
+      "crate_size_bytes": 6133,
+      "download_url": "https://crates.io/api/v1/crates/windows-link/0.2.1/download",
+      "lock_checksum": "f0805222e57f7521d6a62e36fa9163bc891acd422f971defe97d64e70d0a4fe5",
+      "name": "windows-link",
+      "version": "0.2.1"
+    },
+    {
+      "crate_size_bytes": 2576877,
+      "download_url": "https://crates.io/api/v1/crates/windows-sys/0.52.0/download",
+      "lock_checksum": "282be5f36a8ce781fad8c8ae18fa3f9beff57ec1b52cb3de0789201425d9a33d",
+      "name": "windows-sys",
+      "version": "0.52.0"
+    },
+    {
+      "crate_size_bytes": 6310,
+      "download_url": "https://crates.io/api/v1/crates/windows-targets/0.52.4/download",
+      "lock_checksum": "7dd37b7e5ab9018759f893a1952c9420d060016fc19a472b4bb20d1bdd694d1b",
+      "name": "windows-targets",
+      "version": "0.52.4"
+    },
+    {
+      "crate_size_bytes": 433373,
+      "download_url": "https://crates.io/api/v1/crates/windows_aarch64_gnullvm/0.52.4/download",
+      "lock_checksum": "bcf46cf4c365c6f2d1cc93ce535f2c8b244591df96ceee75d8e83deb70a9cac9",
+      "name": "windows_aarch64_gnullvm",
+      "version": "0.52.4"
+    },
+    {
+      "crate_size_bytes": 828055,
+      "download_url": "https://crates.io/api/v1/crates/windows_aarch64_msvc/0.52.4/download",
+      "lock_checksum": "da9f259dd3bcf6990b55bffd094c4f7235817ba4ceebde8e6d11cd0c5633b675",
+      "name": "windows_aarch64_msvc",
+      "version": "0.52.4"
+    },
+    {
+      "crate_size_bytes": 875736,
+      "download_url": "https://crates.io/api/v1/crates/windows_i686_gnu/0.52.4/download",
+      "lock_checksum": "b474d8268f99e0995f25b9f095bc7434632601028cf86590aea5c8a5cb7801d3",
+      "name": "windows_i686_gnu",
+      "version": "0.52.4"
+    },
+    {
+      "crate_size_bytes": 895530,
+      "download_url": "https://crates.io/api/v1/crates/windows_i686_msvc/0.52.4/download",
+      "lock_checksum": "1515e9a29e5bed743cb4415a9ecf5dfca648ce85ee42e15873c3cd8610ff8e02",
+      "name": "windows_i686_msvc",
+      "version": "0.52.4"
+    },
+    {
+      "crate_size_bytes": 831627,
+      "download_url": "https://crates.io/api/v1/crates/windows_x86_64_gnu/0.52.4/download",
+      "lock_checksum": "5eee091590e89cc02ad514ffe3ead9eb6b660aedca2183455434b93546371a03",
+      "name": "windows_x86_64_gnu",
+      "version": "0.52.4"
+    },
+    {
+      "crate_size_bytes": 433358,
+      "download_url": "https://crates.io/api/v1/crates/windows_x86_64_gnullvm/0.52.4/download",
+      "lock_checksum": "77ca79f2451b49fa9e2af39f0747fe999fcda4f5e241b2898624dca97a1f2177",
+      "name": "windows_x86_64_gnullvm",
+      "version": "0.52.4"
+    },
+    {
+      "crate_size_bytes": 828019,
+      "download_url": "https://crates.io/api/v1/crates/windows_x86_64_msvc/0.52.4/download",
+      "lock_checksum": "32b752e52a2da0ddfbdbcc6fceadfeede4c939ed16d13e648833a61dfb611ed8",
+      "name": "windows_x86_64_msvc",
+      "version": "0.52.4"
+    },
+    {
+      "crate_size_bytes": 60508,
+      "download_url": "https://crates.io/api/v1/crates/wit-bindgen/0.46.0/download",
+      "lock_checksum": "f17a85883d4e6d00e8a97c586de764dabcc06133f7f1d55dce5cdc070ad7fe59",
+      "name": "wit-bindgen",
+      "version": "0.46.0"
+    }
+  ],
+  "runtime_wheel_candidates": {
+    "wheels": [
+      {
+        "filename": "requests-2.33.0-py3-none-any.whl",
+        "sha256": "3324635456fa185245e24865e810cecec7b4caf933d7eb133dcde67d48cee69b",
+        "size_bytes": 65017,
+        "url": "https://files.pythonhosted.org/packages/56/5d/c814546c2333ceea4ba42262d8c4d55763003e767fa169adc693bd524478/requests-2.33.0-py3-none-any.whl"
+      },
+      {
+        "filename": "websockets-14.1-cp313-cp313-macosx_11_0_arm64.whl",
+        "sha256": "5b918d288958dc3fa1c5a0b9aa3256cb2b2b84c54407f4813c45d52267600cd3",
+        "size_bytes": 159857,
+        "url": "https://files.pythonhosted.org/packages/f8/47/2a0a3a2fc4965ff5b9ce9324d63220156bd8bedf7f90824ab92a822e65fd/websockets-14.1-cp313-cp313-macosx_11_0_arm64.whl"
+      },
+      {
+        "filename": "python_dateutil-2.8.0-py2.py3-none-any.whl",
+        "sha256": "7e6584c74aeed623791615e26efd690f29817a27c73085b78e4bad02493df2fb",
+        "size_bytes": 226803,
+        "url": "https://files.pythonhosted.org/packages/41/17/c62faccbfbd163c7f57f3844689e3a78bae1f403648a6afb1d0866d87fbb/python_dateutil-2.8.0-py2.py3-none-any.whl"
+      },
+      {
+        "filename": "six-1.17.0-py2.py3-none-any.whl",
+        "sha256": "4721f391ed90541fddacab5acf947aa0d3dc7d27b2e1e8eda2be8970586c3274",
+        "size_bytes": 11050,
+        "url": "https://files.pythonhosted.org/packages/b7/ce/149a00dd41f10bc29e5921b496af8b574d8413afcd5e30dfa0ed46c2cc5e/six-1.17.0-py2.py3-none-any.whl"
+      },
+      {
+        "filename": "charset_normalizer-3.5.2-cp313-cp313-macosx_10_13_universal2.whl",
+        "sha256": "6045373d5a89a5ec71afde535db987ca28e76dfa276c2d4c818265b375d4b055",
+        "size_bytes": 366626,
+        "url": "https://files.pythonhosted.org/packages/91/da/3c5a7798c046df7d2d68ad653cf5b6c5a8bfee225055a843c6f2f42aac1a/charset_normalizer-3.5.2-cp313-cp313-macosx_10_13_universal2.whl"
+      },
+      {
+        "filename": "idna-3.20-py3-none-any.whl",
+        "sha256": "ab7ae7122974553370f0bdb919e1a960b2cd1bc1ef0276416d896db81c14582c",
+        "size_bytes": 69583,
+        "url": "https://files.pythonhosted.org/packages/58/a2/bb081bab032533a855d44de1d56f8e8426114ff1ba5d1f07a438a0a654f8/idna-3.20-py3-none-any.whl"
+      },
+      {
+        "filename": "urllib3-2.8.0-py3-none-any.whl",
+        "sha256": "0cf3cae568d36aa9576b28dfb35f11328f1cb974ca7647d9475ebb86c75ac6e3",
+        "size_bytes": 135717,
+        "url": "https://files.pythonhosted.org/packages/92/9d/c4e665119135114480843e7ab388fa94d8480650450e6f8e26b70d323a4c/urllib3-2.8.0-py3-none-any.whl"
+      },
+      {
+        "filename": "certifi-2026.7.22-py3-none-any.whl",
+        "sha256": "62f22742b58a1a33014a2b6b706588a8d7e2a88ae7bd1a6ebe8c992928483775",
+        "size_bytes": 136983,
+        "url": "https://files.pythonhosted.org/packages/0b/a7/71ac2cff56fec219ed242bb11b8efb69fcc4bec75db06fb7bfe35de520e6/certifi-2026.7.22-py3-none-any.whl"
+      }
+    ]
+  }
+}

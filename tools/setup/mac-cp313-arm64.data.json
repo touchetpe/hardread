@@ -1,0 +1,22 @@
+{
+  "data_inputs": {
+    "pins": [
+      {
+        "cache_path": "foul-play/fp/data/pkmn_sets_cache/gen9ou/pokemon_full_sets.json",
+        "primary_source_url_derived_from_static_code": "https://data.foulplay.cc/gen9ou/pokemon_full_sets.json"
+      },
+      {
+        "cache_path": "foul-play/fp/data/pkmn_sets_cache/gen9ou/replay_moves.json",
+        "primary_source_url_derived_from_static_code": "https://data.foulplay.cc/gen9ou/replay_moves.json"
+      },
+      {
+        "cache_path": "foul-play/fp/data/pkmn_sets_cache/gen9ou/showdown_sets.json",
+        "primary_source_url_derived_from_static_code": "https://play.pokemonshowdown.com/data/sets/gen9ou.json"
+      },
+      {
+        "cache_path": "foul-play/fp/data/smogon_stats_cache/gen9ou-0.json",
+        "primary_source_url_derived_from_static_code": "https://www.smogon.com/stats/2026-09/chaos/gen9ou-0.json"
+      }
+    ]
+  }
+}
