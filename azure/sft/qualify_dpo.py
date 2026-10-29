@@ -104,7 +104,24 @@ def capture_runtime_receipt(output,cfg,config_sha,binding):
     return receipt,digest
 
 
-def response_parity_probe(policy,pairs,reference,device,pad_id,check):
+def write_parity_diagnostic(output,pair_id,config_sha,binding,full_positions,selected_positions,metrics):
+    """Durably persist scalar threshold diagnostics, never model tensors or data."""
+    import re
+    fields=('arm_logp_max_abs_error','loss_abs_error','gradient_cosine','gradient_relative_l2_error','adamw_update_relative_l2_error')
+    if not isinstance(pair_id,str) or not pair_id or not re.fullmatch('[0-9a-f]{64}',str(config_sha)) or not isinstance(binding,dict) or not re.fullmatch('[0-9a-f]{64}',str(binding.get('code_sha256',''))):raise T.DPOError('parity receipt binding invalid')
+    if type(full_positions) is not int or type(selected_positions) is not int or not 0<selected_positions<full_positions or not isinstance(metrics,dict) or set(metrics)!=set(fields):raise T.DPOError('parity receipt shape invalid')
+    finite={k:type(metrics[k]) in (int,float) and math.isfinite(metrics[k]) for k in fields}
+    safe={k:float(metrics[k]) if finite[k] else None for k in fields}
+    limits={'arm_logp_max_abs_error':{'operator':'<=','value':0.01},'loss_abs_error':{'operator':'<=','value':0.001},'gradient_cosine':{'operator':'>=','value':0.9999},'gradient_relative_l2_error':{'operator':'<=','value':0.01},'adamw_update_relative_l2_error':{'operator':'<=','value':0.01}}
+    passed=all(finite.values()) and metrics[fields[0]]<=0.01 and metrics[fields[1]]<=0.001 and metrics[fields[2]]>=0.9999 and metrics[fields[3]]<=0.01 and metrics[fields[4]]<=0.01
+    pair_hash=hashlib.sha256(pair_id.encode()).hexdigest()
+    receipt={'schema':'hardread.dpo.response-parity-diagnostic/v1','status':'passed' if passed else 'failed','config_sha256':config_sha,'binding_sha256':T.fingerprint(binding),'code_sha256':binding['code_sha256'],'pair_id_sha256':pair_hash,'full_positions':full_positions,'selected_positions':selected_positions,'metrics':safe,'finite':finite,'thresholds':limits}
+    path=Path(output)/('parity-diagnostic-'+pair_hash+'.json');T.exclusive_bytes(path,T.canonical(receipt)+b'\n')
+    if json.loads(path.read_bytes())!=receipt:raise T.DPOError('parity receipt readback differs')
+    return receipt
+
+
+def response_parity_probe(policy,pairs,reference,device,pad_id,check,output,config_sha,binding):
     """Pre-update dense/selected parity, with temporary AdamW state, no tensor output."""
     import torch
     import gc
@@ -142,8 +159,10 @@ def response_parity_probe(policy,pairs,reference,device,pad_id,check):
             delta_norm=float(torch.linalg.vector_norm(da))
             if not delta_norm:raise T.DPOError('parity optimizer update zero')
             step_rel=float(torch.linalg.vector_norm(da-db)/delta_norm)
-            if not all(math.isfinite(x) for x in (lpd,ld,cosine,rel,step_rel)) or lpd>0.01 or ld>0.001 or cosine<0.9999 or rel>0.01 or step_rel>0.01:raise T.DPOError('dense/selected parity differs')
             ids,labels,_=T._pair_tensors(pair,device,pad_id);pos=T._response_positions(labels,T._vocab_size(policy))
+            metrics={'arm_logp_max_abs_error':lpd,'loss_abs_error':ld,'gradient_cosine':cosine,'gradient_relative_l2_error':rel,'adamw_update_relative_l2_error':step_rel}
+            write_parity_diagnostic(output,pair['pair_id'],config_sha,binding,ids.shape[1],pos.numel(),metrics)
+            if not all(math.isfinite(x) for x in (lpd,ld,cosine,rel,step_rel)) or lpd>0.01 or ld>0.001 or cosine<0.9999 or rel>0.01 or step_rel>0.01:raise T.DPOError('dense/selected parity differs')
             results.append({'pair_id_sha256':hashlib.sha256(pair['pair_id'].encode()).hexdigest(),'full_positions':ids.shape[1],'selected_positions':pos.numel(),'arm_logp_max_abs_error':lpd,'loss_abs_error':ld,'gradient_cosine':cosine,'gradient_relative_l2_error':rel,'adamw_update_relative_l2_error':step_rel})
             del records,ga,gb,da,db
         restore()
@@ -202,7 +221,7 @@ def run(args):
     optimizer=torch.optim.AdamW(params,lr=T.LEARNING_RATE);policy.train();T.disable_dropout(policy)
     length=lambda p:(len(p['chosen']['input_ids'])+len(p['rejected']['input_ids']),p['pair_id'])
     shortest=min(shard,key=length);longest=max(shard,key=length)
-    parity=response_parity_probe(policy,[shortest,longest],cached,0,cfg['pad_id'],check)
+    parity=response_parity_probe(policy,[shortest,longest],cached,0,cfg['pad_id'],check,output,args.config_sha256,binding)
     check()
     def backward(pair,scale):
         check();t=time.monotonic();ch,rj=T.score_pair(policy,pair,0,cfg['pad_id']);v=cached[pair['pair_id']]
