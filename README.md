@@ -62,8 +62,11 @@ The owner relayed the Oct 28 organizer ruling: HardRead is fair game as a real e
   - sanity check: the validator rejects the known-bad example team.
 - **Diversity:** 386 species, 8,521 distinct 6-species rosters.
 - **Split** `data/teams/splits/hl_05_26-gen9ou-split-v1.json` (SHA-256 `575b5dc2…`):
-  - **30% of rosters (2,556 rosters, 14,136 teams) reserved and untouched** for a future held-out or sealed set;
+  - **At the 2026-10-26 split, 30% of rosters (2,556 rosters, 14,136 teams) were reserved and untouched** for later held-out or sealed evaluation;
   - 29,628 development teams.
+
+This is the pre-test reservation record. A 1,000-team pool, one team per reserved roster, was subsequently used for the registered sealed 10,000-game test, completed on Oct 28 with no demonstrated improvement. The dated split is not a claim that the reserve remains untouched today. Raw sealed team contents remain private; only recorded metadata and aggregate outcomes are public. [Protocol](PREREGISTRATION.md) [Sealed result](RESULTS.md#sealed-full-s41-20261028) [Data](DATA.md)
+
 - **Installed in the fork:**
   - `gen9/hr_hl_dev`: 2,000 development teams;
   - `gen9/hr_comp`: 11 legal expert teams.
