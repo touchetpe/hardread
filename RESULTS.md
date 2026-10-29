@@ -1548,3 +1548,27 @@ Telemetry erratum: the native five-column CSV contains12samples, mean35.5833%,li
 ## 2026-10-29T00:30:08.396541Z — Student v2.1 new-source count below the training gate
 
 The reviewed v5 derivation published a pending-review count of90,362selected/deduplicated/encodeddecisions, including **70,689eligibleNEWtrainingdecisions**:54,018legacy-P6 plus16,671four-farmtopup. The required100,000NEWtrainingdecisions is not met: **29,311short**. Raw226,655decisions are not eligibility. No Student training ran. Actual independent source/count review is pending; farms05/06 require a prospectively versioned producer/catalog admission before inclusion. [Count record](experiments/cards/STUDENT-V21-TOPUP4-ACTUAL-COUNT.json).
+
+
+<a id="reads-n3-xl6-timing-retry-20261029"></a>
+## 2026-10-29T01:00:13Z — Glimmer reads timing retry remains incomplete and unscored
+
+The N3 timing check completed **20 of 440 decisions**. Loading took **17.904 s** and the first 20 decisions took **687.424 s**; the projected remaining work was **14,435.902 s**, above the **9,879.260 s** available at the checkpoint, so the run ended incomplete on its timing gate. Quality scoring was not performed, no model outputs or labels were read, and this attempt did not produce a completed quality run. GPU telemetry contained 12 samples: mean utilization **35%**, linear p10 **38%**, and peak memory **21,459 MiB**. This is a timing-feasibility result, not an accuracy result; the earlier incomplete attempt remains preserved separately. [READS N3 timing-retry card](experiments/cards/READS-N3-XL6-TIMING-RETRY-ACTUAL.json).
+
+Evidence (repository-relative paths): `scratch_ds/codex/training-roadmap/glimmer-reads-n3/monitor-xl6-20261029T0045Z/poll-9/metadata-snapshot/timing-gate-readout.private.json` SHA-256 `5810f0dc2b81d87e8f55199557dc2f26d50f8cef0a3b9d5c90b0f5b428958a38`; `timing.json` SHA-256 `6276fb8813353460e88e308cae9c954ceb4f800d2a69fbf9d081621d172128f0`; `terminal.json` SHA-256 `743573867abb7d3e95e3a37e7e4fc4c58228440e8e55a82276234bfddae11db5`; `gpu-samples.log` SHA-256 `6d656ddc8fdc20aa25d4b22cd42edb552d1cafd06bb4ab806e5b010382bceea3`.
+
+<a id="dpo-stable-r6-actual-nogo-20261029"></a>
+## 2026-10-29T01:05:04Z — DPO stable-backend R6 qualification ends NO-GO
+
+The one-H100 stable-backend qualification recorded **48 scalar samples across 12 comparisons** in two six-comparison groups: one group passed and one failed. The failed group's maximum AdamW update relative-L2 error was **0.0665657285**, above the unchanged **0.01** limit. Arm log-probability and loss absolute errors were zero; the worst-case gradient cosine was **0.9999877880** and gradient relative-L2 error **0.0049461067**. The independent actual review classified the qualification **NO-GO**. Fit/memory/end-to-end timing were not proven, GPU utilization was unmeasured, and the full six-node run was not authorized. This is a qualification diagnostic, not a trained-model benchmark or quality result; the prior R4/R5 negatives remain in place. [R6 actual card](experiments/cards/DPO-STABLE-R6-ACTUAL-NOGO.json).
+
+Evidence (repository-relative paths): `scratch_ds/codex/training-roadmap/dpo-t2/qualification-stable-r6-final-20261029T0055Z/actual-runtime-20261029T010504Z.private/typed-receipt.private.json` SHA-256 `78670a41cbd04df8695d8c5c50c5f0b2f518801a57626317e6e0895b103b299c`; `scratch_ds/codex/training-roadmap/dpo-t2/qualification-stable-r6-final-20261029T0055Z/sol-actual-review.private/SOL-R6-ACTUAL-NOGO.private.json` SHA-256 `09b98b7c4dbbebdad2f0ad0c6f0d555da788e6cc9a2499832000cd6860b8e0e3`. The review binds both six-comparison parity summaries.
+
+<a id="student-v21-topup6-count-pending-20261029"></a>
+## 2026-10-29T01:20:45Z — Student v2.1 count review accepted; new six-farm count remains in progress
+
+The independent review accepted the v5 actual source count **for count reporting only**: **70,689 eligible new training decisions** (54,018 from legacy P6 plus 16,671 from the four-farm top-up), **29,311 below** the 100,000 training gate. No training was authorized or run. This resolves the earlier pending-review status for that v5 count only.
+
+A separate root-authorized, source-count-only derivation for the prospective six-farm source set (the original four top-ups plus farms05/06) started at 01:20:45 UTC and was still active at the 01:29:44 UTC process check. It has no final count or reviewed eligible yield yet; it does not authorize or imply training. Do not add the six farms to the accepted 70,689 count unless a completed derivation is reviewed and admitted. [Student count-status card](experiments/cards/STUDENT-V21-TOPUP6-SOURCE-COUNT-PENDING.json).
+
+Evidence (repository-relative paths): `experiments/cards/STUDENT-V21-TOPUP4-ACTUAL-COUNT.json` SHA-256 `4283b8e5681192b174bc81280ab36078a5126cbd26730df0927ecdc8b6eacb91`; independent v5 source-count review `scratch_ds/codex/training-roadmap/student-v21-topup4-data-readiness-20261028T1952Z/source-selection-actual-review-v1/independent-actual-source-count-review.private.json` SHA-256 `29de16f474048d8084eb4f6e072c420a861a8c50dbe625a7f4a46983e74e596a`; new six-farm count authorization `experiments/cards/STUDENT-V21-TOPUP6-COUNT-AUTH.json` SHA-256 `112c28a4cd664a37e6466ca2cd202c26944be1564ba828bfba7b60d981634e09`; root launch record `scratch_ds/codex/training-roadmap/student-v21-topup6-candidate-v3/root-launch.private.json` SHA-256 `9153dbb92ce7d19edfc67bb88fedc65f30c13e39cfb4e1f328ffcefdf40c7b2c`.
