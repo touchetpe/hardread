@@ -1652,3 +1652,21 @@ Root independently reprojected all 400 rows with `math.fsum`; original Sol resul
 `hrreads-xl6-20261029-nativebf16-r3-ae267cdf` is Running. Its exact first-20 operational artifact confirms native BF16 base / FP32 adapter on CUDA, 728 adapter parameter tensors matching the frozen config. Twenty decisions took **539.841 seconds**; projected remaining **11,336.669 seconds** versus **12,943.301 available** (`within_budget=true`). Root rehashed the raw artifact and pinned runtime config; original source/data/cost admission remains unchanged. This is a runtime projection, not completion or accuracy. No output rows or partial quality were read.
 
 The monitor task's earlier root expectation of 528 tensors was stale; actual frozen config and observed runtime both have 728. The earlier false literal check and correction remain preserved. Raw timing SHA `642fcd083cd5ac7f428b11381671d7f98ea505a09ba905bb9c7d76318b6ff347`; reconciled receipt `407d11ec9002bd069cae55e2454b6aac20b7f39e9557c2f4ea5f5f70c5753600`. Main source record: `experiments/cards/READS-N3-R3-FIRST20-RUNTIME-20261029.json`. Original 440 prompts / 1,954 targets and four-node-hour completion ceiling remain; cancel 08:25 / hard 08:40 UTC. At the bounded local check, DPO watcher 43046 and reads watcher 70456 were alive with their recorded birth times; no signals or restarts were used. All earlier reads failures remain unscored and recorded.
+
+
+<a id="xl6-clean-n1-pooled-g1-20261029"></a>
+
+## 2026-10-29T04:55:17.091528+00:00 — XL6 clean rerun and pooled G1: final, failure-inclusive G1 PASS
+
+The existing Benchmark-owned jobs `hrarena-20261029-xl6-{clean,g1a,g1b}-n1r1` all **Completed**, with the selected XL6 converted-adapter hash `0f907059…e7fb94` verified and server/monitor cleanup reaped. These are against the **Abyssal heuristic bot**, on **partly seen `gen9/hr_hl_dev` development teams**, with 100 side-swapped pairings per arm. They are not battles against Foul Play or human-ladder results.
+
+| Run / seed | Wins / all scheduled records | Wilson 95% CI | Completed battles | Decision p95 |
+|---|---:|---:|---:|---:|
+| Clean rerun / 2000 | **161/200 = 80.50%** | 74.46–85.39% | 199; one timeout | 3.577 s |
+| G1 arm A / 4000 | 163/200 = 81.50% | 75.54–86.27% | 199; one timeout | 3.523 s |
+| G1 arm B / 5000 | 170/200 = 85.00% | 79.39–89.29% | 200 | 3.541 s |
+| **G1 pooled** | **333/400 = 83.25%** | **79.28–86.59%** | **399; one timeout** | Both arms below 5 s; no pooled p95 claimed |
+
+All 600 scheduled records are present and unique by arm/index. Timeouts count as non-wins. The pooled result **passes the predefined ≥60% G1 rule**, and the recorded legal/latency checks pass: zero fallbacks or server rejections across **16,675 decisions**, with p95 below five seconds in every arm. Each individual 200-game G1 summary retains its `gate.pass=false` because the implementation checks 400 records per invocation; the prospectively prescribed pooled 400-record rule governs the final G1 verdict. The clean job has all 200 scheduled records, rather than 200 completed battles.
+
+The earlier incomplete historical run remains **163/200 = 81.5%**, with failed teardown and 199 completed. The clean rate differs by −1.0 percentage point and lies inside that earlier descriptive interval; no formal paired or causal improvement claim is made. Root reprojected every game record, native decision latency record and fallback/rejection counter; Sol independently accepted the original analysis (review `060ce0a6…75488`). Exact raw summary/game hashes, terminal projection, adapter identity, cleanup and registered thresholds are in `experiments/cards/XL6-CLEAN-N1-POOLED-G1-FINAL-20261029.json`. Benchmark owns subsequent battle work; no additional run was launched for this readout. These results are eligible for the source-keyed video draft before the October31 10:00 UTC model-number freeze; later numbers remain separate.
