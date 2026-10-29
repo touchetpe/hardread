@@ -1704,3 +1704,11 @@ Exact version, source/input/model/output hashes, all field intervals and baselin
 ## 2026-10-29 — Student topup16 four-farm wave Running, no new eligibility result
 
 Four unchanged-recipe training-data farms13–16 were created once each at08:07:06–08:08:33UTC and are all **Running** in the08:16 snapshot. The prospective source/cost decision, permanent full200-seed blocks, exact rendered clocks, source rechecks, current node admission and identity-bound watchers passed before each create. Maximum exposure is24node-hours (four one-node jobs, six-hour AML timeout each); no dollar rate is invented. New chunks stop11:06–11:08UTC, workload guards are13:51–13:53 and watcher hard ends14:11–14:13. This is CPU engine data generation on existing H100 nodes, not Student training. Actual accepted NEW remains90,133,9,867 below100k. First-chunk health and the eventual whole-union eligible count remain pending. Exact jobs, guards, authority commits, source hashes and observed states are in `experiments/cards/STUDENT-V21-TOPUP16-FOUR-RUNNING-20261029.json`. No create retry, source-method amendment or public action occurred.
+
+
+<a id="student-v21-topup16-first-chunk-health-20261029"></a>
+## 2026-10-29 — Student v2.1 farms13–16: first-chunk startup health only
+
+Under prospective root authorizationcff4bfa, acquired the exact first c000 archive from each of the four new farms: **4/4 passed** the unchanged strict whole-chunk inspector, **20 games each /80 total**, **34,729,258 bytes**. ETag-conditioned no-overwrite transfer, pinned source, local byte/hash and seed checks passed. This confirms valid initial engine output from all four producers; it is not full-wave terminal acceptance. Two other metadata-visible archives were not acquired or assessed.
+
+The inspector found6,963 structural decision rows; that is **not an eligible-train count** and cannot be added to the accepted90,133. Full terminal coverage, whole-chunk health/quarantine, frozen source/catalog admission and the single full-union count remain before training. No roster/decision encoding, new eligibility measurement, training, battle ranking or source modification occurred. Counts have no CI/p-value; the health check is mechanical. Per-slot filenames, hashes, seeds and receipts are versioned in `experiments/cards/STUDENT-V21-TOPUP16-FIRST-CHUNKS-HEALTH-RESULT-20261029.json`.
