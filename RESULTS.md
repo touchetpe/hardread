@@ -1808,3 +1808,8 @@ Evidence: `experiments/cards/G1-OPERATIONAL-REFRESH-20261029T1640Z.json`. A lite
 ## 2026-10-29T17:05:11.458183+00:00 — README reserved-team history correction
 
 The Teams section now identifies the reserve counts as the Oct26 split record and cites the completed Oct28 sealed study. Counts are unchanged; the page no longer implies that the reserve is currently untouched. PREREGISTRATION, the final sealed RESULTS anchor and DATA support the qualifier. Root exact-delta/source/link checks and one original Sol public-copy review passed. No raw teams, estimator, engine/model run, new outcome or release acceptance. Evidence: `experiments/cards/README-TEAMS-HISTORY-CORRECTION-20261029.json`.
+
+
+## 2026-10-29T17:06:58.630084+00:00 — Open Weights citation fits planned public source selection
+
+One citation in `OPEN_WEIGHTS.md` now targets the existing clean/pooled G1 RESULTS anchor instead of an operational card excluded from the source proposal. Root verified the exact one-link delta and current/frozen468 anchor support; original narrow public-copy review ACCEPT. The next public selection must still add the page and carry the README link. No export was regenerated and no scan/publication, new measurement or overall release PASS occurred. Evidence: `experiments/cards/OPEN-WEIGHTS-EXPORT-LINK-20261029.json`.
