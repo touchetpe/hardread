@@ -120,7 +120,7 @@ def write_parity_diagnostic(output,pair_id,config_sha,binding,full_positions,sel
         if isinstance(x,float) and not math.isfinite(x):return None
         return x
     pair_hash=hashlib.sha256(pair_id.encode()).hexdigest()
-    receipt={'schema':'hardread.dpo.response-parity-diagnostic/v2','status':'passed' if passed else 'failed','comparison':comparison,'config_sha256':config_sha,'binding_sha256':T.fingerprint(binding),'code_sha256':binding['code_sha256'],'pair_id_sha256':pair_hash,'full_positions':full_positions,'selected_positions':selected_positions,'metrics':safe,'finite':finite,'thresholds':limits,'detail':json_safe(detail)}
+    receipt={'schema':'hardread.dpo.response-parity-diagnostic/v2','status':'passed' if passed else 'failed','comparison':comparison,'config_sha256':config_sha,'binding_sha256':T.fingerprint(binding),'code_sha256':binding['code_sha256'],'pair_id_sha256':pair_hash,'full_positions':full_positions,'selected_positions':selected_positions,'projected_positions':full_positions,'normalized_positions':selected_positions,'native_full_head':True,'response_only_softmax':True,'native_indexed_logits':False,'metrics':safe,'finite':finite,'thresholds':limits,'detail':json_safe(detail)}
     path=Path(output)/('parity-diagnostic-'+pair_hash+'-'+comparison+'.json');T.exclusive_bytes(path,T.canonical(receipt)+b'\n')
     if json.loads(path.read_bytes())!=receipt:raise T.DPOError('parity receipt readback differs')
     return receipt
@@ -183,15 +183,15 @@ def response_parity_probe(policy,pairs,reference,device,pad_id,check,output,conf
             keys=('arm_logp_max_abs_error','loss_abs_error','gradient_cosine','gradient_relative_l2_error','adamw_update_relative_l2_error')
             worst={k:(None if any(c['metrics'][k] is None for c in comparisons) else (min if k=='gradient_cosine' else max)(c['metrics'][k] for c in comparisons)) for k in keys}
             pair_hash=hashlib.sha256(pair['pair_id'].encode()).hexdigest()
-            summary={'schema':'hardread.dpo.response-parity-summary/v1','pair_id_sha256':pair_hash,'config_sha256':config_sha,'binding_sha256':T.fingerprint(binding),'status':'failed' if failed else 'passed','comparisons':comparisons,'worst_case':worst}
+            summary={'schema':'hardread.dpo.response-parity-summary/v1','pair_id_sha256':pair_hash,'config_sha256':config_sha,'binding_sha256':T.fingerprint(binding),'status':'failed' if failed else 'passed','native_full_head':True,'response_only_softmax':True,'native_indexed_logits':False,'projected_positions':ids.shape[1],'normalized_positions':pos.numel(),'comparisons':comparisons,'worst_case':worst}
             T.exclusive_bytes(Path(output)/('parity-summary-'+pair_hash+'.json'),T.canonical(summary)+b'\n')
             any_failed=any_failed or failed
-            results.append({'pair_id_sha256':pair_hash,'full_positions':ids.shape[1],'selected_positions':pos.numel(),'comparisons':comparisons,'worst_case':worst})
+            results.append({'pair_id_sha256':pair_hash,'full_positions':ids.shape[1],'selected_positions':pos.numel(),'projected_positions':ids.shape[1],'normalized_positions':pos.numel(),'comparisons':comparisons,'worst_case':worst})
             del records
         restore()
         if any_failed:raise T.DPOError('dense/selected parity differs')
         if T.trainable_fingerprint(policy)!=original:raise T.DPOError('parity restoration differs')
-        return {'status':'passed','native_indexed_logits':True,'parameter_inventory_sha256':T.fingerprint(names),'samples':results,'elapsed_seconds':time.monotonic()-started}
+        return {'status':'passed','native_full_head':True,'response_only_softmax':True,'native_indexed_logits':False,'parameter_inventory_sha256':T.fingerprint(names),'samples':results,'elapsed_seconds':time.monotonic()-started}
     finally:
         restore()
 

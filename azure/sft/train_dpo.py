@@ -208,15 +208,17 @@ def _response_positions(labels,vocab):
     return mask.any(dim=0).nonzero(as_tuple=False).flatten()
 
 def _selected_response_logps(model,ids,labels,attention):
+    """Native full head; normalize only response-predicting rows, then sum at full width."""
     import torch
     vocab=_vocab_size(model);positions=_response_positions(labels,vocab)
-    # Unsupported keywords and internal model failures propagate unchanged; no fallback.
-    out=model(input_ids=ids,attention_mask=attention,use_cache=False,logits_to_keep=positions)
+    out=model(input_ids=ids,attention_mask=attention,use_cache=False)
     logits=getattr(out,'logits',None)
-    if not isinstance(logits,torch.Tensor) or logits.ndim!=3 or tuple(logits.shape)!=(ids.shape[0],positions.numel(),vocab) or logits.device!=ids.device or not logits.is_floating_point():raise DPOError('native indexed logits output differs')
-    target=labels[:,positions+1];mask=target.ne(-100);safe=target.masked_fill(~mask,0)
-    vals=torch.log_softmax(logits.float(),dim=-1).gather(-1,safe.unsqueeze(-1)).squeeze(-1)
-    return (vals*mask).sum(dim=-1)
+    if not isinstance(logits,torch.Tensor) or logits.ndim!=3 or tuple(logits.shape)!=(ids.shape[0],ids.shape[1],vocab) or logits.device!=ids.device or not logits.is_floating_point():raise DPOError('native full-head logits output differs')
+    active=logits[:,positions,:].float();target=labels[:,positions+1]
+    mask=target.ne(-100);safe=target.masked_fill(~mask,0)
+    vals=torch.log_softmax(active,dim=-1).gather(-1,safe.unsqueeze(-1)).squeeze(-1)
+    per_token=vals.new_zeros((ids.shape[0],labels.shape[1]-1)).index_copy(1,positions,vals*mask)
+    return per_token.sum(dim=-1)
 
 def score_arm(model,arm,device):
     import torch
@@ -225,7 +227,7 @@ def score_arm(model,arm,device):
     return _selected_response_logps(model,ids,labels,torch.ones_like(ids))[0]
 
 def score_pair(model,pair,device,pad_id):
-    """One wrapper forward, retaining only unioned response-predicting positions."""
+    """One full-head wrapper forward; normalize only response-predicting positions."""
     ids,labels,attention=_pair_tensors(pair,device,pad_id)
     scores=_selected_response_logps(model,ids,labels,attention)
     return scores[0],scores[1]
