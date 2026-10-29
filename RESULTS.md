@@ -1751,3 +1751,10 @@ Two existing loopback GET endpoints, `/api/health` and `/api/provenance`, return
 Added Modal SDK1.2.4, httpx0.28.1 and Starlette1.7.0 to THIRD_PARTY.md from the already approved local wheels. Root checked metadata and embedded notice members for five packages, source bindings and the exact diff; historical Mac versions remain, while installed client and prospective Linux runtime versions are labelled separately. The original public-copy review rejected an ambiguous introductory hash-provenance sentence; the focused correction was accepted. The first root table assertion was overly broad and is preserved; the scoped check passes.
 
 Evidence: `experiments/cards/P3-DEPLOY-ATTRIBUTION-CORRECTION-20261029.json`. This is a completed attribution component only, with no licence-compatibility, clean-install, hosting, final privacy/history or publication acceptance. No install/download/network/model/job/paid action or active-training source change; science scores and selection are unchanged.
+
+
+## 2026-10-29T15:42:19.638453+00:00 — G1 second-epoch operational refresh (no quality read)
+
+Existing corrected job `hrsft-20261029-g1ep2r2-405667bc`, sourceace4851: all25 operational bodies rehashed. Acquisition finished15:34:58UTC. Global step4,367/6,994,870updates beyond restored3,497; no held-out score or selection. Root's fixed closest-point windows measure8.1004/min over≈10minutes and8.1119/min over≈20minutes. Latest10GPU samples perrank (120total) average96.425%; minimumrank mean93.8%. Conditional20-minute projection gives training≈20:58:49UTC plus15-minute saving/wrap-up≈21:13:49, before22:10:06graceful/22:45:18cancel/23:00:18hard. Anchor is acquisition completion, not an unavailable per-step UTC. Current GPU/time checks indicate no run change.
+
+Evidence: `experiments/cards/G1-OPERATIONAL-REFRESH-20261029T1535Z.json`. Earlier failure/debit, acquisition/interpretation/checker corrections and private non-secret identifier-output incident remain recorded. No new job, source/model mutation, restart or deadline extension; DPO update/loss evidence remains unobserved and its qualification-only ETA unchanged. Model scores/selection unchanged.
