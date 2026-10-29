@@ -14,6 +14,42 @@ SOURCE_INDEX_SHA256 = "7b598b22b129c4a6cfcd11edcd23e3aeaa0f34e697388fa12b39a2a5e
 class DPOError(ValueError):
     pass
 
+def setup_stable_backend():
+    """Apply and verify deterministic settings only after launch admission."""
+    import os,inspect,importlib.metadata
+    import torch
+    if os.environ.get('FLASH_ATTENTION_DETERMINISTIC')!='1' or os.environ.get('CUBLAS_WORKSPACE_CONFIG')!=':4096:8':raise DPOError('deterministic startup environment missing')
+    try:
+        import flash_attn
+        import transformers.modeling_flash_attention_utils as hf_flash
+        version=importlib.metadata.version('flash-attn')
+        functions={}
+        for name in ('flash_attn_func','flash_attn_varlen_func'):
+            fn=getattr(flash_attn,name);sig=inspect.signature(fn)
+            if 'deterministic' not in sig.parameters:raise DPOError('flash-attn deterministic argument missing')
+            functions[name]=str(sig)
+        hf_sha=file_sha(hf_flash.__file__)
+        if hf_sha!='dea5b555b5bb8fba1b4ab2c62c8df9f96019b17555b3714f75be17c54e801f95':raise DPOError('transformers flash implementation differs')
+        if not all(hasattr(torch.backends.cuda.matmul,n) for n in ('allow_tf32','allow_fp16_reduced_precision_reduction','allow_bf16_reduced_precision_reduction')) or not all(hasattr(torch.backends.cudnn,n) for n in ('allow_tf32','benchmark','deterministic')):raise DPOError('backend precision setting unavailable')
+        torch.use_deterministic_algorithms(True);torch.set_float32_matmul_precision('highest')
+        torch.backends.cuda.matmul.allow_tf32=False;torch.backends.cudnn.allow_tf32=False
+        torch.backends.cuda.matmul.allow_fp16_reduced_precision_reduction=False
+        torch.backends.cuda.matmul.allow_bf16_reduced_precision_reduction=False
+        torch.backends.cudnn.benchmark=False;torch.backends.cudnn.deterministic=True
+        flags={'deterministic_algorithms':torch.are_deterministic_algorithms_enabled(),'matmul_precision':torch.get_float32_matmul_precision(),'matmul_allow_tf32':torch.backends.cuda.matmul.allow_tf32,'cudnn_allow_tf32':torch.backends.cudnn.allow_tf32,'fp16_reduced_precision_reduction':torch.backends.cuda.matmul.allow_fp16_reduced_precision_reduction,'bf16_reduced_precision_reduction':torch.backends.cuda.matmul.allow_bf16_reduced_precision_reduction,'cudnn_benchmark':torch.backends.cudnn.benchmark,'cudnn_deterministic':torch.backends.cudnn.deterministic}
+    except (ImportError,AttributeError,ValueError,TypeError) as exc:raise DPOError('deterministic backend unsupported') from exc
+    expected={'deterministic_algorithms':True,'matmul_precision':'highest','matmul_allow_tf32':False,'cudnn_allow_tf32':False,'fp16_reduced_precision_reduction':False,'bf16_reduced_precision_reduction':False,'cudnn_benchmark':False,'cudnn_deterministic':True}
+    if flags!=expected or not isinstance(version,str) or not version:raise DPOError('deterministic backend settings differ')
+    return {'flash_attn_version':version,'flash_attn_signatures':functions,'transformers_flash_source_sha256':hf_sha,'torch_version':torch.__version__,'cuda_version':torch.version.cuda,'environment':{'FLASH_ATTENTION_DETERMINISTIC':'1','CUBLAS_WORKSPACE_CONFIG':':4096:8'},'effective_flags':flags}
+
+def model_dtype_inventory(model):
+    named=[(name,str(param.dtype)) for name,param in model.named_parameters() if param.requires_grad]
+    head=model.get_output_embeddings()
+    if not named or head is None or getattr(head,'weight',None) is None:raise DPOError('model dtype inventory missing')
+    inventory=[{'name_sha256':hashlib.sha256(name.encode()).hexdigest(),'dtype':str(param.dtype),'shape':list(param.shape)} for name,param in model.named_parameters() if param.requires_grad]
+    return {'output_head_weight_dtype':str(head.weight.dtype),'trainable_dtype_counts':{dtype:sum(v==dtype for _,v in named) for dtype in sorted(set(v for _,v in named))},'trainable_parameters':inventory,'trainable_inventory_sha256':fingerprint(inventory)}
+
+
 def canonical(value):
     return json.dumps(value, sort_keys=True, separators=(',', ':'), ensure_ascii=False, allow_nan=False).encode()
 
@@ -518,6 +554,7 @@ def execute_job(args):
     from torch.nn.parallel import DistributedDataParallel as DDP
     os.environ.update(HF_HUB_OFFLINE='1',TRANSFORMERS_OFFLINE='1',HF_HUB_DISABLE_TELEMETRY='1',WANDB_MODE='offline',NCCL_IB_DISABLE='1')
     approval=check_root_approval(args.approval,args.approval_sha256,args.config_sha256,'six_h100_full_epoch')
+    backend=setup_stable_backend()
     rank=int(os.environ['RANK']); size=int(os.environ['WORLD_SIZE']); local=int(os.environ['LOCAL_RANK'])
     if size!=WORLD_SIZE or local!=0 or not 0<=rank<size or not torch.cuda.is_available() or torch.cuda.device_count()!=1: raise DPOError('expected one H100 per six ranks')
     torch.cuda.set_device(local)
@@ -540,6 +577,7 @@ def execute_job(args):
             if Path(args.out).is_symlink() or not Path(args.out).is_dir(): raise DPOError('output mount invalid')
             output.mkdir(mode=0o700)
         dist.barrier(); deadline_check(deadline)
+        exclusive_bytes(output/('backend-rank-%d.json'%rank),canonical({'schema':'hardread.dpo.stable-backend/v1','config_sha256':args.config_sha256,'binding_sha256':fingerprint(binding),'backend':backend})+b'\n')
         refmodel=load_xl6(args.base,args.adapter,trainable=False,device=local)
         local_cache=reference_partition(refmodel,pairs,rank,local,cfg['pad_id'])
         parts=[None]*size if rank==0 else None
@@ -563,6 +601,7 @@ def execute_job(args):
         policy=load_xl6(args.base,args.adapter,trainable=True,device=local)
         params=[p for p in policy.parameters() if p.requires_grad]
         if not params or any('lora_' not in n for n,p in policy.named_parameters() if p.requires_grad): raise DPOError('unexpected trainable parameters')
+        exclusive_bytes(output/('model-dtypes-rank-%d.json'%rank),canonical({'schema':'hardread.dpo.model-dtypes/v1','config_sha256':args.config_sha256,'binding_sha256':fingerprint(binding),'model_dtypes':model_dtype_inventory(policy)})+b'\n')
         ddp=DDP(policy,device_ids=[local],output_device=local,find_unused_parameters=False,broadcast_buffers=False)
         collective=six_rank_startup_collective(ddp,policy,pairs[0],reference,rank,local,cfg['pad_id'],output,deadline_check,deadline)
         optimizer=torch.optim.AdamW(params,lr=LEARNING_RATE)

@@ -11,6 +11,8 @@ command: >-
 compute: __COMPUTE__
 environment: __ENVIRONMENT__
 environment_variables:
+  FLASH_ATTENTION_DETERMINISTIC: "1"
+  CUBLAS_WORKSPACE_CONFIG: ":4096:8"
   HARDREAD_DPO_QUALIFY: "1"
   HF_HUB_OFFLINE: "1"
   TRANSFORMERS_OFFLINE: "1"

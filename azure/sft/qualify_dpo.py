@@ -104,41 +104,65 @@ def capture_runtime_receipt(output,cfg,config_sha,binding):
     return receipt,digest
 
 
-def write_parity_diagnostic(output,pair_id,config_sha,binding,full_positions,selected_positions,metrics):
-    """Durably persist scalar threshold diagnostics, never model tensors or data."""
+def write_parity_diagnostic(output,pair_id,config_sha,binding,full_positions,selected_positions,metrics,comparison,detail):
+    """Persist one immutable scalar-only comparison before any parity rejection."""
     import re
     fields=('arm_logp_max_abs_error','loss_abs_error','gradient_cosine','gradient_relative_l2_error','adamw_update_relative_l2_error')
     if not isinstance(pair_id,str) or not pair_id or not re.fullmatch('[0-9a-f]{64}',str(config_sha)) or not isinstance(binding,dict) or not re.fullmatch('[0-9a-f]{64}',str(binding.get('code_sha256',''))):raise T.DPOError('parity receipt binding invalid')
-    if type(full_positions) is not int or type(selected_positions) is not int or not 0<selected_positions<full_positions or not isinstance(metrics,dict) or set(metrics)!=set(fields):raise T.DPOError('parity receipt shape invalid')
+    if comparison not in ('D1-D2','S1-S2','D1-S1','D1-S2','D2-S1','D2-S2') or type(full_positions) is not int or type(selected_positions) is not int or not 0<selected_positions<full_positions or not isinstance(metrics,dict) or set(metrics)!=set(fields):raise T.DPOError('parity receipt shape invalid')
     finite={k:type(metrics[k]) in (int,float) and math.isfinite(metrics[k]) for k in fields}
     safe={k:float(metrics[k]) if finite[k] else None for k in fields}
     limits={'arm_logp_max_abs_error':{'operator':'<=','value':0.01},'loss_abs_error':{'operator':'<=','value':0.001},'gradient_cosine':{'operator':'>=','value':0.9999},'gradient_relative_l2_error':{'operator':'<=','value':0.01},'adamw_update_relative_l2_error':{'operator':'<=','value':0.01}}
     passed=all(finite.values()) and metrics[fields[0]]<=0.01 and metrics[fields[1]]<=0.001 and metrics[fields[2]]>=0.9999 and metrics[fields[3]]<=0.01 and metrics[fields[4]]<=0.01
+    def json_safe(x):
+        if isinstance(x,dict):return {k:json_safe(v) for k,v in x.items()}
+        if isinstance(x,list):return [json_safe(v) for v in x]
+        if isinstance(x,float) and not math.isfinite(x):return None
+        return x
     pair_hash=hashlib.sha256(pair_id.encode()).hexdigest()
-    receipt={'schema':'hardread.dpo.response-parity-diagnostic/v1','status':'passed' if passed else 'failed','config_sha256':config_sha,'binding_sha256':T.fingerprint(binding),'code_sha256':binding['code_sha256'],'pair_id_sha256':pair_hash,'full_positions':full_positions,'selected_positions':selected_positions,'metrics':safe,'finite':finite,'thresholds':limits}
-    path=Path(output)/('parity-diagnostic-'+pair_hash+'.json');T.exclusive_bytes(path,T.canonical(receipt)+b'\n')
+    receipt={'schema':'hardread.dpo.response-parity-diagnostic/v2','status':'passed' if passed else 'failed','comparison':comparison,'config_sha256':config_sha,'binding_sha256':T.fingerprint(binding),'code_sha256':binding['code_sha256'],'pair_id_sha256':pair_hash,'full_positions':full_positions,'selected_positions':selected_positions,'metrics':safe,'finite':finite,'thresholds':limits,'detail':json_safe(detail)}
+    path=Path(output)/('parity-diagnostic-'+pair_hash+'-'+comparison+'.json');T.exclusive_bytes(path,T.canonical(receipt)+b'\n')
     if json.loads(path.read_bytes())!=receipt:raise T.DPOError('parity receipt readback differs')
     return receipt
 
+def _compare_passes(left,right,base,names,eps):
+    import torch
+    lpd=max(abs(x-y) for x,y in zip(left[0],right[0]));ld=abs(left[1]-right[1])
+    ga=torch.cat([x.reshape(-1).double() for x in left[2]]);gb=torch.cat([x.reshape(-1).double() for x in right[2]])
+    na=float(torch.linalg.vector_norm(ga));nb=float(torch.linalg.vector_norm(gb))
+    cosine=float(torch.dot(ga,gb)/(na*nb)) if na and nb else float('nan')
+    rel=float(torch.linalg.vector_norm(ga-gb)/na) if na else float('nan')
+    da=torch.cat([(x-y.float()).reshape(-1).double() for x,y in zip(left[3],base)]);db=torch.cat([(x-y.float()).reshape(-1).double() for x,y in zip(right[3],base)])
+    delta_norm=float(torch.linalg.vector_norm(da));right_norm=float(torch.linalg.vector_norm(db))
+    step_rel=float(torch.linalg.vector_norm(da-db)/delta_norm) if delta_norm else float('nan')
+    metrics={'arm_logp_max_abs_error':lpd,'loss_abs_error':ld,'gradient_cosine':cosine,'gradient_relative_l2_error':rel,'adamw_update_relative_l2_error':step_rel}
+    bands={k:{'count':0,'update_error_squared_norm':0.0} for k in ('le_eps','eps_to_10eps','gt_10eps')};worst=[];signs=0
+    for name,g1,g2,u1,u2,initial in zip(names,left[2],right[2],left[3],right[3],base):
+        g1=g1.double();g2=g2.double();difference=u1.double()-u2.double();squared=difference.square();absolute=g1.abs()
+        signs+=int(((g1*g2)<0).sum());masks=(absolute<=eps,(absolute>eps)&(absolute<=10*eps),absolute>10*eps)
+        for key,mask in zip(bands,masks):bands[key]['count']+=int(mask.sum());bands[key]['update_error_squared_norm']+=float(squared[mask].sum())
+        worst.append({'parameter_sha256':hashlib.sha256(name.encode()).hexdigest(),'update_error_squared_norm':float(squared.sum()),'coordinate_count':g1.numel(),'differing_sign_count':int(((g1*g2)<0).sum())})
+    worst.sort(key=lambda x:x['update_error_squared_norm'],reverse=True)
+    return metrics,{'gradient_norm_left':na,'gradient_norm_right':nb,'update_norm_left':delta_norm,'update_norm_right':right_norm,'different_gradient_signs':signs,'adamw_epsilon':eps,'gradient_magnitude_bands':bands,'worst_parameters':worst[:10],'parameter_count':len(names)}
 
 def response_parity_probe(policy,pairs,reference,device,pad_id,check,output,config_sha,binding):
-    """Pre-update dense/selected parity, with temporary AdamW state, no tensor output."""
-    import torch
-    import gc
+    """Fixed D1,D2,S1,S2 passes; all six self/cross comparisons per pair."""
+    import torch,gc
     named=[(n,p) for n,p in policy.named_parameters() if p.requires_grad]
     if not named or any('lora_' not in n for n,_ in named):raise T.DPOError('parity trainable inventory differs')
-    params=[p for _,p in named];base=[p.detach().cpu().clone() for p in params]
-    original=T.trainable_fingerprint(policy);started=time.monotonic();results=[]
+    names=[n for n,_ in named];params=[p for _,p in named];base=[p.detach().cpu().clone() for p in params]
+    original=T.trainable_fingerprint(policy);started=time.monotonic();results=[];any_failed=False
     def restore():
         with torch.no_grad():
             for p,v in zip(params,base):p.copy_(v.to(device=p.device,dtype=p.dtype))
         for p in params:p.grad=None
     try:
         for pair in pairs:
-            check();records=[]
-            for scorer in (T._score_pair_dense_oracle,T.score_pair):
+            check();records={};eps=None
+            for label,scorer in (('D1',T._score_pair_dense_oracle),('D2',T._score_pair_dense_oracle),('S1',T.score_pair),('S2',T.score_pair)):
                 check();restore();opt=torch.optim.AdamW(params,lr=T.LEARNING_RATE)
-                ch,rj=scorer(policy,pair,device,pad_id);ref=reference[pair['pair_id']]
+                if opt.defaults['eps']!=1e-8:raise T.DPOError('AdamW default epsilon differs')
+                eps=opt.defaults['eps'];ch,rj=scorer(policy,pair,device,pad_id);ref=reference[pair['pair_id']]
                 loss=T.dpo_loss(ch,rj,torch.tensor(ref['chosen'],device=device),torch.tensor(ref['rejected'],device=device))
                 if not all(bool(torch.isfinite(x)) for x in (ch,rj,loss)):raise T.DPOError('parity score nonfinite')
                 loss.backward()
@@ -146,28 +170,28 @@ def response_parity_probe(policy,pairs,reference,device,pad_id,check,output,conf
                 grads=[p.grad.detach().float().cpu().clone() for p in params]
                 if not any(bool(torch.count_nonzero(g)) for g in grads):raise T.DPOError('parity gradient zero')
                 check();opt.step();updated=[p.detach().float().cpu().clone() for p in params]
-                records.append(([float(ch.detach().cpu()),float(rj.detach().cpu())],float(loss.detach().cpu()),grads,updated))
+                records[label]=([float(ch.detach().cpu()),float(rj.detach().cpu())],float(loss.detach().cpu()),grads,updated)
                 del opt,ch,rj,loss;gc.collect()
-            dense,selected=records
-            lpd=max(abs(x-y) for x,y in zip(dense[0],selected[0]));ld=abs(dense[1]-selected[1])
-            ga=torch.cat([x.reshape(-1).double() for x in dense[2]]);gb=torch.cat([x.reshape(-1).double() for x in selected[2]])
-            na=float(torch.linalg.vector_norm(ga));nb=float(torch.linalg.vector_norm(gb))
-            if not na or not nb:raise T.DPOError('parity gradient norm zero')
-            cosine=float(torch.dot(ga,gb)/(na*nb));rel=float(torch.linalg.vector_norm(ga-gb)/na)
-            da=torch.cat([(x-y.float()).reshape(-1).double() for x,y in zip(dense[3],base)])
-            db=torch.cat([(x-y.float()).reshape(-1).double() for x,y in zip(selected[3],base)])
-            delta_norm=float(torch.linalg.vector_norm(da))
-            if not delta_norm:raise T.DPOError('parity optimizer update zero')
-            step_rel=float(torch.linalg.vector_norm(da-db)/delta_norm)
-            ids,labels,_=T._pair_tensors(pair,device,pad_id);pos=T._response_positions(labels,T._vocab_size(policy))
-            metrics={'arm_logp_max_abs_error':lpd,'loss_abs_error':ld,'gradient_cosine':cosine,'gradient_relative_l2_error':rel,'adamw_update_relative_l2_error':step_rel}
-            write_parity_diagnostic(output,pair['pair_id'],config_sha,binding,ids.shape[1],pos.numel(),metrics)
-            if not all(math.isfinite(x) for x in (lpd,ld,cosine,rel,step_rel)) or lpd>0.01 or ld>0.001 or cosine<0.9999 or rel>0.01 or step_rel>0.01:raise T.DPOError('dense/selected parity differs')
-            results.append({'pair_id_sha256':hashlib.sha256(pair['pair_id'].encode()).hexdigest(),'full_positions':ids.shape[1],'selected_positions':pos.numel(),'arm_logp_max_abs_error':lpd,'loss_abs_error':ld,'gradient_cosine':cosine,'gradient_relative_l2_error':rel,'adamw_update_relative_l2_error':step_rel})
-            del records,ga,gb,da,db
+            ids,labels,_=T._pair_tensors(pair,device,pad_id);pos=T._response_positions(labels,T._vocab_size(policy));comparisons=[];failed=False
+            for left,right in (('D1','D2'),('S1','S2'),('D1','S1'),('D1','S2'),('D2','S1'),('D2','S2')):
+                check();metrics,detail=_compare_passes(records[left],records[right],base,names,eps)
+                doc=write_parity_diagnostic(output,pair['pair_id'],config_sha,binding,ids.shape[1],pos.numel(),metrics,left+'-'+right,detail)
+                comparisons.append({'comparison':doc['comparison'],'status':doc['status'],'metrics':doc['metrics']})
+                if doc['status']!='passed':
+                    failed=True
+                    if left+right in ('D1D2','S1S2'):raise T.DPOError('dense/selected parity differs')
+            keys=('arm_logp_max_abs_error','loss_abs_error','gradient_cosine','gradient_relative_l2_error','adamw_update_relative_l2_error')
+            worst={k:(None if any(c['metrics'][k] is None for c in comparisons) else (min if k=='gradient_cosine' else max)(c['metrics'][k] for c in comparisons)) for k in keys}
+            pair_hash=hashlib.sha256(pair['pair_id'].encode()).hexdigest()
+            summary={'schema':'hardread.dpo.response-parity-summary/v1','pair_id_sha256':pair_hash,'config_sha256':config_sha,'binding_sha256':T.fingerprint(binding),'status':'failed' if failed else 'passed','comparisons':comparisons,'worst_case':worst}
+            T.exclusive_bytes(Path(output)/('parity-summary-'+pair_hash+'.json'),T.canonical(summary)+b'\n')
+            any_failed=any_failed or failed
+            results.append({'pair_id_sha256':pair_hash,'full_positions':ids.shape[1],'selected_positions':pos.numel(),'comparisons':comparisons,'worst_case':worst})
+            del records
         restore()
+        if any_failed:raise T.DPOError('dense/selected parity differs')
         if T.trainable_fingerprint(policy)!=original:raise T.DPOError('parity restoration differs')
-        return {'status':'passed','native_indexed_logits':True,'parameter_inventory_sha256':T.fingerprint([n for n,_ in named]),'samples':results,'elapsed_seconds':time.monotonic()-started}
+        return {'status':'passed','native_indexed_logits':True,'parameter_inventory_sha256':T.fingerprint(names),'samples':results,'elapsed_seconds':time.monotonic()-started}
     finally:
         restore()
 
@@ -180,6 +204,7 @@ def run(args):
     import torch
     os.environ.update(HF_HUB_OFFLINE='1',TRANSFORMERS_OFFLINE='1',HF_HUB_DISABLE_TELEMETRY='1',WANDB_MODE='offline')
     started=time.monotonic();check_approval(args.approval,args.approval_sha256,args.config_sha256)
+    backend=T.setup_stable_backend()
     cfg,pairs,binding=T.load_inputs(args.config,args.config_sha256,args.code_root,args.data,args.base,args.adapter,args.selection,qualification=True)
     check_approval(args.approval,args.approval_sha256,args.config_sha256,binding['code_sha256'])
     if Path(__file__).resolve()!=(Path(args.code_root)/'azure/sft/qualify_dpo.py').resolve():raise T.DPOError('qualification source differs')
@@ -219,6 +244,7 @@ def run(args):
     params=[p for p in policy.parameters() if p.requires_grad]
     if not params or any('lora_' not in name for name,p in policy.named_parameters() if p.requires_grad):raise T.DPOError('unexpected trainable parameters')
     optimizer=torch.optim.AdamW(params,lr=T.LEARNING_RATE);policy.train();T.disable_dropout(policy)
+    T.exclusive_bytes(output/'backend-evidence.json',T.canonical({'schema':'hardread.dpo.stable-backend/v1','config_sha256':args.config_sha256,'binding_sha256':T.fingerprint(binding),'backend':backend,'model_dtypes':T.model_dtype_inventory(policy)})+b'\n')
     length=lambda p:(len(p['chosen']['input_ids'])+len(p['rejected']['input_ids']),p['pair_id'])
     shortest=min(shard,key=length);longest=max(shard,key=length)
     parity=response_parity_probe(policy,[shortest,longest],cached,0,cfg['pad_id'],check,output,args.config_sha256,binding)
