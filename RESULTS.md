@@ -1744,3 +1744,10 @@ Original quality/validation/selection/arena rules and budgets remain unchanged. 
 ## 2026-10-29T14:56:01.026856+00:00 — local product health component, not a new benchmark
 
 Two existing loopback GET endpoints, `/api/health` and `/api/provenance`, returned HTTP200 and `ok=true`; the configured explanation mode remains `template`. Root checked the saved response hashes and transport records. No new engine review, model generation, quality evaluation, process or deployment. This establishes local component health only, not hosted10/10, clean-machine operation, semantic quality or OpenWeights eligibility. Private public-form discovery, fixed-ref build-window metadata and unverified quickstart preparation are recorded in `experiments/cards/PRODUCT-LOCAL-READINESS-PREP-20261029T1455Z.json`. Exact submission labels/limits and all aggregate release gates remain pending; score/selection/ledger unchanged.
+
+
+## 2026-10-29T15:13:56.386203+00:00 — Deploy dependency attribution (documentation component)
+
+Added Modal SDK1.2.4, httpx0.28.1 and Starlette1.7.0 to THIRD_PARTY.md from the already approved local wheels. Root checked metadata and embedded notice members for five packages, source bindings and the exact diff; historical Mac versions remain, while installed client and prospective Linux runtime versions are labelled separately. The original public-copy review rejected an ambiguous introductory hash-provenance sentence; the focused correction was accepted. The first root table assertion was overly broad and is preserved; the scoped check passes.
+
+Evidence: `experiments/cards/P3-DEPLOY-ATTRIBUTION-CORRECTION-20261029.json`. This is a completed attribution component only, with no licence-compatibility, clean-install, hosting, final privacy/history or publication acceptance. No install/download/network/model/job/paid action or active-training source change; science scores and selection are unchanged.
