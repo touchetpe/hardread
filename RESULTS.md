@@ -1628,3 +1628,20 @@ The hosting wheel-stage build missed its 90-minute hard deadline. The later Carg
 The farm 07/08 census is health-only: **15 archives**, **14 healthy**, **one whole chunk held**, and **22,990 raw decision rows**. Eligibility was not evaluated, so the prior **74,033** count-only new-source result remains unchanged and this union remains pending. No N1/B2 outcome is added here; those remain with their Benchmark-owned record.
 
 [Engineering operations update card](experiments/cards/ENGINEERING-OPS-UPDATE-20261029T0231-0354Z.json) records the source paths, hashes and scope limits.
+
+
+<a id="glimmer-v2-fixed-v0-400-20261029"></a>
+
+## 2026-10-29T04:46:20.954083+00:00 — Glimmer v2 on the registered fixed-v0 400: descriptive comparison; XL6 retained
+
+`hrsft-20261029-v2-fixed400-owner12-946a548b` Completed. The selection decision **v2 NOT SELECTED / XL6 retained** was committed in `6a9b7d6` before this job was created at 04:20:09 UTC. The full 400 ordered identities exactly match the prior fixed-v0 cohort (LF-join digest `dcf05ed82eaf7b487df1741f27c091c581aa65aa1af6869fb1153bd44225c545`). Both preflight and teacher evaluation passed; generation count is zero.
+
+| Model / version | Recorded-choice top-1 | Top-2 | Top-3 | Mean policy cross-entropy |
+|---|---:|---:|---:|---:|
+| Glimmer v2 final, adapter 946a548b | **227/400 = 56.75%** | 303/400 = 75.75% | 336/400 = 84.00% | 1.582312375779234 |
+| Selected XL6, same fixed-v0 cohort | 223/400 = 55.75% | See original XL6 record | 336/400 = 84.00% | 1.593645290891526 |
+| Base Glimmer, same-prefix scoring in this run | 101/400 = 25.25% | 168/400 = 42.00% | 228/400 = 57.00% | 3.35584456830693 |
+
+V2 has four additional correct choices (+1.00 percentage point) in this descriptive test. This is **teacher-forced agreement with the recorded choice**, separate from the 2,428-position engine-policy validation used for selection and from battle win rates. Base engine-policy argmax agreement is separately 109/400, not its 101/400 recorded-choice score. No significance, independent-position interval, battle-strength improvement or causal data-scaling effect is claimed. No test-driven reselection: v2 missed the original validation threshold, XL6 remains selected, and DPO round 2 is not triggered. The teacher-forced legal probability mass is not a generated-action legality rate.
+
+Root independently reprojected all 400 rows with `math.fsum`; original Sol result review **ACCEPT, descriptive only**, SHA `5ea500daae1053b2cde15529c96a3b4f680908a20e725f7e6a2536c578cf3ca1`. Raw result `ffba598bfb83ae42af002e43ef7c131d48253827c440474cd13f303f5a06f1eb`, rows `105f319dc6bfe63c7023ca5cb415e551f1b59e562b30c76705e8e1082cfae14b`, summary `56e988a2dd12ad76e7048a664c3c5f118fdaed02119b28caa4cfbaa5255318f9`. Exact adapter, source/dataset, original source/cost review, row digest and corrected preflight projection are in `experiments/cards/GLIMMER-V2-FIXED400-DESCRIPTIVE-RESULT-20261029.json`. The initial preflight extraction receipt remains preserved alongside its correction; the raw artifacts were unchanged. No further evaluator or model call was made for this readout.
