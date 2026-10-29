@@ -1,0 +1,28 @@
+# Complete exact-version closure; metadata only, no package body acquired.
+# Target: CPython 3.12 Linux x86_64; no extras.
+annotated-doc==0.0.4
+annotated-types==0.7.0
+anyio==4.11.0
+certifi==2026.7.22
+charset-normalizer==3.5.2
+click==8.1.8
+fastapi==0.143.0
+h11==0.16.0
+httpcore==1.0.9
+httpx==0.28.1
+idna==3.20
+numpy==2.5.4
+opentelemetry-api==1.44.0
+pydantic==2.12.3
+pydantic-core==2.41.4
+python-dateutil==2.8.0
+pyyaml==6.0.3
+requests==2.33.0
+six==1.17.0
+sniffio==1.3.1
+starlette==1.7.0
+typing-extensions==4.15.0
+typing-inspection==0.4.2
+urllib3==2.8.0
+uvicorn==0.54.0
+websockets==14.1
