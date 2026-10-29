@@ -10,6 +10,8 @@ import time
 
 INFERENCE_ENABLED=os.environ.get('HARDREAD_N3_INFERENCE_ENABLED')=='1'
 MAX_SECONDS=10800
+EXPECTED_NATIVE_LORA_TENSORS=728
+LORA_PARAMETER_MARKERS={'lora_A','lora_B','lora_embedding_A','lora_embedding_B'}
 class N3RunError(ValueError):pass
 
 def strict_json(raw):
@@ -40,10 +42,20 @@ def verify_tree(root,pins):
     for name,expected in pins.items():
         if not re.fullmatch('[0-9a-f]{64}',str(expected)) or sha(root/name)!=expected:raise N3RunError('model bytes differ')
 
+def inventory_sha256(pins):
+    if not isinstance(pins,dict) or not pins:
+        raise N3RunError('model inventory missing')
+    payload=json.dumps(pins,sort_keys=True,separators=(',',':')).encode('utf-8')
+    return hashlib.sha256(payload).hexdigest()
+
 def validate_config(cfg):
-    required={'schema','arm','status','prompt_sha256','cohort_manifest_sha256','source_review_sha256','selection_sha256',
+    required={'schema','arm','status','inference_precision','base_precision','adapter_precision','adapter_parameter_tensors','prompt_sha256','cohort_manifest_sha256','source_review_sha256','selection_sha256',
               'tokenizer_sha256','template_sha256','code_files','base_files','adapter_files','deadline_unix','max_seconds','xl6_completion_sha256','run_name'}
-    if not isinstance(cfg,dict) or set(cfg)!=required or cfg.get('schema')!='hardread.reads-n3.runtime/v1' or cfg.get('status')!='approved':raise N3RunError('runtime config differs')
+    if not isinstance(cfg,dict) or set(cfg)!=required or cfg.get('schema')!='hardread.reads-n3.runtime/v2' or cfg.get('status')!='approved':raise N3RunError('runtime config differs')
+    if cfg.get('inference_precision')!='native_bf16':raise N3RunError('inference precision differs')
+    if (cfg.get('base_precision')!='bf16' or cfg.get('adapter_precision')!='fp32' or
+        type(cfg.get('adapter_parameter_tensors')) is not int or
+        cfg.get('adapter_parameter_tensors')!=EXPECTED_NATIVE_LORA_TENSORS):raise N3RunError('base/adapter precision policy differs')
     if cfg['arm'] not in ('xl6','selected_v2') or type(cfg['max_seconds']) is not int or not 0<cfg['max_seconds']<=MAX_SECONDS or type(cfg['deadline_unix']) is not int:raise N3RunError('arm or deadline differs')
     for key in ('prompt_sha256','cohort_manifest_sha256','source_review_sha256','selection_sha256','tokenizer_sha256','template_sha256'):
         if not isinstance(cfg[key],str) or not re.fullmatch('[0-9a-f]{64}',cfg[key]):raise N3RunError('runtime pin malformed')
@@ -52,6 +64,59 @@ def validate_config(cfg):
     if not all(isinstance(cfg[k],dict) and cfg[k] for k in ('base_files','adapter_files','code_files')):raise N3RunError('model or code pins missing')
     if not isinstance(cfg['run_name'],str) or not re.fullmatch('hrreads-[a-z0-9-]{1,64}',cfg['run_name']):raise N3RunError('invalid output name')
     return cfg
+
+def validate_memory_snapshot(snapshot):
+    if not isinstance(snapshot,dict) or set(snapshot)!={'free_bytes','total_bytes'}:
+        raise N3RunError('CUDA memory snapshot differs')
+    free,total=snapshot['free_bytes'],snapshot['total_bytes']
+    if type(free) is not int or type(total) is not int or free<=0 or total<=0 or free>total:
+        raise N3RunError('CUDA memory snapshot differs')
+    return {'free_bytes':free,'total_bytes':total}
+
+def cuda_memory_snapshot(torch,device):
+    try: free,total=torch.cuda.mem_get_info(device)
+    except Exception as exc: raise N3RunError('CUDA memory query unavailable') from exc
+    return validate_memory_snapshot({'free_bytes':free,'total_bytes':total})
+
+def verify_native_bf16_residency(model,torch,device):
+    expected=f'cuda:{device}'
+    try: params=list(model.named_parameters())
+    except Exception as exc: raise N3RunError('loaded model parameters unavailable') from exc
+    if not params: raise N3RunError('loaded model has no parameters')
+    base_floating=0
+    adapter_tensors=0
+    for name,param in params:
+        if str(getattr(param,'device',None))!=expected:
+            raise N3RunError('native model and adapter are not fully resident on the H100')
+        try: is_float=param.is_floating_point()
+        except Exception as exc: raise N3RunError('loaded model parameter dtype unavailable') from exc
+        segments=str(name).split('.')
+        is_adapter=any(part in LORA_PARAMETER_MARKERS for part in segments)
+        if any(part.startswith('lora_') for part in segments) and not is_adapter:
+            raise N3RunError('unexpected LoRA parameter type')
+        if is_adapter:
+            adapter_tensors+=1
+            if not is_float or param.dtype is not torch.float32:
+                raise N3RunError('LoRA adapter parameter dtype differs from FP32 policy')
+            continue
+        if is_float:
+            if param.dtype is not torch.bfloat16:
+                raise N3RunError('base model parameter dtype differs from BF16 policy')
+            base_floating+=1
+    if base_floating==0: raise N3RunError('loaded base model has no floating-point parameters')
+    if adapter_tensors!=EXPECTED_NATIVE_LORA_TENSORS:
+        raise N3RunError('LoRA adapter tensor count differs from pinned FP32 inventory')
+    device_map=getattr(model,'hf_device_map',None)
+    if device_map is not None:
+        if not isinstance(device_map,dict) or not device_map:
+            raise N3RunError('loaded model device map differs')
+        for value in device_map.values():
+            if type(value) is int:
+                if value!=device: raise N3RunError('CPU/disk or off-device model map rejected')
+            elif str(value)!=expected:
+                raise N3RunError('CPU/disk or off-device model map rejected')
+    return {'device':expected,'base_dtype':str(torch.bfloat16),'adapter_dtype':str(torch.float32),
+            'base_floating_parameter_tensors':base_floating,'adapter_parameter_tensors':adapter_tensors}
 
 def timing_allows(elapsed,completed,total,remaining):
     if completed!=20 or total!=440 or not math.isfinite(elapsed) or elapsed<=0 or not math.isfinite(remaining) or remaining<=0:
@@ -62,7 +127,10 @@ def utc_timestamp():
     return datetime.now(timezone.utc).isoformat(timespec='microseconds').replace('+00:00','Z')
 
 def write_first20_timing(path,*,load_start,load_end,decode_start,checkpoint,deadline,checkpoint_epoch,
-                         load_start_utc,load_end_utc,decode_start_utc,checkpoint_utc,source_sha256,config_sha256):
+                         load_start_utc,load_end_utc,decode_start_utc,checkpoint_utc,source_sha256,config_sha256,
+                         inference_precision,base_precision,adapter_precision,cuda_memory_before_load,cuda_memory_after_load,
+                         loaded_model_device,loaded_model_base_dtype,loaded_model_adapter_dtype,
+                         loaded_model_base_floating_parameter_tensors,loaded_model_adapter_parameter_tensors):
     monotonic=(load_start,load_end,decode_start,checkpoint)
     if any(type(x) not in (int,float) or not math.isfinite(x) for x in monotonic):
         raise N3RunError('timing checkpoint monotonic values differ')
@@ -77,13 +145,31 @@ def write_first20_timing(path,*,load_start,load_end,decode_start,checkpoint,dead
     for digest in (source_sha256,config_sha256):
         if not isinstance(digest,str) or not re.fullmatch('[0-9a-f]{64}',digest):
             raise N3RunError('timing checkpoint source pin differs')
+    if inference_precision!='native_bf16': raise N3RunError('timing checkpoint precision differs')
+    if base_precision!='bf16' or adapter_precision!='fp32': raise N3RunError('timing checkpoint base/adapter precision policy differs')
+    cuda_memory_before_load=validate_memory_snapshot(cuda_memory_before_load)
+    cuda_memory_after_load=validate_memory_snapshot(cuda_memory_after_load)
+    if (loaded_model_device!='cuda:0' or loaded_model_base_dtype!='torch.bfloat16' or
+        loaded_model_adapter_dtype!='torch.float32' or
+        type(loaded_model_base_floating_parameter_tensors) is not int or
+        loaded_model_base_floating_parameter_tensors<=0 or
+        type(loaded_model_adapter_parameter_tensors) is not int or
+        loaded_model_adapter_parameter_tensors!=EXPECTED_NATIVE_LORA_TENSORS):
+        raise N3RunError('timing checkpoint loaded model identity differs')
     load_seconds=load_end-load_start
     decode_seconds=checkpoint-decode_start
     available_remaining=deadline-checkpoint_epoch
     projected_remaining=decode_seconds/20*(440-20)
     within_budget=timing_allows(decode_seconds,20,440,available_remaining)
-    record={'schema':'hardread.reads-n3.first20-timing/v1','source_sha256':source_sha256,
-            'config_sha256':config_sha256,'load_start_utc':load_start_utc,'load_end_utc':load_end_utc,
+    record={'schema':'hardread.reads-n3.first20-timing/v2','source_sha256':source_sha256,
+            'config_sha256':config_sha256,'inference_precision':inference_precision,
+            'base_precision':base_precision,'adapter_precision':adapter_precision,
+            'cuda_memory_before_load':cuda_memory_before_load,'cuda_memory_after_load':cuda_memory_after_load,
+            'loaded_model_device':loaded_model_device,'loaded_model_base_dtype':loaded_model_base_dtype,
+            'loaded_model_adapter_dtype':loaded_model_adapter_dtype,
+            'loaded_model_base_floating_parameter_tensors':loaded_model_base_floating_parameter_tensors,
+            'loaded_model_adapter_parameter_tensors':loaded_model_adapter_parameter_tensors,
+            'load_start_utc':load_start_utc,'load_end_utc':load_end_utc,
             'decode_start_utc':decode_start_utc,'checkpoint_utc':checkpoint_utc,
             'load_seconds':load_seconds,'first20_decode_seconds':decode_seconds,
             'projected_remaining_seconds':projected_remaining,'available_remaining_seconds':available_remaining,
@@ -97,14 +183,37 @@ def write_first20_timing(path,*,load_start,load_end,decode_start,checkpoint,dead
 def load_model(base,adapter,device):
     import torch
     from peft import PeftModel
-    from transformers import AutoModelForImageTextToText,BitsAndBytesConfig
-    quant=BitsAndBytesConfig(load_in_4bit=True,bnb_4bit_quant_type='nf4',bnb_4bit_use_double_quant=True,
-                            bnb_4bit_compute_dtype=torch.bfloat16,bnb_4bit_quant_storage=torch.bfloat16)
-    model=AutoModelForImageTextToText.from_pretrained(str(base),local_files_only=True,quantization_config=quant,
+    from transformers import AutoModelForImageTextToText
+    model=AutoModelForImageTextToText.from_pretrained(str(base),local_files_only=True,
              dtype=torch.bfloat16,attn_implementation='flash_attention_2',device_map={'':device})
     model=PeftModel.from_pretrained(model,str(adapter),is_trainable=False,local_files_only=True)
     model.eval()
     return model
+
+def validate_xl6_completion(cfg,receipt_path):
+    if not receipt_path or sha(receipt_path)!=cfg['xl6_completion_sha256']:
+        raise N3RunError('XL6 completion proof differs')
+    xl6=strict_json(Path(receipt_path).read_bytes())
+    if (xl6.get('schema')!='hardread.reads-n3.terminal/v2' or xl6.get('status')!='complete' or
+        xl6.get('arm')!='xl6' or xl6.get('completed')!=440 or
+        xl6.get('inference_precision')!='native_bf16' or
+        xl6.get('base_precision')!=cfg['base_precision'] or xl6.get('adapter_precision')!=cfg['adapter_precision'] or
+        type(xl6.get('adapter_parameter_tensors')) is not int or
+        xl6.get('adapter_parameter_tensors')!=cfg['adapter_parameter_tensors'] or
+        xl6.get('loaded_model_base_dtype')!='torch.bfloat16' or
+        xl6.get('loaded_model_adapter_dtype')!='torch.float32' or
+        type(xl6.get('loaded_model_base_floating_parameter_tensors')) is not int or
+        xl6.get('loaded_model_base_floating_parameter_tensors')<=0 or
+        type(xl6.get('loaded_model_adapter_parameter_tensors')) is not int or
+        xl6.get('loaded_model_adapter_parameter_tensors')!=cfg['adapter_parameter_tensors'] or
+        xl6.get('cohort_manifest_sha256')!=cfg['cohort_manifest_sha256'] or
+        xl6.get('prompt_sha256')!=cfg['prompt_sha256'] or
+        xl6.get('base_files_sha256')!=inventory_sha256(cfg['base_files']) or
+        xl6.get('adapter_files_sha256')!=inventory_sha256(cfg['adapter_files']) or
+        not isinstance(xl6.get('outputs_sha256'),str) or
+        not re.fullmatch('[0-9a-f]{64}',xl6['outputs_sha256'])):
+        raise N3RunError('complete native-BF16 XL6 proof required')
+    return xl6
 
 def verify_source(root,pins):
     root=Path(root).resolve()
@@ -141,11 +250,7 @@ def run(config_path,config_sha,prompt_path,cohort_path,review_path,selection_pat
     if selection.get('status')!='selected' or selection.get('arm')!=cfg['arm'] or selection.get('adapter_files')!=cfg['adapter_files'] or selection.get('base_files')!=cfg['base_files']:
         raise N3RunError('selected model identity differs')
     if cfg['arm']=='selected_v2':
-        if not xl6_receipt_path or sha(xl6_receipt_path)!=cfg['xl6_completion_sha256']:
-            raise N3RunError('XL6 completion proof differs')
-        xl6=strict_json(Path(xl6_receipt_path).read_bytes())
-        if xl6.get('status')!='complete' or xl6.get('arm')!='xl6' or xl6.get('cohort_manifest_sha256')!=cfg['cohort_manifest_sha256']:
-            raise N3RunError('XL6 completion missing')
+        validate_xl6_completion(cfg,xl6_receipt_path)
     verify_tree(base_path,cfg['base_files']);verify_tree(adapter_path,cfg['adapter_files'])
     with open(prompt_path,encoding='utf-8') as f:prompts=[strict_json(line) for line in f]
     if len(prompts)!=440 or len({p.get('duid') for p in prompts})!=440 or len({p.get('game') for p in prompts})!=440:
@@ -184,11 +289,21 @@ def run(config_path,config_sha,prompt_path,cohort_path,review_path,selection_pat
                 if stop.wait(60):break
     sampler=threading.Thread(target=sample_gpu,daemon=True);sampler.start()
     status='incomplete';count=0;reason='unexpected interruption'
+    native_memory_before_load=None;native_memory_after_load=None
+    loaded_model_device=None;loaded_model_base_dtype=None;loaded_model_adapter_dtype=None
+    loaded_model_base_floating_parameter_tensors=None;loaded_model_adapter_parameter_tensors=None
     try:
         if not first_sample.wait(15) or sample_error.is_set():raise N3RunError('GPU sampling unavailable')
+        native_memory_before_load=cuda_memory_snapshot(torch,0)
         load_start_utc=utc_timestamp()
         load_start=time.monotonic()
         model=load_model(base_path,adapter_path,0)
+        loaded_identity=verify_native_bf16_residency(model,torch,0)
+        loaded_model_device=loaded_identity['device'];loaded_model_base_dtype=loaded_identity['base_dtype']
+        loaded_model_adapter_dtype=loaded_identity['adapter_dtype']
+        loaded_model_base_floating_parameter_tensors=loaded_identity['base_floating_parameter_tensors']
+        loaded_model_adapter_parameter_tensors=loaded_identity['adapter_parameter_tensors']
+        native_memory_after_load=cuda_memory_snapshot(torch,0)
         load_end=time.monotonic()
         load_end_utc=utc_timestamp()
         decode_start=None;decode_start_utc=None
@@ -219,16 +334,36 @@ def run(config_path,config_sha,prompt_path,cohort_path,review_path,selection_pat
                     timing=write_first20_timing(output/'timing.json',load_start=load_start,load_end=load_end,
                             decode_start=decode_start,checkpoint=checkpoint,deadline=deadline,checkpoint_epoch=checkpoint_epoch,
                             load_start_utc=load_start_utc,load_end_utc=load_end_utc,decode_start_utc=decode_start_utc,
-                            checkpoint_utc=checkpoint_utc,source_sha256=sha(Path(__file__).resolve()),config_sha256=config_sha)
+                            checkpoint_utc=checkpoint_utc,source_sha256=sha(Path(__file__).resolve()),config_sha256=config_sha,
+                            inference_precision=cfg['inference_precision'],base_precision=cfg['base_precision'],
+                            adapter_precision=cfg['adapter_precision'],cuda_memory_before_load=native_memory_before_load,
+                            cuda_memory_after_load=native_memory_after_load,loaded_model_device=loaded_model_device,
+                            loaded_model_base_dtype=loaded_model_base_dtype,loaded_model_adapter_dtype=loaded_model_adapter_dtype,
+                            loaded_model_base_floating_parameter_tensors=loaded_model_base_floating_parameter_tensors,
+                            loaded_model_adapter_parameter_tensors=loaded_model_adapter_parameter_tensors)
                     if not timing['within_budget']:
                         reason='20-decision timing projection exceeds deadline';break
                     reason='unexpected interruption'
             os.fsync(out.fileno())
         if count==440 and time.time()<=deadline:status='complete';reason=None
+    except Exception as exc:
+        reason='native BF16 execution failed: '+type(exc).__name__
+        raise
     finally:
         stop.set();sampler.join(timeout=15)
-        terminal={'status':status,'arm':cfg['arm'],'completed':count,'reason':reason,'cohort_manifest_sha256':cfg['cohort_manifest_sha256'],
-                  'prompt_sha256':cfg['prompt_sha256'],'selection_sha256':cfg['selection_sha256'],'config_sha256':config_sha,
+        terminal={'schema':'hardread.reads-n3.terminal/v2','status':status,'arm':cfg['arm'],
+                  'inference_precision':cfg['inference_precision'],'base_precision':cfg['base_precision'],
+                  'adapter_precision':cfg['adapter_precision'],'adapter_parameter_tensors':cfg['adapter_parameter_tensors'],
+                  'completed':count,'reason':reason,
+                  'cohort_manifest_sha256':cfg['cohort_manifest_sha256'],'prompt_sha256':cfg['prompt_sha256'],
+                  'selection_sha256':cfg['selection_sha256'],'config_sha256':config_sha,
+                  'base_files_sha256':inventory_sha256(cfg['base_files']),
+                  'adapter_files_sha256':inventory_sha256(cfg['adapter_files']),
+                  'cuda_memory_before_load':native_memory_before_load,'cuda_memory_after_load':native_memory_after_load,
+                  'loaded_model_device':loaded_model_device,'loaded_model_base_dtype':loaded_model_base_dtype,
+                  'loaded_model_adapter_dtype':loaded_model_adapter_dtype,
+                  'loaded_model_base_floating_parameter_tensors':loaded_model_base_floating_parameter_tensors,
+                  'loaded_model_adapter_parameter_tensors':loaded_model_adapter_parameter_tensors,
                   'outputs_sha256':sha(output/'outputs.jsonl') if (output/'outputs.jsonl').is_file() else None}
         fd=os.open(output/'terminal.json',os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
         with os.fdopen(fd,'w') as f:json.dump(terminal,f,sort_keys=True);f.write('\n');f.flush();os.fsync(f.fileno())
