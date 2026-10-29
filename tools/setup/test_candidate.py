@@ -108,4 +108,74 @@ class Tests(unittest.TestCase):
             self.assertFalse((run/'data-inputs.private.json').exists())
             self.assertFalse(any((run/'hardread'/pin['cache_path']).exists() for pin in pins))
 
+
+class OwnerLocalTests(unittest.TestCase):
+    def make_bundle(self, base):
+        bundle=base/'bundle'; bundle.mkdir()
+        pins=[]; rows=[]
+        for i in range(4):
+            name=f'file{i}.json'; body=json.dumps({'v':i}).encode(); (bundle/name).write_bytes(body)
+            path=f'foul-play/fp/data/cache{i}/item.json'; pins.append({'cache_path':path})
+            rows.append({'cache_path':path,'relative_file':name,'size_bytes':len(body),'sha256':hashlib.sha256(body).hexdigest(),'source':'synthetic','capture_date':'2026-10-29','permission_reference':'fake'})
+        obj={'schema':'hardread-owner-cache-bundle-v1','provenance_record_id':'synthetic','snapshot_date':'2026-10-29','files':rows}
+        manifest=bundle/'manifest.json'; auth=bundle/'auth.json'
+        def update():
+            manifest.write_text(json.dumps(obj))
+            auth.write_text(json.dumps({'manifest_sha256':hashlib.sha256(manifest.read_bytes()).hexdigest(),'scope':'private-local-S6.4-test','decision_reference':'synthetic'}))
+        update()
+        return manifest,auth,{'data_inputs':{'pins':pins}},obj,update
+    def test_cache_exact_copy_receipt_and_no_network(self):
+        with tempfile.TemporaryDirectory(dir='/private/tmp') as t:
+            base=pathlib.Path(t).resolve(); manifest,auth,closure,obj,_=self.make_bundle(base); run=base/'run'; run.mkdir()
+            with mock.patch.object(acquire,'build_opener',side_effect=AssertionError('network')):
+                acquire.stage_owner_cache_files(run,manifest,auth,closure)
+            for row in obj['files']:
+                self.assertEqual((run/'hardread'/row['cache_path']).read_bytes(),(manifest.parent/row['relative_file']).read_bytes())
+            receipt=json.loads((run/'owner-cache-receipt.private.json').read_text()); self.assertEqual(len(receipt['files']),4)
+            self.assertEqual((run/'owner-cache-receipt.private.json').stat().st_mode & 0o777,0o600)
+    def test_package_64_fake_files_and_no_network(self):
+        with tempfile.TemporaryDirectory(dir='/private/tmp') as t:
+            base=pathlib.Path(t).resolve(); src=base/'src'; src.mkdir(); run=base/'run'; run.mkdir(); rows=[]
+            for group,count in [('wheelhouse',9),('crate-archives',55)]:
+                (src/group).mkdir()
+                for i in range(count):
+                    name=f'{i}.pkg'; body=bytes([i]); (src/group/name).write_bytes(body); rows.append((group,name,1,hashlib.sha256(body).hexdigest()))
+            with mock.patch.object(acquire,'package_rows',return_value=rows), mock.patch.object(acquire,'build_opener',side_effect=AssertionError('network')):
+                acquire.stage_local_packages(run,src,{})
+                self.assertEqual(sum(1 for p in run.rglob('*.pkg')),64)
+                (src/'wheelhouse'/'extra').write_bytes(b'x')
+                with self.assertRaises(RuntimeError): acquire.stage_local_packages(base/'second',src,{})
+    def test_cache_rejections(self):
+        for scenario in ('duplicate','duplicate-file','missing','extra','size','hash','empty','malformed','traversal','symlink','destination','noauth','scope','oversize'):
+            with self.subTest(scenario=scenario), tempfile.TemporaryDirectory(dir='/private/tmp') as t:
+                base=pathlib.Path(t).resolve(); manifest,auth,closure,obj,update=self.make_bundle(base); run=base/'run'; run.mkdir(); row=obj['files'][0]
+                if scenario=='duplicate': obj['files'][1]['cache_path']=row['cache_path']
+                if scenario=='duplicate-file': obj['files'][1]['relative_file']=row['relative_file']
+                if scenario=='missing': obj['files'].pop()
+                if scenario=='extra': obj['files'].append(dict(row))
+                if scenario=='size': row['size_bytes']+=1
+                if scenario=='hash': row['sha256']='0'*64
+                if scenario=='empty':
+                    body=b'{}'; (manifest.parent/row['relative_file']).write_bytes(body); row['size_bytes']=len(body); row['sha256']=hashlib.sha256(body).hexdigest()
+                if scenario=='malformed':
+                    body=b'{'; (manifest.parent/row['relative_file']).write_bytes(body); row['size_bytes']=len(body); row['sha256']=hashlib.sha256(body).hexdigest()
+                if scenario=='traversal': row['relative_file']='../escape'
+                if scenario=='symlink':
+                    target=manifest.parent/row['relative_file']; target.unlink(); target.symlink_to(manifest.parent/'file1.json')
+                if scenario=='destination':
+                    dest=run/'hardread'/row['cache_path']; dest.parent.mkdir(parents=True); dest.write_bytes(b'existing')
+                if scenario=='oversize': row['size_bytes']=4*1024*1024+1
+                update()
+                if scenario=='noauth': auth.unlink()
+                if scenario=='scope': auth.write_text(json.dumps({'scope':'wrong','manifest_sha256':hashlib.sha256(manifest.read_bytes()).hexdigest(),'decision_reference':'x'}))
+                with mock.patch.object(acquire,'build_opener',side_effect=AssertionError('network')):
+                    with self.assertRaises((RuntimeError,ValueError,OSError)): acquire.stage_owner_cache_files(run,manifest,auth,closure)
+    def test_modes_reject_before_run(self):
+        for flags in ([],['--input-mode','live','--owner-data-manifest','/tmp/a'],['--input-mode','owner-local']):
+            with tempfile.TemporaryDirectory(dir='/private/tmp') as t:
+                run=pathlib.Path(t).resolve()/'run'
+                args=['clean_cli.py','--python','/x','--rust-bin','/x','--engine-sdist','/x','--foulplay-source','/x','--replay','/x','--team','/x','--side','p1','--run',str(run)]+flags
+                with mock.patch.object(sys,'argv',args), self.assertRaises(SystemExit): driver.main()
+                self.assertFalse(run.exists())
+
 if __name__=='__main__': unittest.main()

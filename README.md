@@ -134,11 +134,13 @@ The scripts in `azure/` read the workspace settings from environment variables: 
 
 ### Clean local CLI on Mac arm64 / CPython 3.13
 
-This procedure needs a completed replay log and its matching own-team export, an existing approved engine sdist, the pinned Rust 1.89 toolchain, and a separate local Foul Play Git checkout containing commit `f061e63d3d588f30e72af2f4a7d12d3101896d02`. Foul Play is not included in this repository. The engine sdist must have SHA-256 `070010686f2aedff11e25137e696e301ccd80fd57c805d255464067fc905ca12`. Use the directly installed Rust/Cargo 1.89 binaries pinned by the setup helper; a rustup installer shim does not satisfy this requirement.
+These are prospective examples, not evidence of a completed installation, native build, or fresh-clone review. An earlier approved attempt stopped at HTTP 403 before installation or build; it did not run these explicit input modes. Each mode below requires a new authorization. Choose exactly one `--input-mode`; there is no automatic fallback.
 
-Set these variables to absolute paths to your local inputs before running the commands below: `PYTHON`, `RUST_BIN`, `ENGINE_SDIST`, `FOULPLAY_SOURCE`, `REPLAY`, `TEAM`, and `HARDREAD_SOURCE`. `HARDREAD_SOURCE` is the local HardRead Git checkout whose current commit contains these setup instructions. Use a private output location. This performs one attempt, bounded to 30 minutes, with new isolated environments and no shared dependency cache.
+Both modes require a completed replay log and matching own-team export, an existing approved engine sdist, the pinned Rust 1.89 toolchain, and a separate local Foul Play Git checkout containing commit `f061e63d3d588f30e72af2f4a7d12d3101896d02`. Foul Play is not included in this repository. The engine sdist must have SHA-256 `070010686f2aedff11e25137e696e301ccd80fd57c805d255464067fc905ca12`. Use the directly installed Rust/Cargo 1.89 binaries pinned by the setup helper; a rustup installer shim does not satisfy this requirement.
 
-```sh
+Set these variables to absolute paths before use: `PYTHON`, `RUST_BIN`, `ENGINE_SDIST`, `FOULPLAY_SOURCE`, `REPLAY`, `TEAM`, and `HARDREAD_SOURCE`. `HARDREAD_SOURCE` is the local HardRead checkout containing these setup instructions. Each example creates a fresh source clone, new runtime/build environments, and a private run directory; neither reuses a virtual environment, compiled dependency, app state, nor review output. The procedure is local and uses no paid or cloud compute. Any new download, installation, or native compilation requires authorization.
+
+```bash
 : "${PYTHON:?absolute path to CPython 3.13}" "${RUST_BIN:?absolute path to Rust 1.89 bin directory}" "${ENGINE_SDIST:?absolute path to approved engine sdist}" "${FOULPLAY_SOURCE:?absolute path to Foul Play git checkout}" "${REPLAY:?absolute path to completed replay}" "${TEAM:?absolute path to matching team export}" "${HARDREAD_SOURCE:?absolute path to HardRead git checkout}"
 umask 077
 BASE="$(mktemp -d "${TMPDIR:-/tmp}/hardread-clean.XXXXXXXX")"
@@ -146,7 +148,20 @@ HARDREAD_COMMIT="$(git -C "$HARDREAD_SOURCE" rev-parse HEAD)"
 git clone --no-local --no-checkout "$HARDREAD_SOURCE" "$BASE/hardread"
 git -C "$BASE/hardread" checkout --detach "$HARDREAD_COMMIT"
 cd "$BASE/hardread"
-"$PYTHON" tools/setup/clean_cli.py --python "$PYTHON" --rust-bin "$RUST_BIN" --engine-sdist "$ENGINE_SDIST" --foulplay-source "$FOULPLAY_SOURCE" --replay "$REPLAY" --team "$TEAM" --side p2 --run "$BASE/run"
+COMMON_ARGS=(--python "$PYTHON" --rust-bin "$RUST_BIN" --engine-sdist "$ENGINE_SDIST" --foulplay-source "$FOULPLAY_SOURCE" --replay "$REPLAY" --team "$TEAM" --side p2 --run "$BASE/run")
 ```
 
-Select `--side p1` if your team was player one. The run records the checked-out source commit, data hashes, stage logs and resulting review in its private directory. It fetches exactly 64 pinned package/crate bodies totaling 32,411,866 bytes and four private upstream set-data bodies under a 32 MiB combined raw cap. The set-data licence is unverified; keep those bodies private and do not redistribute them. This uses local resources and no paid or cloud service. Downloads, installation and native compilation need your authorization. No previous data cache or compiled dependency is reused.
+**Live mode — prospective.** The consumed approved attempt is not an attempt with this mode flag. A future live invocation needs new authorization. It would use the 64 pinned package/crate inputs and fetch the four set-data inputs described below; their current availability is not asserted. Set-data redistribution rights are unverified, so keep any retrieved data private and do not redistribute it.
+
+```bash
+"$PYTHON" tools/setup/clean_cli.py --input-mode live "${COMMON_ARGS[@]}"
+```
+
+**Owner-local mode — prospective; required files and scope are absent here.** This mode uses only the previously verified 64 package/crate archive outputs (32,411,866 bytes total) and four exact owner-supplied set-data cache snapshots, named in a private manifest and covered by a separate owner authorization record. The snapshots, manifest, and authorization scope are not present in this repository, so this example is not runnable yet; it makes no claim that fresh set data is available. Set these absolute-path variables only after the owner supplies and authorizes the inputs: `PACKAGE_ARCHIVE_ROOT`, `OWNER_DATA_MANIFEST`, and `OWNER_AUTHORIZATION_RECORD`. Only those 64 archive outputs are reused: no prior cache, virtual environment, compiled dependency, app state, or review output is reused. Keep set-data snapshots private; redistribution rights are unverified.
+
+```bash
+: "${PACKAGE_ARCHIVE_ROOT:?absolute path to the verified 64 package/crate archive outputs}" "${OWNER_DATA_MANIFEST:?absolute path to the private four-snapshot manifest}" "${OWNER_AUTHORIZATION_RECORD:?absolute path to the owner authorization record}"
+"$PYTHON" tools/setup/clean_cli.py --input-mode owner-local "${COMMON_ARGS[@]}" --package-archive-root "$PACKAGE_ARCHIVE_ROOT" --owner-data-manifest "$OWNER_DATA_MANIFEST" --owner-authorization-record "$OWNER_AUTHORIZATION_RECORD"
+```
+
+Select `--side p1` instead of `p2` if your team was player one. These examples do not establish a successful clean CLI review.

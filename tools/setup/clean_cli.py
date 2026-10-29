@@ -41,7 +41,14 @@ def main():
     ap=argparse.ArgumentParser()
     for name in ('python','rust-bin','engine-sdist','foulplay-source','replay','team','run'): ap.add_argument('--'+name,type=P,required=True)
     ap.add_argument('--side',choices=['p1','p2'],required=True)
+    ap.add_argument('--input-mode',choices=['live','owner-local'],required=True)
+    for name in ('package-archive-root','owner-data-manifest','owner-authorization-record'):
+        ap.add_argument('--'+name,type=P)
     a=ap.parse_args()
+    local=(a.package_archive_root,a.owner_data_manifest,a.owner_authorization_record)
+    if a.input_mode=='owner-local' and any(x is None for x in local): ap.error('owner-local requires all three local inputs')
+    if a.input_mode=='live' and any(x is not None for x in local): ap.error('live rejects owner-local inputs')
+    if any(x is not None and not x.is_absolute() for x in local): ap.error('owner-local paths must be absolute')
     for name in ('python','rust_bin','engine_sdist','foulplay_source','replay','team'):
         p=getattr(a,name).resolve(strict=True); setattr(a,name,p)
     run=a.run
@@ -57,7 +64,7 @@ def main():
         for name,h in RUST_PINS.items():
             p=a.rust_bin/name
             if p.is_symlink() or digest(p)!=h: raise RuntimeError('direct Rust binary pin mismatch')
-        if datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m')!='2026-10': raise RuntimeError('monthly data URL requires rebinding')
+        if a.input_mode=='live' and datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m')!='2026-10': raise RuntimeError('monthly data URL requires rebinding')
         env={'PATH':'/usr/bin:/bin:/usr/sbin:/sbin','HOME':str(run),'TMPDIR':str(run),'PYTHONNOUSERSITE':'1','PIP_NO_CACHE_DIR':'1','PIP_CONFIG_FILE':'/dev/null','GIT_CONFIG_NOSYSTEM':'1','GIT_CONFIG_GLOBAL':'/dev/null','GIT_TERMINAL_PROMPT':'0'}
         def go(n,cmd,cwd=run,extra=None):
             nonlocal stage
@@ -76,8 +83,12 @@ def main():
         setup=repo/'tools/setup'
         artifacts=setup/'mac-cp313-arm64.artifacts.json'
         data=setup/'mac-cp313-arm64.data.json'
-        go('packages',[a.python,setup/'acquire.py','packages','--run',run,'--closure',artifacts,'--crates',artifacts])
-        go('data',[a.python,setup/'acquire.py','data','--run',run,'--closure',data])
+        if a.input_mode=='live':
+            go('packages',[a.python,setup/'acquire.py','packages','--run',run,'--closure',artifacts,'--crates',artifacts])
+            go('data',[a.python,setup/'acquire.py','data','--run',run,'--closure',data])
+        else:
+            go('local_packages',[a.python,setup/'acquire.py','local-packages','--run',run,'--closure',artifacts,'--archive-root',a.package_archive_root])
+            go('local_data',[a.python,setup/'acquire.py','owner-cache','--run',run,'--closure',data,'--manifest',a.owner_data_manifest,'--authorization-record',a.owner_authorization_record])
         go('vendor',[a.python,setup/'vendor.py','--run',run,'--closure',artifacts,'--crates',artifacts,'--engine-archive',a.engine_sdist])
         go('build_venv',[a.python,'-m','venv',run/'build-venv'])
         go('venv',[a.python,'-m','venv',run/'venv'])
