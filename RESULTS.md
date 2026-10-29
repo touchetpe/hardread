@@ -1767,3 +1767,10 @@ The existing three-minute v7 had optional mov_text subtitles; it did not satisfy
 The initial strict preservation check failed on1,289later picture frames, first3,601; one range-tag repair made identical output and stopped. Original strictREJECT remains. A separate manual fallback accepted the caption/readability component with that encoding difference explicit; no all-picture pixel-equality claim. Screen 'replay flows' versus caption 'engineering flows' was reviewed as the same flow unit, not three unique games.
 
 Evidence: `experiments/cards/VIDEO-PRIVATE-BURNED-CAPTIONS-V8.json`. Voice, actual two-viewer feedback, model-number freeze and overall video acceptance remain pending; this is private preparation, no publication or hosted-playback guarantee. Sourcev7 and all39ledger entries/scores/selection remain unchanged; no new model, app capture, dependency install, paid action or experiment.
+
+
+## 2026-10-29T16:13:50.823161+00:00 — Private 40-second teaser and copy component
+
+The reviewed private S8.3 cut uses four existing v8 spans (0–5,82–97,97–105,168–180seconds). Actual binary is40.000seconds/1,200frames,1920×1320,30fps,H.264/yuv420p,one video stream/no audio or subtitle stream. The whole15-second comparison remains adjacent to the8-second template/source caveat and12-second credits/fan-made/18+card. Root independently counted decoded frames, verified source/output hashes and inspected the contact sheet plus four full-size frames. Sol accepted one original actual visual/public-copy review. Gallery and277-character X drafts remain private, without a destination link.
+
+Evidence: `experiments/cards/VIDEO-PRIVATE-TEASER-S83-20261029.json`. Ordinary recoding differences are not an equality gate; private rough-cut labels and original source-card times remain. Sampled inspection is not a full-motion art scan. S8.3 owner/final-copy OD18 acceptance, publication, and the full180-second video's actual viewer/freeze gates remain pending. No new quality metric, model/app capture, install, paid action, public post or source-video change; all39ledger entries remain unchanged/unfrozen.
