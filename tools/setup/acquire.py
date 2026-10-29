@@ -9,6 +9,7 @@ import hashlib
 import json
 from pathlib import Path
 from urllib.parse import urlsplit
+from urllib.error import HTTPError
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 
@@ -102,7 +103,7 @@ def acquire_data(run, closure):
     opener = build_opener(RestrictedRedirect(data_mode=True))
     transfer = 0
     receipt = []
-    for pin in pins:
+    for index, pin in enumerate(pins, start=1):
         url = pin["primary_source_url_derived_from_static_code"]
         host = urlsplit(url).hostname
         if urlsplit(url).scheme != "https" or host not in {
@@ -110,7 +111,15 @@ def acquire_data(run, closure):
         }:
             raise RuntimeError(f"unapproved data source: {url}")
         cap = (20 if host == "www.smogon.com" else 4) * 1024 * 1024
-        with opener.open(Request(url, headers={"Accept-Encoding": "identity"}), timeout=20) as response:
+        try:
+            response = opener.open(Request(url, headers={"Accept-Encoding": "identity"}), timeout=20)
+        except HTTPError as error:
+            status = int(error.code)
+            failure = {"stage": "data", "url": url, "status": status, "index": index}
+            write_new(run / "data-http-failure.private.json",
+                      (json.dumps(failure, sort_keys=True) + "\n").encode("utf-8"))
+            raise RuntimeError(f"data source HTTP {status}: {url}") from None
+        with response:
             body = bounded_read(response, min(cap, 32 * 1024 * 1024 - transfer))
         transfer += len(body)
         if transfer > 32 * 1024 * 1024:

@@ -75,4 +75,37 @@ class Tests(unittest.TestCase):
             p=pathlib.Path(t)/'exercise.py'; p.write_text('import socket\nsocket.create_connection(("example.com",80))\n')
             r=subprocess.run([sys.executable,'offline_review.py',str(p)],capture_output=True)
             self.assertNotEqual(r.returncode,0); self.assertIn(b'offline review attempted network',r.stderr)
+    def test_data_http_error_is_minimal_and_does_not_read_body(self):
+        pins=json.loads(pathlib.Path('mac-cp313-arm64.data.json').read_text())['data_inputs']['pins']
+        first_url=pins[0]['primary_source_url_derived_from_static_code']
+        class UnreadBody:
+            reads=0
+            def read(self,*args):
+                self.reads+=1
+                raise AssertionError('HTTP error body must not be read')
+            def close(self):
+                pass
+        body=UnreadBody()
+        error=acquire.HTTPError(first_url,403,'Forbidden',{},body)
+        class ErrorOpener:
+            def __init__(self): self.calls=[]
+            def open(self,request,timeout=20):
+                self.calls.append(request.full_url)
+                raise error
+        opener=ErrorOpener()
+        closure=json.loads(pathlib.Path('mac-cp313-arm64.data.json').read_text())
+        with tempfile.TemporaryDirectory() as t:
+            run=pathlib.Path(t)
+            with mock.patch.object(acquire,'build_opener',return_value=opener):
+                with self.assertRaises(RuntimeError) as raised:
+                    acquire.acquire_data(run,closure)
+            self.assertEqual(str(raised.exception),f'data source HTTP 403: {first_url}')
+            self.assertIsNone(raised.exception.__cause__)
+            self.assertEqual(opener.calls,[first_url])
+            self.assertEqual(body.reads,0)
+            failure=json.loads((run/'data-http-failure.private.json').read_text())
+            self.assertEqual(failure,{'stage':'data','url':first_url,'status':403,'index':1})
+            self.assertFalse((run/'data-inputs.private.json').exists())
+            self.assertFalse(any((run/'hardread'/pin['cache_path']).exists() for pin in pins))
+
 if __name__=='__main__': unittest.main()
