@@ -304,13 +304,42 @@ class HardReadSFTPlugin(BasePlugin):
         return callbacks + [StepTimer()]
 
 
+def compare_optimizer_value(actual, saved, *, max_depth=4, max_entries=100000):
+    """Exact bounded comparison of observed bnb nested dict/tensor/scalar state."""
+    import torch
+    seen_left=set();seen_right=set();budget=[0]
+    def compare(left,right,depth):
+        budget[0]+=1
+        if budget[0]>max_entries or depth>max_depth:raise RuntimeError('optimizer state comparison bounds exceeded')
+        if torch.is_tensor(right):
+            if not torch.is_tensor(left) or left.dtype!=right.dtype or tuple(left.shape)!=tuple(right.shape):raise RuntimeError('optimizer tensor metadata differs')
+            x=left.detach().cpu();y=right.detach().cpu()
+            if (x.is_floating_point() or x.is_complex()) and (not bool(torch.isfinite(x).all()) or not bool(torch.isfinite(y).all())):raise RuntimeError('optimizer tensor is nonfinite')
+            if not torch.equal(x,y):raise RuntimeError('optimizer tensor state differs')
+        elif type(right) is dict:
+            if type(left) is not dict or {(type(k),k) for k in left}!={(type(k),k) for k in right}:raise RuntimeError('optimizer nested keys differ')
+            if id(left) in seen_left or id(right) in seen_right:raise RuntimeError('optimizer state cycle')
+            seen_left.add(id(left));seen_right.add(id(right))
+            try:
+                for key in right:
+                    if type(key) not in (str,int):raise RuntimeError('optimizer dictionary key unsupported')
+                    compare(left[key],right[key],depth+1)
+            finally:seen_left.remove(id(left));seen_right.remove(id(right))
+        elif type(right) in (int,float,str,bool,type(None)):
+            if type(left) is not type(right):raise RuntimeError('optimizer scalar type differs')
+            if type(right) is float and (not math.isfinite(right) or not math.isfinite(left)):raise RuntimeError('optimizer scalar is nonfinite')
+            if left!=right:raise RuntimeError('optimizer scalar state differs')
+        else:raise RuntimeError('unsupported optimizer state value')
+    compare(actual,saved,0)
+
+
 def compare_resume_state(optimizer, scheduler, checkpoint):
     """Compare loaded optimizer counters and scheduler state against pinned source bytes."""
     import torch
     saved=torch.load(Path(checkpoint)/'optimizer.pt',map_location='cpu',weights_only=True)
     saved_scheduler=torch.load(Path(checkpoint)/'scheduler.pt',map_location='cpu',weights_only=True)
     actual=optimizer.state_dict();a=actual.get('state');b=saved.get('state')
-    if not isinstance(a,dict) or not a or not isinstance(b,dict) or set(a)!=set(b):raise RuntimeError('optimizer state inventory differs')
+    if not isinstance(a,dict) or not a or not isinstance(b,dict) or len(a)>10000 or set(a)!=set(b):raise RuntimeError('optimizer state inventory differs')
     def scalar(value):
         value=value.item() if hasattr(value,'item') else value
         if type(value) not in (int,float) or not math.isfinite(value):raise RuntimeError('optimizer counter invalid')
@@ -323,13 +352,7 @@ def compare_resume_state(optimizer, scheduler, checkpoint):
             if scalar(left['step'])!=scalar(right['step']):raise RuntimeError('optimizer counter differs')
             compared+=1
         for field in right:
-            x,y=left[field],right[field]
-            if torch.is_tensor(y):
-                if not torch.is_tensor(x) or not torch.equal(x.detach().cpu(),y.detach().cpu()):raise RuntimeError('optimizer tensor state differs')
-            elif isinstance(y,(int,float,str,bool,type(None))):
-                if torch.is_tensor(x):x=x.item()
-                if x!=y:raise RuntimeError('optimizer scalar state differs')
-            else:raise RuntimeError('unsupported optimizer state value')
+            compare_optimizer_value(left[field],right[field])
     if not compared:raise RuntimeError('optimizer counters unavailable')
     if scheduler is None or scheduler.last_epoch!=saved_scheduler.get('last_epoch'):raise RuntimeError('scheduler checkpoint differs')
     if list(scheduler.get_last_lr())!=saved_scheduler.get('_last_lr'):raise RuntimeError('scheduler learning rate differs')

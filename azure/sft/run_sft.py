@@ -34,8 +34,10 @@ import argparse
 import ast
 import gzip
 import re
+import signal
 import hashlib
 import json
+import math
 import os
 import shutil
 import subprocess
@@ -314,6 +316,70 @@ def prefetch(work: Path, shm: Path, res: dict):
         res["done"] = True
 
 
+class NativeGpuSampler:
+    """Bounded rank-local operational telemetry; no training state is read."""
+    INTERVAL=60
+    TIMEOUT=5
+    MAX_BYTES=2*1024*1024
+    QUERY=['nvidia-smi','--query-gpu=timestamp,index,uuid,utilization.gpu,memory.used,memory.total,power.draw','--format=csv,noheader,nounits']
+    def __init__(self,out,rank):
+        self.path=Path(out)/('gpu-rank%d.csv' % rank);self.stop_event=threading.Event();self.thread=None;self.previous={};self.samples=0;self.periodic_samples=0;self.periodic_attempts=0;self.periodic_failures=0;self.error=None;self.truncated=False
+    def sample(self,periodic=False):
+        if periodic:self.periodic_attempts+=1
+        try:
+            result=subprocess.run(self.QUERY,capture_output=True,text=True,timeout=self.TIMEOUT,check=True)
+            lines=[]
+            for row in result.stdout.splitlines():
+                fields=[x.strip() for x in row.split(',')]
+                if len(fields)!=7 or any(not x or len(x)>128 for x in fields) or not fields[1].isdigit() or not fields[2].startswith('GPU-'):raise ValueError('invalid telemetry format')
+                for index in (3,4,5):
+                    val=float(fields[index])
+                    if not math.isfinite(val) or val<0:raise ValueError('invalid telemetry value')
+                if float(fields[3])>100:raise ValueError('invalid utilization')
+                if fields[6] in ('N/A','[N/A]','[Not Supported]','Not Supported'):
+                    fields[6]='N/A'
+                else:
+                    power=float(fields[6])
+                    if not math.isfinite(power) or power<0:raise ValueError('invalid power')
+                lines.append(','.join(fields)+'\n')
+            if not lines:raise ValueError('empty telemetry')
+            raw=''.join(lines).encode('utf8')
+            if self.path.stat().st_size+len(raw)>self.MAX_BYTES:
+                self.truncated=True
+                if periodic:self.periodic_failures+=1
+                self.stop_event.set();return
+            with self.path.open('ab') as f:f.write(raw)
+            self.samples+=len(lines)
+            if periodic:self.periodic_samples+=len(lines)
+        except Exception as exc:
+            self.error=type(exc).__name__
+            if periodic:self.periodic_failures+=1
+    def loop(self):
+        while not self.stop_event.wait(self.INTERVAL):self.sample(periodic=True)
+    def _signal(self,number,frame):raise SystemExit(128+number)
+    def __enter__(self):
+        try:
+            if self.path.exists():raise RuntimeError('telemetry output already exists')
+            self.path.touch(mode=0o600,exist_ok=False)
+            if threading.current_thread() is threading.main_thread():
+                for sig in (signal.SIGTERM,signal.SIGINT):self.previous[sig]=signal.getsignal(sig);signal.signal(sig,self._signal)
+            self.sample();self.thread=threading.Thread(target=self.loop,name='rank-gpu-sampler',daemon=True);self.thread.start()
+            return self
+        except Exception as exc:
+            self.error=type(exc).__name__;return self
+        except BaseException:
+            self.close();raise
+    def close(self):
+        self.stop_event.set()
+        if self.thread:self.thread.join(self.TIMEOUT+2)
+        for sig,handler in self.previous.items():signal.signal(sig,handler)
+        self.previous.clear()
+        STATE['gpu_sampling']={'status':('unmeasured' if not self.periodic_samples else 'partial' if self.error or self.truncated or (self.thread and self.thread.is_alive()) else 'measured'),'samples':self.samples,'initial_samples':self.samples-self.periodic_samples,'periodic_samples':self.periodic_samples,'periodic_attempts':self.periodic_attempts,'periodic_failures':self.periodic_failures,'rank':RANK,'interval_seconds':self.INTERVAL,'command_timeout_seconds':self.TIMEOUT,'error_type':self.error,'truncated':self.truncated,'sampler_stopped':not self.thread or not self.thread.is_alive()}
+        try:save_state()
+        except Exception:pass
+    def __exit__(self,*_):self.close();return False
+
+
 def _train(args, env):
     import yaml
     cfg = yaml.safe_load((SFT / "qlora_sft.yaml").read_text())
@@ -352,8 +418,11 @@ def _train(args, env):
         cfg["cut_cross_entropy"] = False
     resolved = OUT / f"config.resolved{SUFFIX}.yaml"
     resolved.write_text(yaml.safe_dump(cfg, sort_keys=False))
-    sh(["axolotl", "train", resolved, "--launcher", "python"], f"train{SUFFIX}.log", env=env, cwd=CODE,
-       timeout=args.train_timeout)
+    if getattr(args,"resume_v2_second_epoch",False):
+        with NativeGpuSampler(OUT,RANK) as sampler:
+            sh(["axolotl", "train", resolved, "--launcher", "python"], f"train{SUFFIX}.log", env=env, cwd=CODE, timeout=args.train_timeout)
+    else:
+        sh(["axolotl", "train", resolved, "--launcher", "python"], f"train{SUFFIX}.log", env=env, cwd=CODE, timeout=args.train_timeout)
     if (OUT / f"deadline_stop{SUFFIX}.json").exists():
         res_stop = json.loads((OUT / f"deadline_stop{SUFFIX}.json").read_text())
         log(f"training stopped at the time budget: {res_stop}")

@@ -54,6 +54,22 @@ class ResumeTests(unittest.TestCase):
   with self.assertRaisesRegex(RuntimeError,'optimizer counter differs'):P.compare_resume_state(optimizer,scheduler,self.ck)
   optimizer.state[parameter]['step']-=1;optimizer.state[parameter]['exp_avg']+=1
   with self.assertRaisesRegex(RuntimeError,'optimizer tensor state differs'):P.compare_resume_state(optimizer,scheduler,self.ck)
+ def test_bnb_nested_state_exact_and_guarded(self):
+  import torch
+  keys=('absmax1','absmax2','qmap1','qmap2','state1','state2')
+  original={k:torch.tensor([float(i)]) for i,k in enumerate(keys)};actual={k:v.clone() for k,v in original.items()};P.compare_optimizer_value(actual,original)
+  for mutation in ('tensor','shape','dtype','key','scalar','unsupported','depth','cycle','nonfinite'):
+   left={k:v.clone() for k,v in original.items()};right={k:v.clone() for k,v in original.items()}
+   if mutation=='tensor':left['state1']+=1
+   elif mutation=='shape':left['state1']=torch.zeros(2)
+   elif mutation=='dtype':left['state1']=left['state1'].double()
+   elif mutation=='key':left.pop('state1')
+   elif mutation=='scalar':left={'step':2};right={'step':1}
+   elif mutation=='unsupported':left={'other':[]};right={'other':[]}
+   elif mutation=='depth':left={'a':{'b':{'c':{'d':{'e':1}}}}};right={'a':{'b':{'c':{'d':{'e':1}}}}}
+   elif mutation=='cycle':left={};right={};left['x']=left;right['x']=right
+   elif mutation=='nonfinite':left={'x':float('nan')};right={'x':float('nan')}
+   with self.subTest(mutation=mutation),self.assertRaises(RuntimeError):P.compare_optimizer_value(left,right)
  def test_loaded_optimizer_scheduler_receipt(self):
   class O:
    param_groups=[{'lr':0.0}]
