@@ -1680,3 +1680,22 @@ The updated silent preview incorporates the accepted XL6 arena chart at120–130
 ## 2026-10-29 — Student v2.1 data count v3: 90,133 NEW, training gate not met
 
 The single accepted 18-producer count completed under its original 90-minute / sampled 12-GiB guard. Independent review accepts **90,133 eligible NEW train decisions**, **9,867 short** of 100,000; Student v2.1 training remains disabled. This is a training-data count, not a model accuracy or win rate. Historical six-source 74,033 remains unchanged as its own run. The expanded union gives 314,303 raw decisions, 117,356 selected/encoded/deduplicated, and 90,133 eligible NEW. Whole-game selection precedes encoding; original cohorts, collisions, C9 and heldout barriers remain. The union removes 2,492 previously eligible prior-class rows and adds 18,592 new-class rows: direct addition to 74,033 would be wrong. Exact report/provenance/cohort hashes and original independent admission are in `experiments/cards/STUDENT-V21-TOPUP12-COUNT-RESULT-20261029.json`. Private work was removed after the successful zero exit; final sampled work was 7,854,231,326 bytes, with transient peaks unverified. No training or count rerun occurred. A new useful farm wave requires prospective source/cost/usefulness checks and current capacity admission.
+
+
+<a id="glimmer-reads-n3-xl6-complete-20261029"></a>
+
+## 2026-10-29 — N3 XL6 native BF16 R3: complete exploratory reads
+
+On a prospectively frozen exploratory subset of 440 held-out S-A hr_val games (one predetermined decision per game; 1,954 Pokémon rows), XL6 Glimmer completed all 440 reads. Eligible-row top-1 accuracy was 907/1,473 (61.58%) for hidden items, 800/1,855 (43.13%) for tera type, 1,509/1,620 (93.15%) for ability, and 848/958 (88.52%) when restricting abilities to species with more than one legal ability. Exact hidden-move-set match was 309/1,911 (16.17%). No output was excluded for parse or field failure.
+
+Compared on identical rows, item and tera rates exceeded the usage reference by 3.53 and 3.13 percentage points (exploratory 95% paired game-bootstrap intervals: 1.55 to 5.61 and 1.62 to 4.72). The intervals did not demonstrate gains over belief v1 for item, tera or ability; hidden-move-set exact match was lower than usage and belief v1 by 3.04 and 3.66 points (intervals: −4.68 to −1.47 and −5.28 to −2.11). These are exploratory subset results, with 2,000 paired game resamples and seed 0. They do not replace the full S-A benchmark or establish overall model or playing strength. Glimmer categorical NLL and all moves NLL remain undefined; this readout does not trigger a product or shipping decision.
+
+| Field | XL6 correct / eligible rows | XL6 | Usage | Belief v1 |
+|---|---:|---:|---:|---:|
+| Hidden item | 907/1473 | 61.58% | 58.04% | 60.96% |
+| Hidden tera type | 800/1855 | 43.13% | 40.00% | 43.83% |
+| Hidden ability | 1509/1620 | 93.15% | 93.58% | 93.58% |
+| Ability, multi-ability species | 848/958 | 88.52% | 89.14% | 89.14% |
+| Exact hidden-move set | 309/1911 | 16.17% | 19.20% | 19.83% |
+
+Exact version, source/input/model/output hashes, all field intervals and baseline support counts: `experiments/cards/READS-N3-XL6-COMPLETE-EXPLORATORY-20261029.json`. Original independent result review6abe25af reproduced every count and paired interval exactly; maximum arithmetic error0. Earlier timing and pre-model failures remain separate and unscored.
