@@ -1,6 +1,6 @@
 # Third-party software, models and data
 
-HardRead builds on the open-source projects, open model weights and public data listed here. Every licence below was read from the project's own `LICENSE` file at the pinned commit; the SHA-256 is the hash of that file. Rows marked *not verified locally* give the upstream's declared licence because we have no local copy of its licence file.
+HardRead builds on the open-source projects, open model weights and public data listed here. A SHA-256 shown for a locally available `LICENSE` or policy file is the hash of that file at the pinned commit. Other rows cite package metadata or the upstream's declared licence, as identified in each row; *not verified locally* means no local copy of the licence file was available to inspect.
 
 **Pokémon** is a trademark of Nintendo, Creatures Inc. and GAME FREAK inc. HardRead is a fan-made research project, not affiliated with or endorsed by Nintendo, The Pokémon Company, Creatures, GAME FREAK, Smogon or Pokémon Showdown. HardRead uses no official art, sprites, logos or music; Pokémon, move and item names appear only as game data.
 
@@ -8,12 +8,12 @@ HardRead builds on the open-source projects, open model weights and public data 
 
 | Project | Upstream | Pinned commit / version | Licence (file SHA-256) | How HardRead uses it | Shipped in our repos? |
 |---|---|---|---|---|---|
-| **Foul Play** (battle bot; PokéAgent Challenge 2025 Gen 9 OU winner's engine) | github.com/pmariglia/foul-play | `8f541f80f91f960603673796559f796b10ccf0fb` | **GPL-3.0** (`3972dc97…6986`) | Our fork `hardread-foulplay` adds hooks that are off by default (engine levers, decision logging, an oracle hook for one experiment, a policy hook, a local guest login). HardRead's review engine imports it. | Yes: the fork, under GPL-3.0, with upstream history and notices kept. HardRead imports the fork, so HardRead's own licence must be GPL-3.0-compatible (see `LICENSE`). |
+| **Foul Play** (battle bot; PokéAgent Challenge 2025 Gen 9 OU winner's engine) | github.com/pmariglia/foul-play | Upstream base `8f541f80f91f960603673796559f796b10ccf0fb`; separate HardRead fork `f061e63d3d588f30e72af2f4a7d12d3101896d02` | **GPL-3.0** (`3972dc97…6986`) | The separate `hardread-foulplay` checkout adds default-off engine levers, decision logging and hooks used by local experiments. The top-level `LICENSE` is byte-identical to `foul-play/LICENSE`. | Separate dependency checkout; not bundled in this 441-path source candidate. |
 | **poke-engine** (Rust battle search used by Foul Play) | github.com/pmariglia/poke-engine | `bcf13823abc162a608e187b26bbf683f759f385e`; Python package 0.0.48 built with `terastallization` | MIT, © 2024 pmariglia (`38ce7f13…0b4d`) | Search and battle simulation, through Foul Play | No (installed dependency) |
 | **Pokémon Showdown** (battle simulator) | github.com/smogon/pokemon-showdown | `c0845f33d381402dfcb18ce324c20a94f18af075` | MIT, © 2011–2026 Guangcong Luo and contributors (`b2002a9f…3ed0`) | A private local server for self-play; `TeamValidator` (`tools/validate_teams.js`); `tools/sft/dex.json` is generated from its data by `tools/sft/mkdex.js` | No (local checkout); `dex.json` is a generated subset of its data files |
 | **PokéChamp** (`AbyssalPlayer` heuristic baseline) | github.com/sethkarten/pokechamp | `0f84c460319ebe733f8c3028e58a2a5452c60d85` | MIT, © 2025 Seth Karten (`8c7dde40…37fb`) | Opponent bot in the arena (`tools/arena/abyssal_bot.py` runs it unmodified from a local checkout) | No |
 | **poke-env** | github.com/hsahovic/poke-env | `7ff6212e4e738efd46f1ea52035b37a8bba1e386` | MIT, © 2019 hsahovic (`77f2c617…4f3b`) | Through PokéChamp, which bundles a modified `poke_env` package | No |
-| **llama.cpp** (inference server, LoRA → GGUF conversion) | github.com/ggml-org/llama.cpp | `f8def7fe168bab245fbf15d3f18b26dbb1ef73c8` | MIT, © 2023–2026 the ggml authors (`94f29bbe…010d`); bundles nlohmann/json (MIT, © 2013–2025 Niels Lohmann) | Serves Muse Glimmer locally and in jobs; converts LoRA adapters | No (built from source) |
+| **llama.cpp** (inference server, LoRA → GGUF conversion) | github.com/ggml-org/llama.cpp | `f8def7fe168bab245fbf15d3f18b26dbb1ef73c8` | MIT, © 2023–2026 the ggml authors (`94f29bbe…010d`); bundles nlohmann/json (MIT, © 2013–2025 Niels Lohmann) | Optional local Glimmer inference and LoRA-to-GGUF conversion. The app defaults to labeled template explanations; Glimmer is not required for every review. | No (built from source) |
 | **Axolotl** (fine-tuning framework) | github.com/axolotl-ai-cloud/axolotl | version installed in the training container image | Apache-2.0 (*not verified locally*) | QLoRA fine-tuning of Glimmer (`azure/sft/run_sft.py`) | No |
 | PyTorch | pytorch.org | 2.8.0 | BSD-3-Clause (package metadata) | Student, belief model, training | No |
 | NumPy | numpy.org | 2.0.2 / 2.4.2 | BSD-3-Clause (package metadata) | Everywhere | No |
@@ -24,7 +24,7 @@ HardRead builds on the open-source projects, open model weights and public data 
 
 | Model | Source | Licence (file SHA-256) | How HardRead uses it | Shipped? |
 |---|---|---|---|---|
-| **Muse Glimmer-30B** (Meta open weights), Q4_K_M GGUF | Meta's official release (`meta-models/Muse-Glimmer-30B-GGUF`) | **Apache-2.0** (`cfc7749b…3d30`) + **Muse Glimmer Usage Policy** (`98a14dab…81d3`; among other terms, "not intended for individuals under the age of 18") | Explainer and note parser in the product, served by us with llama.cpp. LoRA fine-tunes for the science experiments. | No: download the weights from Meta's release. Our LoRA adapters are not published yet. |
+| **Muse Glimmer-30B** (Meta open weights), Q4_K_M GGUF | Meta's official release (`meta-models/Muse-Glimmer-30B-GGUF`) | **Apache-2.0** (`cfc7749b…3d30`) + **Muse Glimmer Usage Policy** (`98a14dab…81d3`; among other terms, "not intended for individuals under the age of 18") | Explainer and note parser in the optional local Glimmer path; the app defaults to labeled template explanations. LoRA fine-tunes are used for science experiments. | No: download the weights from Meta's release. Our LoRA adapters are not published yet. |
 
 Because of Meta's usage policy, HardRead is for users aged 18 and over.
 
