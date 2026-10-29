@@ -1596,3 +1596,20 @@ Evidence (repository-relative paths): `scratch_ds/codex/training-roadmap/dpo-t2/
 The independent review accepted the completed six-farm source-count report for **count reporting only**: **74,033 eligible new-only training decisions**, from **250,212 raw** and **95,867 selected/deduplicated/encoded** decisions. This remains **25,967 below** the 100,000 training threshold. Training was not admitted or executed. The earlier pending six-farm status is superseded by this count-only review; this report does not authorize training. [Six-farm count card](experiments/cards/STUDENT-V21-TOPUP6-ACTUAL-COUNT.json).
 
 Evidence (repository-relative paths): `scratch_ds/codex/training-roadmap/student-v21-topup6-candidate-v3/count-helper/execution-v1/source-count.private.json` SHA-256 `6eb5e9243f0fcfe30750610aefd580e4c958d8ef8885a4cdcd62aac2af004b1a`; independent count-only review `scratch_ds/codex/training-roadmap/student-v21-topup6-candidate-v3/independent-actual-count-review.private.json` SHA-256 `eedbc2ea8dd96e7183054190a0b5d1cb6241980a8be38de96e8c632ee0ba54ca`.
+
+
+<a id="glimmer-v2-original-validation-20261029"></a>
+## 2026-10-29T03:53:57Z — Glimmer v2 original validation complete; XL6 retained
+
+The all-data Glimmer v2 candidate completed its original full validation in `hrsft-20261029-v2all-fullval-946a548b`. Independent original readout and root reprojection accept **1,386/2,428 = 57.0840% engine-policy agreement**, policy CE **1.5677826965**, top-2 **1,886/2,428**, top-3 **2,123/2,428**, and zero generated rows. All 2,428 action identities, original validation/companion bytes and final v2 adapter hashes match. The companion's 238 reads rows are not included in the action denominator.
+
+| Original validation | Correct / n | Engine agreement | Policy CE |
+|---|---:|---:|---:|
+| Selected XL6 | 1,379 / 2,428 | 56.7957% | 1.5677069633 |
+| Glimmer v2 candidate | 1,386 / 2,428 | 57.0840% | 1.5677826965 |
+
+V2 gains seven cases (**+0.2883 percentage points**) and misses the prespecified **at least 1,416/2,428** selection gate by 30. **V2 is not selected; XL6 remains selected. DPO round 2 is not triggered.** The descriptive v2 Wilson 95% interval is55.106–59.040%; the aggregate difference establishes neither paired significance nor a causal effect of more training data. This agreement metric is not a battle win rate.
+
+This decision is recorded and committed before any registered fixed-v0 test-quality read for v2. A subsequent owner-12 candidate fixed-400 comparison is descriptive and cannot change selection. The producer's built-in400 rows are not that registered test. Training/five-stage/persistence completion and earlier failures remain separate records.
+
+[Original validation and selection card](experiments/cards/GLIMMER-V2-ORIGINAL-VAL-NOT-SELECTED-20261029.json). Independent original review SHA-256`c02f5483c441f1edace4edaf32854986b675e255535c11342ac2731070d43c30`; teacher rows SHA-256`716b56ad028a12d774b1a4b0ce619ae080bf65ce6cc8b1df55e3f15867ba5bce`; v2 adapter SHA-256`946a548b635db87ed304eb66d5a104c35d7c4787a29c9a3a87574e04dcbe57f3`. No fixed-v0 score, new arena outcome or DPO quality result was opened for this decision.
