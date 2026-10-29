@@ -12,7 +12,10 @@
 #   run_sft.py always receives --job-timeout <timeout_s> so its training budget fits inside the job.
 set -euo pipefail
 NAME="$1"; DATA="$2"; TIMEOUT="$3"; DESC="$4"; shift 4
+RESUME_MODE=0
 for arg in "$@"; do
+  [[ "$arg" != --resume-marker && "$arg" != --resume-marker=* ]] || { echo "use RESUME_MARKER_FILE" >&2; exit 2; }
+  [[ "$arg" != --resume-v2-second-epoch ]] || RESUME_MODE=1
   [[ "$arg" != --proof-binding && "$arg" != --proof-binding=* && "$arg" != --proof-binding-sha256 && "$arg" != --proof-binding-sha256=* ]] || { echo "use V2_PROOF_FILE to stage the reviewed proof" >&2; exit 2; }
 done
 NODES="${NODES:-1}"
@@ -50,6 +53,10 @@ if [[ ${V2_PROOF_FILE+x} ]]; then
   [[ "$(shasum -a 256 "$V2_PROOF_FILE" | awk '{print $1}')" == "$V2_PRE_PROOF_SHA" ]] || { echo "v2 proof changed during validation" >&2; exit 2; }
   [[ "$(cd "$DATA" && shasum -a 256 train.jsonl.gz val.jsonl.gz eval.jsonl.gz manifest.json)" == "$V2_PRE_FILES" ]] || { echo "v2 data changed during validation" >&2; exit 2; }
 fi
+if [ "$RESUME_MODE" = 1 ]; then
+  [[ "$NODES" = 12 && "${CKPT_ARG:-}" = --resume-from && -n "${CKPT_URI:-}" && -n "${DATA_URI:-}" && -n "${V2_PROOF_FILE:-}" ]] || { echo "reviewed DDP resume bindings missing" >&2; exit 2; }
+  [[ -f "${RESUME_MARKER_FILE:-}" && ! -L "$RESUME_MARKER_FILE" && "$(shasum -a 256 "$RESUME_MARKER_FILE" | awk '{print $1}')" = ae466cac9617dfd8635835574ec9ce048316946bfebf916693a26abd1341a333 ]] || { echo "resume marker differs" >&2; exit 2; }
+fi
 A="$AZ/attempts/$NAME"
 [ -e "$A" ] && { echo "attempt dir exists: $A"; exit 2; }
 mkdir -p "$A/code/azure/sft" "$A/code/tools/sft"
@@ -80,6 +87,12 @@ if [[ ${V2_PROOF_FILE+x} ]]; then
     [[ "$(cd "$A/code/data" && shasum -a 256 train.jsonl.gz val.jsonl.gz eval.jsonl.gz manifest.json)" == "$V2_PRE_FILES" ]] || { echo "v2 copied data differs" >&2; exit 2; }
   fi
 fi
+RESUME_CMD=""
+if [ "$RESUME_MODE" = 1 ]; then
+  cp "$RESUME_MARKER_FILE" "$A/code/resume-persistence-marker.json"
+  [[ "$(shasum -a 256 "$A/code/resume-persistence-marker.json" | awk '{print $1}')" = ae466cac9617dfd8635835574ec9ce048316946bfebf916693a26abd1341a333 ]] || { echo "staged resume marker differs" >&2; exit 2; }
+  RESUME_CMD="--resume-marker resume-persistence-marker.json"
+fi
 (cd "$HR" && git rev-parse HEAD > "$A/code/HARDREAD_COMMIT" 2>/dev/null || true)
 (cd "$A/code" && find . -type f | sort | xargs shasum -a 256 > "$A/code-manifest.sha256")
 CKPT_CMD=""; CKPT_INPUT=""
@@ -102,7 +115,7 @@ display_name: $NAME
 experiment_name: hardread-sft
 description: "$DESC"
 code: "$A/code"
-command: $RUNNER --snapshot \${{inputs.model_snapshot}} $DATA_CMD --out \${{outputs.artifacts}} --job-timeout $TIMEOUT $CKPT_CMD $PROOF_CMD $*
+command: $RUNNER --snapshot \${{inputs.model_snapshot}} $DATA_CMD --out \${{outputs.artifacts}} --job-timeout $TIMEOUT $CKPT_CMD $PROOF_CMD $RESUME_CMD $*
 compute: azureml:${HR_AZ_CLUSTER}
 environment: azureml:$ENV_ID
 environment_variables:

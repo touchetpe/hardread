@@ -554,6 +554,38 @@ def serve_eval(args, env, pre, lora_gguf):
     return res
 
 
+RESUME_MARKER_SHA = "ae466cac9617dfd8635835574ec9ce048316946bfebf916693a26abd1341a333"
+RESUME_PROOF_SHA = "c52b6ee7196771cc38de17f513b5e59a6e1bdfe18feb88449e39ba94f88534db"
+RESUME_TRAIN_SHA = "fc94428772b0fc67e893347099513ba968b7c9aff175167c0012f1cf5eac1979"
+RESUME_MANIFEST_SHA = "0822d13ec13eda05a3f188abaaead9b70dd67e74428a4d3273b72ddf45acfd60"
+
+def validate_v2_second_epoch(args, *, marker_digest=RESUME_MARKER_SHA, proof_digest=RESUME_PROOF_SHA, train_digest=RESUME_TRAIN_SHA, manifest_digest=RESUME_MANIFEST_SHA):
+    """Verify pinned rank-zero checkpoint and recipe; nonzero-rank RNG is not restored."""
+    if int(os.environ.get("WORLD_SIZE", "1")) != 12 or not args.resume_from or args.eval_only:
+        raise ValueError("second epoch requires a 12-rank checkpoint resume")
+    recipe=(args.epochs,args.micro_batch,args.grad_accum,args.lr,args.lora_r,args.lora_alpha,args.save_steps,args.loss,args.choice_weight,args.soft_alpha,args.max_steps,args.warmup_steps,args.no_mb_fallback,args.skip_teacher,args.skip_serve)
+    if recipe!=(2,4,2,2e-4,32,16,200,"weighted",10.0,0.7,None,None,True,True,True):raise ValueError("second epoch recipe differs")
+    marker=Path(args.resume_marker);ck=Path(args.resume_from)
+    if not marker.is_file() or marker.is_symlink() or sha256(marker)!=marker_digest:raise ValueError("checkpoint marker differs")
+    if not args.proof_binding or args.proof_binding_sha256!=proof_digest or sha256(Path(args.proof_binding))!=proof_digest:raise ValueError("v2 proof differs")
+    if sha256(Path(args.data)/"train.jsonl.gz")!=train_digest or sha256(Path(args.data)/"manifest.json")!=manifest_digest:raise ValueError("v2 training data differs")
+    obj=json.loads(marker.read_bytes());prefix="checkpoint-3497/";rows=[r for r in obj.get("files",[]) if isinstance(r,dict) and str(r.get("path","")).startswith(prefix)]
+    expected={r["path"][len(prefix):]:(r["bytes"],r["sha256"]) for r in rows}
+    required={"adapter_model.safetensors","adapter_config.json","optimizer.pt","scheduler.pt","trainer_state.json","rng_state_0.pth"}
+    if len(expected)!=len(rows) or not required.issubset(expected) or not ck.is_dir() or ck.is_symlink():raise ValueError("checkpoint inventory incomplete")
+    observed=set()
+    for path in ck.rglob("*"):
+        if path.is_symlink() or (not path.is_file() and not path.is_dir()):raise ValueError("checkpoint entry unsupported")
+        if path.is_file():
+            rel=path.relative_to(ck).as_posix();observed.add(rel)
+            if rel not in expected or (path.stat().st_size,sha256(path))!=expected[rel]:raise ValueError("checkpoint bytes differ")
+    if observed!=set(expected):raise ValueError("checkpoint inventory differs")
+    state=json.loads((ck/"trainer_state.json").read_bytes())
+    epoch=state.get("epoch")
+    if state.get("global_step")!=3497 or type(epoch) not in (int,float) or not 0.99<=epoch<=1.001:raise ValueError("checkpoint training position differs")
+    if {name for name in observed if name.startswith("rng_state_")}!={"rng_state_0.pth"}:raise ValueError("checkpoint RNG inventory differs")
+    return {"global_step":3497,"checkpoint_epoch":epoch,"world_size":12,"rank0_rng_present":True,"other_rank_rng":"newly_initialized_not_restored","bitwise_replay":False}
+
 def main():
     global OUT, LOCAL_OUTPUT
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -577,6 +609,8 @@ def main():
     ap.add_argument("--post-budget", type=int, default=None,
                     help="seconds reserved after training for eval/convert/serve (default 2400, 300 if both skipped)")
     ap.add_argument("--resume-from", default=None, help="checkpoint dir to resume training from")
+    ap.add_argument("--resume-v2-second-epoch", action="store_true")
+    ap.add_argument("--resume-marker", default=None)
     ap.add_argument("--eval-only", action="store_true", help="no training: evaluate/convert/serve --adapter")
     ap.add_argument("--adapter", default=None, help="adapter (checkpoint) dir for --eval-only")
     ap.add_argument("--eval-n", type=int, default=200)
@@ -610,7 +644,12 @@ def main():
         # NC40ads_H100_v5 nodes have no InfiniBand: NCCL over TCP sockets. LoRA grads are ~0.4 GB/step.
         env.update(NCCL_IB_DISABLE="1", NCCL_DEBUG="WARN", TORCH_NCCL_ASYNC_ERROR_HANDLING="1")
     if is_ddp() and args.resume_from:
-        raise RuntimeError("DDP resume is not supported by local-output fallback")
+        if not args.resume_v2_second_epoch or not args.resume_marker:raise RuntimeError("DDP resume requires the reviewed second-epoch mode")
+        STATE["resume_validation"]=validate_v2_second_epoch(args)
+        env["HRSFT_RESUME_EXPECTED_STEP"]="3497"
+        env["HRSFT_RESUME_RECEIPT_DIR"]=str(OUT)
+    elif args.resume_v2_second_epoch or args.resume_marker:
+        raise RuntimeError("reviewed second-epoch mode requires DDP resume")
     if is_ddp() and RANK == 0 and ((OUT / "rank0-terminal.json").exists() or (OUT / "checkpoints").exists()):
         raise RuntimeError("DDP requires a fresh persistent output directory")
     if RANK == 0 and (OUT / "rank0.done").exists():
@@ -646,6 +685,12 @@ def main():
     train(args, env)
     if is_ddp():
         # No rank-local objective or batch-size changes in a collective run.
+        if args.resume_v2_second_epoch:
+            receipt=OUT / ("resume-rank%d.json" % RANK)
+            if not receipt.is_file():raise RuntimeError("resume startup receipt missing")
+            record=json.loads(receipt.read_bytes())
+            if record.get("restored_global_step")!=3497 or not record.get("optimizer_state_entries") or not record.get("optimizer_step_counters_verified") or record.get("adapter_load_hook") is not True or record.get("scheduler_step")!=3497 or not record.get("steps") or record["steps"][0].get("global_step")!=3498:
+                raise RuntimeError("resume state or step proof missing")
         if STATE["stages"].get("train", {}).get("status") != "ok":
             STATE["fatal"] = "train failed on this rank"
             save_state()

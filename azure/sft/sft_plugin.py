@@ -196,6 +196,20 @@ def make_trainer_cls():
             # compute_loss returns a per-micro-batch mean; let the Trainer divide by the GA steps.
             self.model_accepts_loss_kwargs = False
 
+        def _load_from_checkpoint(self, checkpoint, *args, **kwargs):
+            result=super()._load_from_checkpoint(checkpoint,*args,**kwargs)
+            if os.environ.get('HRSFT_RESUME_EXPECTED_STEP'):
+                if not checkpoint:raise RuntimeError('adapter checkpoint was not loaded')
+                self._hrsft_adapter_loaded=True
+            return result
+
+        def _load_optimizer_and_scheduler(self, checkpoint):
+            result=super()._load_optimizer_and_scheduler(checkpoint)
+            if os.environ.get('HRSFT_RESUME_EXPECTED_STEP'):
+                if not checkpoint:raise RuntimeError('resume checkpoint was not loaded')
+                self._hrsft_resume_comparison=compare_resume_state(self.optimizer,self.lr_scheduler,checkpoint)
+            return result
+
         def compute_loss(self, model, inputs, return_outputs=False, num_items_in_batch=None, **kw):
             loss, stats = choice_loss_step(model, inputs, w_choice, alpha)
             _accumulate(stats)
@@ -247,6 +261,9 @@ class HardReadSFTPlugin(BasePlugin):
         from transformers import TrainerCallback
 
         callbacks = []
+        expected=os.environ.get("HRSFT_RESUME_EXPECTED_STEP")
+        if expected:
+            callbacks.append(make_resume_callback(TrainerCallback,trainer,Path(os.environ["HRSFT_RESUME_RECEIPT_DIR"]),int(expected)))
         deadline = float(os.environ.get("HRSFT_TRAIN_DEADLINE", "0") or 0)
         log_path = os.environ.get("HRSFT_STEPS_LOG")
         if deadline:
@@ -285,6 +302,67 @@ class HardReadSFTPlugin(BasePlugin):
                     f.write(json.dumps(rec) + "\n")
 
         return callbacks + [StepTimer()]
+
+
+def compare_resume_state(optimizer, scheduler, checkpoint):
+    """Compare loaded optimizer counters and scheduler state against pinned source bytes."""
+    import torch
+    saved=torch.load(Path(checkpoint)/'optimizer.pt',map_location='cpu',weights_only=True)
+    saved_scheduler=torch.load(Path(checkpoint)/'scheduler.pt',map_location='cpu',weights_only=True)
+    actual=optimizer.state_dict();a=actual.get('state');b=saved.get('state')
+    if not isinstance(a,dict) or not a or not isinstance(b,dict) or set(a)!=set(b):raise RuntimeError('optimizer state inventory differs')
+    def scalar(value):
+        value=value.item() if hasattr(value,'item') else value
+        if type(value) not in (int,float) or not math.isfinite(value):raise RuntimeError('optimizer counter invalid')
+        return value
+    compared=0
+    for key in a:
+        left=a[key];right=b[key]
+        if not isinstance(left,dict) or not isinstance(right,dict) or set(left)!=set(right):raise RuntimeError('optimizer state keys differ')
+        if 'step' in right:
+            if scalar(left['step'])!=scalar(right['step']):raise RuntimeError('optimizer counter differs')
+            compared+=1
+        for field in right:
+            x,y=left[field],right[field]
+            if torch.is_tensor(y):
+                if not torch.is_tensor(x) or not torch.equal(x.detach().cpu(),y.detach().cpu()):raise RuntimeError('optimizer tensor state differs')
+            elif isinstance(y,(int,float,str,bool,type(None))):
+                if torch.is_tensor(x):x=x.item()
+                if x!=y:raise RuntimeError('optimizer scalar state differs')
+            else:raise RuntimeError('unsupported optimizer state value')
+    if not compared:raise RuntimeError('optimizer counters unavailable')
+    if scheduler is None or scheduler.last_epoch!=saved_scheduler.get('last_epoch'):raise RuntimeError('scheduler checkpoint differs')
+    if list(scheduler.get_last_lr())!=saved_scheduler.get('_last_lr'):raise RuntimeError('scheduler learning rate differs')
+    groups=actual.get('param_groups');saved_groups=saved.get('param_groups')
+    if not isinstance(groups,list) or not isinstance(saved_groups,list) or len(groups)!=len(saved_groups) or any(a.get('lr')!=b.get('lr') for a,b in zip(groups,saved_groups)):raise RuntimeError('optimizer learning rate differs')
+    return {'optimizer_state_entries':len(a),'optimizer_step_counters_verified':compared,'scheduler_checkpoint_step':scheduler.last_epoch}
+
+
+def make_resume_callback(base_cls, trainer, receipt_dir: Path, expected: int):
+    """Fail before steps unless Trainer restored optimizer, scheduler and global position."""
+    class ResumeProof(base_cls):
+        def __init__(self):self.record=None
+        def write(self):
+            path=receipt_dir / ("resume-rank%d.json" % int(os.environ.get("RANK","0")))
+            temp=path.with_suffix(".tmp");temp.write_text(json.dumps(self.record,sort_keys=True));os.replace(temp,path)
+        def on_train_begin(self,args,state,control,**kw):
+            optimizer=trainer.optimizer;scheduler=trainer.lr_scheduler
+            values=optimizer.state_dict().get('state') if optimizer is not None else None
+            comparison=getattr(trainer,'_hrsft_resume_comparison',None)
+            if not getattr(trainer,'_hrsft_adapter_loaded',False) or not comparison or not values or scheduler is None or scheduler.last_epoch!=expected or state.global_step!=expected:
+                raise RuntimeError('optimizer scheduler or trainer resume not established')
+            rates=[float(group['lr']) for group in optimizer.param_groups]
+            if not rates or any(not math.isfinite(x) for x in rates):raise RuntimeError('invalid restored learning rate')
+            self.record={'rank':int(os.environ.get('RANK','0')),'restored_global_step':expected,'optimizer_state_entries':len(values),'optimizer_step_counters_verified':comparison['optimizer_step_counters_verified'],'adapter_load_hook':True,'scheduler_step':scheduler.last_epoch,'loaded_learning_rates':rates,'rng':'restored_from_rank0_file' if int(os.environ.get('RANK','0'))==0 else 'newly_initialized_not_restored','bitwise_replay':False,'steps':[]}
+            self.write()
+        def on_step_end(self,args,state,control,**kw):
+            if self.record is None:raise RuntimeError('resume proof missing')
+            if len(self.record['steps'])<3:
+                rates=[float(group['lr']) for group in trainer.optimizer.param_groups]
+                if any(not math.isfinite(x) for x in rates):raise RuntimeError('invalid learning rate')
+                if state.global_step != expected+len(self.record['steps'])+1:raise RuntimeError('resume step sequence differs')
+                self.record['steps'].append({'global_step':state.global_step,'learning_rates_after_step':rates});self.write()
+    return ResumeProof()
 
 
 def deadline_reached(deadline: float, now: float | None = None) -> bool:
