@@ -421,3 +421,7 @@ dl.prov dd.mono { font-family: var(--mono); font-size: 12.5px; }
 details.dropped { margin-top: 8px; font-size: 13px; color: var(--ink-2); }
 details.dropped ul { margin: 6px 0 0; padding-left: 18px; }
 details.dropped b { font-weight: 600; color: var(--ink); }
+
+.own-game { margin-top: 18px; }
+.own-game .dis { margin-top: 12px; }
+.own-citation small { font-size: 11px; color: var(--ink-3); overflow-wrap: anywhere; }

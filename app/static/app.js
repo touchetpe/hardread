@@ -135,6 +135,7 @@
     if (pm && hsh === "/") { renderReview(pm[1]); nav = ""; }
     else if ((m = hsh.match(/^\/review\/([A-Za-z0-9_-]+)$/))) { renderReview(m[1]); nav = ""; }
     else if ((m = hsh.match(/^\/job\/([A-Za-z0-9_-]+)$/))) { renderJob(m[1]); nav = ""; }
+    else if (hsh === "/own-ladder") { renderOwnLadder(); nav = ""; }
     else if (hsh === "/about") { renderAbout(); nav = "about"; }
     else renderLanding();
     if (hsh !== "/about" && !gateAccepted()) requireGate();
@@ -282,7 +283,48 @@
       h("p", { class: "eyebrow" }, "Hidden information · search engine · receipts"),
       h("h1", null, "Was it luck, or was it you?"),
       h("p", { class: "lede" }, "Paste a competitive Pokémon battle. HardRead separates the dice from the decisions, turn by turn, and shows where a champion search engine would have played differently.")),
-      form, how, showcaseSec], null, false);
+      form, how, h("section", { class: "card", style: "margin-top:34px" },
+        h("h2", null, "Why the bot played this"),
+        h("p", null, "Explore selected pre-action search evidence from the bot’s own ladder games."),
+        h("a", { href: "#/own-ladder" }, "Open the bot’s games →")), showcaseSec], null, false);
+  }
+
+  function ownCitation(field) {
+    return h("span", { class: "own-citation" }, String(field.value),
+      h("small", null, " [", h("code", null, field.field), "; source ", h("code", null, field.ref), "]"));
+  }
+
+  function renderOwnLadder() {
+    show([h("p", { class: "muted" }, "Loading the bot’s games…")], "Why the bot played this", false);
+    var request = STATIC ? Promise.resolve({ games: [] }) : api("/api/own-ladder");
+    request.then(function (data) {
+      var games = (data && data.games && data.games.length === 3) ? data.games :
+        ["G1", "G2", "G3"].map(function (alias) { return { alias: alias, decisions: [] }; });
+      var recordedFacts = data && data.presentation === "recorded-facts";
+      var cards = games.map(function (game) {
+        var decisions = game.decisions || [];
+        return h("section", { class: "card own-game" }, h("h2", null, game.alias),
+          h("p", { class: "card-sub" }, "HardReadBot vs Opponent"),
+          decisions.length < 2 ? h("p", { class: "empty" }, decisions.length ? "Partial evidence: only one decision is available." : "Decision evidence is unavailable. This game remains pending.") : null,
+          game.conflicts_unavailable ? h("p", { class: "notice" }, "Conflicting source records are unavailable.") : null,
+          decisions.map(function (d) {
+            if (recordedFacts) return h("article", { class: "dis" },
+              h("p", null, "On turn ", ownCitation(d.turn), ", HardReadBot recorded ", ownCitation(d.chosen), " as its choice."),
+              d.duration ? h("p", null, "The log records ", ownCitation(d.duration.value), " ", ownCitation(d.duration.unit), " of search.") : null,
+              (d.visits || []).map(function (v) { return h("p", null, "The log records ", ownCitation(v.value), " search visits for ", ownCitation(v.scope), "."); }));
+            return h("article", { class: "dis" },
+              h("h3", null, "Turn ", ownCitation(d.turn)),
+              h("p", null, "Before acting, the bot’s active Pokémon: ", d.own_active ? ownCitation(d.own_active) : "unavailable", "."),
+              h("p", null, "The bot chose ", ownCitation(d.chosen), "; its logged legal candidate score was ", ownCitation(d.chosen_score), "."),
+              h("p", null, "Best other logged legal candidate: ", ownCitation(d.other), ", score ", ownCitation(d.other_score), "."),
+              h("p", { class: "footnote" }, "These are search scores on the same recorded scale; they are not calibrated win probabilities. Score order: ", ownCitation(d.score_order), "; scale: ", ownCitation(d.scale), "; unit: ", d.score_unit ? ownCitation(d.score_unit) : "unavailable", ". Legality sources: ", ownCitation(d.chosen_legal), " and ", ownCitation(d.other_legal), "."));
+          }));
+      });
+      show([h("a", { class: "back", href: "#/" }, "← Home"), h("h1", null, "Why the bot played this"),
+        recordedFacts ? h("p", null, h("span", { class: "badge-model" }, "Recorded decision facts"), " ", h("span", { class: "badge-model" }, "Template-only")) : null,
+        h("p", { class: "lede" }, recordedFacts ? "The bot’s recorded choices and search work, captured before it acted." : "Examples selected from pre-action decision evidence. Template-only explanations."),
+        recordedFacts ? h("p", { class: "footnote" }, "Detailed candidate comparisons are unavailable in these logs.") : null, cards], "Why the bot played this");
+    });
   }
 
   function miniBridge(b) {

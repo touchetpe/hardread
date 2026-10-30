@@ -39,6 +39,7 @@ sys.path.insert(0, str(APP))
 sys.path.insert(0, str(HARDREAD / "tools" / "review"))
 import pipeline as P  # noqa: E402
 import card as CARD  # noqa: E402
+import own_ladder_review as OWN  # noqa: E402
 import verdict_identity as VI  # noqa: E402
 
 STATE = Path(os.environ.get("HARDREAD_APP_STATE", HARDREAD / "scratch_ds" / "app"))
@@ -554,6 +555,19 @@ def create_app(concurrency=1, processes=4):
     @app.get("/api/showcases")
     def showcases():
         return _jsonfile(SHOWCASES / "index.json", {"showcases": []})
+
+    @app.get("/api/own-ladder")
+    def own_ladder():
+        # Only a separately admitted, sanitized projection is accepted here.
+        path = os.environ.get("HARDREAD_OWN_LADDER_PROJECTION")
+        try:
+            if path:
+                with open(path, encoding="utf-8") as source:
+                    return OWN.build_projection(json.load(source))
+        except (OSError, ValueError, TypeError):
+            pass
+        return {"games": [{"alias": alias, "decisions": []} for alias in ("G1", "G2", "G3")],
+                "mode": "template-only"}
 
     # ---- review
     @app.post("/api/preflight")
