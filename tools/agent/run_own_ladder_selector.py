@@ -22,13 +22,14 @@ import re
 import sys
 import time
 import urllib.request
+import urllib.error
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'app'))
 from own_ladder_review import build_projection, FACTS_SCHEMA
 from own_ladder_selection import Registry, validate_completion
 from evallock import eval_lock
-from llm import GlimmerClient
+from llm import GlimmerClient, LLMError
 
 BASE = 'http://127.0.0.1:18131'
 MODEL_SHA = '4cc57c0f51040a226e5a72cc47b7613f7772950e460a665f7083de89f183f60e'
@@ -38,6 +39,62 @@ SELECTOR = ROOT / 'app/own_ladder_selection.py'
 MAX_RESPONSE = 1_000_000
 HASH = re.compile(r'[a-f0-9]{64}\Z')
 SYSTEM = 'Select exactly one cited recorded fact per turn. Do not infer strategy or outcomes. Call select_evidence.'
+
+
+# The diagnostic envelope contains only these reviewed literal values.
+STAGES=frozenset(('unknown','admission','registry','lock.acquire','runtime.initial','health.request','health.validate',
+    'props.request','props.validate','template.request','template.validate','tokenize.request','tokenize.validate',
+    'token_budget','runtime.before_completion','attempt.write','completion.request','completion.validate','receipt.write'))
+EXCEPTIONS=((TimeoutError,'TimeoutError','timeout'), (urllib.error.HTTPError,'HTTPError','request_http_error'),
+    (urllib.error.URLError,'URLError','request_http_error'), (json.JSONDecodeError,'JSONDecodeError','decode_format'),
+    (UnicodeDecodeError,'UnicodeDecodeError','decode_format'), (LLMError,'LLMError','request_http_error'),
+    (FileExistsError,'FileExistsError','local_io'), (OSError,'OSError','local_io'),
+    (ValueError,'ValueError','validation'), (TypeError,'TypeError','validation'),
+    (KeyError,'KeyError','validation'), (RuntimeError,'RuntimeError','unexpected'))
+
+
+def diagnostic_context():
+    return {'stage':'admission','alias':None,'preflight_requests_counted':0,'completion_attempts_committed':0,'marker_owned':False}
+
+
+def classify_exception(exc):
+    for typ,name,category in EXCEPTIONS:
+        if isinstance(exc,typ): return {'category':category,'exception_class':name}
+    return {'category':'unexpected','exception_class':'OtherException'}
+
+
+class OwnedRequestError(RuntimeError):
+    def __init__(self, category, exception_class):
+        super().__init__('owned request failed')
+        permitted={(c,n) for _,n,c in EXCEPTIONS}|{('unexpected','OtherException')}
+        self.category,self.exception_class=(category,exception_class) if (category,exception_class) in permitted else ('unexpected','OtherException')
+
+
+def diagnostic_envelope(ctx, exc):
+    safe=classify_exception(exc)
+    origin='parent'
+    if isinstance(exc,OwnedRequestError):
+        safe={'category':exc.category,'exception_class':exc.exception_class}; origin='owned_request_child'
+    stage=ctx.get('stage') if ctx.get('stage') in STAGES else 'unknown'
+    alias=ctx.get('alias') if ctx.get('alias') in ('G1','G2','G3') else None
+    pre=ctx.get('preflight_requests_counted'); attempts=ctx.get('completion_attempts_committed')
+    if type(pre) is not int or not 0<=pre<=8: pre=0
+    if type(attempts) is not int or not 0<=attempts<=3: attempts=0
+    return {'schema':'own-ladder-selector-failure-diagnostic-v1','status':'unavailable','stage':stage,
+            **safe,'origin':origin,'alias':alias,'preflight_requests_counted':pre,'completion_attempts_committed':attempts}
+
+
+def write_failure(ctx, exc, stage=STAGE):
+    # Preserve the original generic receipt behavior; the companion requires
+    # a marker created by this invocation, never one left by an earlier run.
+    try:
+        if ctx.get('marker_owned') is True:
+            write_new(stage/'batch-failure.private.json', {'status':'unavailable'})
+    except (OSError,ValueError):
+        pass
+    if ctx.get('marker_owned') is True:
+        try: write_new(stage/'batch-failure-diagnostic.private.json',diagnostic_envelope(ctx,exc))
+        except (OSError,ValueError): pass
 
 
 def _keys(obj, keys):
@@ -127,8 +184,8 @@ def bounded_call(fn, args, timeout):
             raw=json.dumps({'ok':True,'value':value},allow_nan=False).encode()
             if len(raw)>MAX_RESPONSE: raise ValueError('response too large')
             send.send_bytes(raw)
-        except BaseException:
-            try: send.send_bytes(b'{"ok":false}')
+        except BaseException as exc:
+            try: send.send_bytes(json.dumps({'ok':False,**classify_exception(exc)}).encode())
             except BaseException: pass
         finally: send.close()
     p=ctx.Process(target=work); p.start(); send.close()
@@ -136,7 +193,8 @@ def bounded_call(fn, args, timeout):
         if not recv.poll(timeout): raise TimeoutError('request deadline')
         try: payload=json_unique(recv.recv_bytes(MAX_RESPONSE))
         except (EOFError,OSError,ValueError): raise RuntimeError('request failed')
-        if not payload.get('ok'): raise RuntimeError('request failed')
+        if not payload.get('ok'):
+            raise OwnedRequestError(payload.get('category'),payload.get('exception_class'))
         return payload['value']
     finally:
         recv.close()
@@ -204,42 +262,61 @@ def synthetic_batch(games, client, record_attempt, preflight, clock):
     return result
 
 
-def run(admission, admission_sha, view, stage=STAGE, call=bounded_call, process_check=verify_process):
+def run(admission, admission_sha, view, stage=STAGE, call=bounded_call, process_check=verify_process, diagnostic=None):
+    ctx=diagnostic if diagnostic is not None else diagnostic_context()
     stage.mkdir(mode=0o700,parents=True,exist_ok=True)
     if stage.is_symlink() or stage.stat().st_mode & 0o077: raise ValueError('private stage permissions')
     # Atomic marker prevents any automatic second batch even after interruption.
     write_new(stage/'batch-started.private.json',{'admission_sha256':admission_sha,'started_unix':time.time()})
+    ctx['marker_owned']=True
     now=time.monotonic(); total_end=now+480; preflight_end=now+60
+    ctx['stage']='registry'
     regs=[]
     for game in view['games']:
         try: regs.append(Registry(game))
         except ValueError: regs.append(None)
     results=[{'alias':a,'status':'fallback','refs':[]} for a in ('G1','G2','G3')]
     records=[]; request_count=0; completion_seconds=0.0
+    ctx['stage']='lock.acquire'
     with eval_lock('W3 local product selection',600):
+        ctx['stage']='runtime.initial'
         process_check(admission['runtime'])
         def preflight(endpoint, body=None):
             nonlocal request_count
             request_count+=1
+            ctx['preflight_requests_counted']=request_count
             if request_count>8: raise ValueError('preflight limit')
             return call(http_json,(endpoint,body),min(15,preflight_end-time.monotonic(),total_end-time.monotonic()))
+        ctx['stage']='health.request'
         health=preflight('/health')
+        ctx['stage']='health.validate'
         if health.get('status')!='ok': raise ValueError('runtime unavailable')
-        context=verify_props(preflight('/props'),admission['runtime'])
+        ctx['stage']='props.request'
+        props=preflight('/props')
+        ctx['stage']='props.validate'
+        context=verify_props(props,admission['runtime'])
         prompts=[]
         for reg in regs:
             if reg is None: prompts.append(None); continue
+            ctx['alias']=reg.alias
             messages=prompt_of(reg); tool=reg.schema()
             body={'messages':messages,'tools':[tool],'tool_choice':'required','chat_template_kwargs':{'reasoning_strength':'low'}}
+            ctx['stage']='template.request'
             applied=preflight('/apply-template',body)
+            ctx['stage']='template.validate'
             if not isinstance(applied,dict) or not isinstance(applied.get('prompt'),str): raise ValueError('template unavailable')
+            ctx['stage']='tokenize.request'
             tokens=preflight('/tokenize',{'content':applied['prompt'],'add_special':True,'parse_special':True})
+            ctx['stage']='tokenize.validate'
             token_list=tokens.get('tokens') if isinstance(tokens,dict) else None
+            ctx['stage']='token_budget'
             if not isinstance(token_list,list) or any(type(t) is not int for t in token_list) or len(token_list)>2048 or len(token_list)+1024>context: raise ValueError('prompt token budget unavailable')
             prompts.append((messages,tool,len(token_list)))
         for i,(reg,prompt) in enumerate(zip(regs,prompts)):
             alias=('G1','G2','G3')[i]
             if reg is None: continue
+            ctx['alias']=alias
+            ctx['stage']='runtime.before_completion'
             process_check(admission['runtime'])
             remaining=min(120,360-completion_seconds,total_end-time.monotonic())
             if remaining<=0: break
@@ -247,12 +324,16 @@ def run(admission, admission_sha, view, stage=STAGE, call=bounded_call, process_
             messages,tool,prompt_tokens=prompt
             write_new(directory/'registry.private.json',{'facts':reg.facts,'turns':reg.turns})
             write_new(directory/'prompt.private.json',{'messages':messages,'tools':[tool]})
+            ctx['stage']='attempt.write'
             write_new(directory/'attempt.private.json',{'alias':alias,'admission_sha256':admission_sha,'at_unix':time.time()})
+            ctx['completion_attempts_committed']+=1
             started=time.monotonic(); status='fallback'; refs=[]; response=None; reason='invalid_selection'
             try:
+                ctx['stage']='completion.request'
                 response=call(complete,(messages,tool),remaining)
                 elapsed=time.monotonic()-started; completion_seconds+=elapsed
                 write_new(directory/'response.private.json',response)
+                ctx['stage']='completion.validate'
                 completion_tokens=response.get('completion_tokens')
                 if type(completion_tokens) is not int or not 0<=completion_tokens<=1024:
                     reason='usage_unavailable'
@@ -267,8 +348,11 @@ def run(admission, admission_sha, view, stage=STAGE, call=bounded_call, process_
                     'elapsed_seconds':time.monotonic()-started,'completion_tokens':response.get('completion_tokens') if isinstance(response,dict) else None,
                     'projection_sha256':admission['projection_sha256'],'selector_sha256':admission['selector_sha256'],
                     'rule_sha256':admission['rule_sha256'],'runtime':admission['runtime'],'selected_refs':refs}
+            ctx['stage']='receipt.write'
             write_new(directory/'selection.private.json',entry); write_new(directory/'receipt.private.json',record); records.append(record)
             if reason in ('transport_or_timeout','usage_unavailable'): break
+    ctx['alias']=None
+    ctx['stage']='receipt.write'
     receipt={'schema':'own-ladder-selector-receipt-v1','admission_sha256':admission_sha,'projection_sha256':admission['projection_sha256'],
              'selector_sha256':admission['selector_sha256'],'rule_sha256':admission['rule_sha256'],
              'preflight_requests':request_count,'completion_attempts':len(records),'games':records}
@@ -279,21 +363,18 @@ def run(admission, admission_sha, view, stage=STAGE, call=bounded_call, process_
     return {'receipt_sha256':receipt_sha,'sidecar_sha256':sidecar_sha,'completion_attempts':len(records)}
 
 
-def main():
+def main(ctx):
     parser=argparse.ArgumentParser(); parser.add_argument('--admission',required=True); parser.add_argument('--sha256',required=True)
     args=parser.parse_args(); os.umask(0o077)
     admission=json_unique(read_bound(args.admission,args.sha256))
     view=validate_admission(admission)
-    result=run(admission,args.sha256,view)
+    result=run(admission,args.sha256,view,diagnostic=ctx)
     print(json.dumps({'status':'completed','completion_attempts':result['completion_attempts']}))
 
 
 if __name__=='__main__':
-    try: main()
-    except Exception:
-        try:
-            if (STAGE/'batch-started.private.json').exists():
-                write_new(STAGE/'batch-failure.private.json', {'status':'unavailable'})
-        except (OSError,ValueError):
-            pass
+    ctx=diagnostic_context()
+    try: main(ctx)
+    except Exception as exc:
+        write_failure(ctx,exc)
         print(json.dumps({'status':'unavailable'})); raise SystemExit(1)
