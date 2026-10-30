@@ -1,0 +1,83 @@
+{
+  "schema": "hardread-public-replay-acquisition-result/1",
+  "accepted_utc": "2026-10-30T03:30:06.688325+00:00",
+  "status": "ACCEPTED_BOUNDED_RAW_INCREMENT",
+  "owner_authorization": "Direct human request to download substantially more top/broad public replays, followed by continued-work instruction.",
+  "source_commit": "303991b6355df993a95e103d4321c69d1323b81c",
+  "runner_sha256": "f133f3745d9a512e49e5a756b7acaea5b8d3af6c833abecdeae77daec6c30842",
+  "started_utc": "2026-10-30T00:14:12.681520+00:00",
+  "first_terminal_observed_utc": "2026-10-30T03:19:36Z",
+  "receipt_artifact_mtime_utc": "2026-10-30T03:10:48.615033+00:00",
+  "exact_process_end_utc": null,
+  "hard_end_utc_historical": "2026-10-30T04:14:12.681520+00:00",
+  "source_terminal_status": "stopped",
+  "source_terminal_reason": "complete",
+  "managed_exec_status": "completed",
+  "original_process_ended": true,
+  "counts": {
+    "baseline_raw_records": 17779,
+    "additional_raw_records": 8815,
+    "combined_raw_records": 26594,
+    "top500_saved_route": 3409,
+    "global_saved_route": 5406,
+    "duplicate_id_queue_skips": 116,
+    "duplicate_logs_saved": 0,
+    "baseline_new_id_or_exact_log_overlap": 0,
+    "eligible_training_rows": null
+  },
+  "actual_limits": {
+    "accepted_records": 8815,
+    "max_records": 10000,
+    "attempts": 8815,
+    "max_attempts": 12000,
+    "http_codes": {
+      "200": 8815
+    },
+    "wire_bytes": 20110915,
+    "max_wire_bytes": 1073741824,
+    "decoded_bytes": 92151501,
+    "max_decoded_bytes": 2147483648,
+    "whole_output_bytes": 21439198,
+    "max_output_bytes": 104857600,
+    "wall_cap_seconds": 14400,
+    "first_terminal_observation_elapsed_seconds": 11087.31848,
+    "terminal_before_hard_end": true
+  },
+  "output_directory": "../data/replays/gen9ou-human-increment-20261030-v1/raw",
+  "receipt": {
+    "path": "../data/replays/gen9ou-human-increment-20261030-v1/raw/receipt-0001.json",
+    "sha256": "0445a9ec20437387d9b57f57cb04b069c57cc1ecba355b95c5399fa852aa318f"
+  },
+  "input_closure_sha256": "a7a2a4fb35e59297f2648d8870e2856878740a7cc10abcd393d98bbb900dd27c",
+  "input_files": 547,
+  "original_archives_unchanged": true,
+  "validation": {
+    "path": "scratch_ds/codex/ladder-training-proposal-20261030/acquisition-runtime-v1/terminal-validation-v1.private/validation-v2.private.json",
+    "sha256": "6e5281a5b363df427fa408ab64fd5ac7e8644ac5d51afaa817532f71702a79ae"
+  },
+  "original_actual_review": {
+    "path": "scratch_ds/codex/ladder-training-proposal-20261030/SOL-ORIGINAL-ACQUISITION-TERMINAL-REVIEW.private.md",
+    "sha256": "f39572d7875102b527570688a553779b81316b2331e54a9dcd29113af2e1e6cd"
+  },
+  "root_integrity": {
+    "path": "scratch_ds/codex/ladder-training-proposal-20261030/acquisition-runtime-v1/root-terminal-observation.private/root-integrity-check.private.json",
+    "sha256": "eff5b792cd26b0c5954e489e9cd105d4b53dab78cd1a5d290c2ade5b29b1f830"
+  },
+  "root_process_proof": {
+    "path": "scratch_ds/codex/ladder-training-proposal-20261030/acquisition-runtime-v1/root-terminal-observation.private/process-check.private.json",
+    "sha256": "2fdf80baea5113abf98663ca4e8ff1eb6272bdea2dfcb4d491acec11cfd3ac04"
+  },
+  "qualifications": [
+    "Participant type remains unverified; two explicit known-account digests are only a partial filter, not human-only certification.",
+    "All new records were checked by ID/exact-log hash against the baseline; no training eligibility, A2 count, causal-state reconstruction, stronger-teacher labels, split admission or rights conclusion follows.",
+    "The10000 limit was a ceiling; exact attribution of the8815 count below it remains unknown beyond the normal complete source termination.",
+    "Receipt mtime is artifacttime, not exact process endtime.",
+    "The original v1 typed validator incorrectly expected status=complete; v2 corrects it to stopped+reason=complete. Original v1 and startup format errors remain preserved."
+  ],
+  "new_training_dataset_created": false,
+  "model_or_checkpoint_changed": false,
+  "new_model_battle_or_cloud_job": false,
+  "new_upload_public_post_install_account_or_deployment": false,
+  "restart_or_signal": false,
+  "overall_roadmap_complete": false
+}
