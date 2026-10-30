@@ -40,7 +40,7 @@
     "whole_output_bytes": 21439198,
     "max_output_bytes": 104857600,
     "wall_cap_seconds": 14400,
-    "first_terminal_observation_elapsed_seconds": 11087.31848,
+    "first_terminal_observation_elapsed_seconds": 11123.31848,
     "terminal_before_hard_end": true
   },
   "output_directory": "../data/replays/gen9ou-human-increment-20261030-v1/raw",
@@ -79,5 +79,11 @@
   "new_model_battle_or_cloud_job": false,
   "new_upload_public_post_install_account_or_deployment": false,
   "restart_or_signal": false,
-  "overall_roadmap_complete": false
+  "overall_roadmap_complete": false,
+  "elapsed_projection_erratum": {
+    "initial_value_seconds": 11087.31848,
+    "correct_value_seconds": 11123.31848,
+    "basis": "Exact subtraction of saved start00:14:12.681520UTC from firstterminalobservation03:19:36UTC. Original private review/result-card arithmetic error preserved; both values remain below14400s.",
+    "actual_acquisition_data_changed": false
+  }
 }
