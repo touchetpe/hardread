@@ -19,7 +19,7 @@ from pathlib import Path
 
 SCHEMA='own-ladder-postgame-v1'
 HASH=re.compile(r'[a-f0-9]{64}\Z')
-ACTION=re.compile(r"[A-Za-z][A-Za-z0-9 .'-]{0,63}\Z")
+ACTION=re.compile(r"[A-Za-z][A-Za-z0-9 .'-]{0,63}(?: \(Tera\))?\Z")
 REASONS={'cache_missing','native_runtime','native_failure','review_unavailable','malformed'}
 BRIDGE=('available','tie','S','L','C','R','s','l','c','r','result','swingy')
 CARD=('turn','k','kind','chosen','best','gap','gap_pts','wp_before','wp_before_pct','chosen_wp','best_wp')

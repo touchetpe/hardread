@@ -60,6 +60,18 @@ class PostgameTests(unittest.TestCase):
         v=view(); v['wp'][0]['wp']=None
         self.assertIsNone(p.project_view('G1',v,[],'a'*64,'b'*64,False,False)['wp'][0]['wp'])
 
+    def test_tera_action_suffix_is_exact_and_narrow(self):
+        v=view(); card={'turn':2,'k':0,'kind':'move','chosen':'Move A (Tera)','best':'Move B (Tera)',
+                        'gap':0.1,'gap_pts':10,'wp_before':0.5,'wp_before_pct':50,'chosen_wp':0.5,'best_wp':0.6}
+        v['disagreements']=[card]
+        pane=p.project_view('G1',v,[{'turn':2,'k':0}],'a'*64,'b'*64,False,False)
+        self.assertEqual(pane['disagreements'][0]['chosen'],'Move A (Tera)')
+        self.assertIn({'pointer':'disagreements[0].chosen','value':'Move A (Tera)','view_sha256':'a'*64},pane['citations'])
+        for bad in ('Move A (tera)','Move A (Tera) extra','Move A (Tera)(Tera)',
+                    'Move A (Opponent)','Move A (Tera; injected)','Move A (Tera) (Tera)'):
+            card['chosen']=bad
+            with self.assertRaises(ValueError): p.project_view('G1',v,[{'turn':2,'k':0}],'a'*64,'b'*64,False,False)
+
     def test_stale_alias_swaps_and_untrusted_fields_rejected(self):
         binding,data=fixture(); packet=p.build_sidecar(binding,data)
         for proj,mapping,batch in [('4'*64,'2'*64,'3'*64),('1'*64,'4'*64,'3'*64),('1'*64,'2'*64,'4'*64)]:
