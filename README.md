@@ -1,4 +1,6 @@
-# HardRead: engine-backed decision review
+# HardRead: was it luck, or was it you?
+
+HardRead reviews luck and moves with Foul Play and Meta’s Muse Glimmer. Its shared bot account ranked #199 on 30 October 2026.
 
 HardRead reviews finished competitive Pokémon replays. It uses Foul Play search to estimate chance, inspect selected decisions and test a player's stated read against engine alternatives. The current product explains cited results with labeled templates while live model prose awaits its final checks.
 
