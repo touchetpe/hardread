@@ -34,7 +34,7 @@ from llm import GlimmerClient, LLMError
 BASE = 'http://127.0.0.1:18131'
 MODEL_SHA = '4cc57c0f51040a226e5a72cc47b7613f7772950e460a665f7083de89f183f60e'
 LLAMA_COMMIT = 'f8def7fe168bab245fbf15d3f18b26dbb1ef73c8'
-STAGE = ROOT / 'scratch_ds/codex/win-sprint-20261030/W3-local-selector.private'
+STAGE = ROOT / 'scratch_ds/codex/win-sprint-20261030/W3-local-selector-v2.private'
 SELECTOR = ROOT / 'app/own_ladder_selection.py'
 MAX_RESPONSE = 1_000_000
 HASH = re.compile(r'[a-f0-9]{64}\Z')
