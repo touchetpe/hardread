@@ -562,8 +562,27 @@ def create_app(concurrency=1, processes=4):
         path = os.environ.get("HARDREAD_OWN_LADDER_PROJECTION")
         try:
             if path:
-                with open(path, encoding="utf-8") as source:
-                    return OWN.build_projection(json.load(source))
+                with open(path, "rb") as source:
+                    projection_bytes = source.read(4_000_001)
+                if len(projection_bytes) > 4_000_000:
+                    raise ValueError("projection too large")
+                view = OWN.build_projection(json.loads(projection_bytes))
+                sidecar_path = os.environ.get("HARDREAD_OWN_LADDER_SIDECAR")
+                sidecar_sha = os.environ.get("HARDREAD_OWN_LADDER_SIDECAR_SHA256")
+                receipt_sha = os.environ.get("HARDREAD_OWN_LADDER_RECEIPT_SHA256")
+                if sidecar_path and sidecar_sha and receipt_sha:
+                    try:
+                        import own_ladder_selection as selection
+                        with open(sidecar_path, "rb") as source:
+                            sidecar_bytes = source.read(1_000_001)
+                        if len(sidecar_bytes) > 1_000_000 or selection.digest_bytes(sidecar_bytes) != sidecar_sha:
+                            raise ValueError("sidecar differs")
+                        selector_sha = selection.digest_bytes(Path(selection.__file__).read_bytes())
+                        view = selection.apply_sidecar(view, selection.digest_bytes(projection_bytes), selector_sha,
+                                                       receipt_sha, json.loads(sidecar_bytes))
+                    except (OSError, ValueError, TypeError, KeyError):
+                        pass  # Fail to the original template-only view.
+                return view
         except (OSError, ValueError, TypeError):
             pass
         return {"games": [{"alias": alias, "decisions": []} for alias in ("G1", "G2", "G3")],

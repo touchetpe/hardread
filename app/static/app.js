@@ -305,6 +305,7 @@
         var decisions = game.decisions || [];
         return h("section", { class: "card own-game" }, h("h2", null, game.alias),
           h("p", { class: "card-sub" }, "HardReadBot vs Opponent"),
+          recordedFacts ? h("p", null, h("span", { class: "badge-model" }, game.selection_mode === "glimmer-selected" ? "Supporting facts selected by Glimmer · Template wording" : "Template only")) : null,
           decisions.length < 2 ? h("p", { class: "empty" }, decisions.length ? "Partial evidence: only one decision is available." : "Decision evidence is unavailable. This game remains pending.") : null,
           game.conflicts_unavailable ? h("p", { class: "notice" }, "Conflicting source records are unavailable.") : null,
           decisions.map(function (d) {
@@ -321,7 +322,7 @@
           }));
       });
       show([h("a", { class: "back", href: "#/" }, "← Home"), h("h1", null, "Why the bot played this"),
-        recordedFacts ? h("p", null, h("span", { class: "badge-model" }, "Recorded decision facts"), " ", h("span", { class: "badge-model" }, "Template-only")) : null,
+        recordedFacts ? h("p", null, h("span", { class: "badge-model" }, "Recorded decision facts")) : null,
         h("p", { class: "lede" }, recordedFacts ? "The bot’s recorded choices and search work, captured before it acted." : "Examples selected from pre-action decision evidence. Template-only explanations."),
         recordedFacts ? h("p", { class: "footnote" }, "Detailed candidate comparisons are unavailable in these logs.") : null, cards], "Why the bot played this");
     });
