@@ -157,7 +157,20 @@ COMMON_ARGS=(--python "$PYTHON" --rust-bin "$RUST_BIN" --engine-sdist "$ENGINE_S
 "$PYTHON" tools/setup/clean_cli.py --input-mode live "${COMMON_ARGS[@]}"
 ```
 
-**Owner-local mode — prospective; required files and scope are absent here.** This mode uses only the previously verified 64 package/crate archive outputs (32,411,866 bytes total) and four exact owner-supplied set-data cache snapshots, named in a private manifest and covered by a separate owner authorization record. The snapshots, manifest, and authorization scope are not present in this repository, so this example is not runnable yet; it makes no claim that fresh set data is available. Set these absolute-path variables only after the owner supplies and authorizes the inputs: `PACKAGE_ARCHIVE_ROOT`, `OWNER_DATA_MANIFEST`, and `OWNER_AUTHORIZATION_RECORD`. Only those 64 archive outputs are reused: no prior cache, virtual environment, compiled dependency, app state, or review output is reused. Keep set-data snapshots private; redistribution rights are unverified.
+**Owner-local mode — manual fallback for the blocked feed; prospective and not yet runnable.** The earlier owner-approved feed-based attempt stopped at the first set-data fetch with HTTP 403, before installation or build. Do not retry that feed, change its source, or add a fallback. The existing `owner-local` mode is the manual route: the owner must supply four exact cache snapshots with documented provenance and use permission, a private manifest that records their hashes, and a separate authorization record bound to that manifest. No snapshots, manifest, or authorization record are present here, so this remains a documented manual step, not a clean-machine pass.
+
+Supply exactly one file for each cache destination below; do not substitute a different dataset or mix snapshots. If any role is unavailable, stop and report that missing role rather than switching to live mode:
+
+- Full sets: `foul-play/fp/data/pkmn_sets_cache/gen9ou/pokemon_full_sets.json`
+- Replay moves: `foul-play/fp/data/pkmn_sets_cache/gen9ou/replay_moves.json`
+- Showdown sets: `foul-play/fp/data/pkmn_sets_cache/gen9ou/showdown_sets.json`
+- Smogon stats: `foul-play/fp/data/smogon_stats_cache/gen9ou-0.json`
+
+Each file must already be a cache-ready, nonempty UTF-8 JSON object. For the Smogon stats destination, supply the inner `data` object that is written to the cache, not the outer feed-response object; the owner-local stager does not unwrap that response. Keep all four snapshots and both records outside the repository.
+
+The manifest must use schema `hardread-owner-cache-bundle-v1`, set `snapshot_date` and `provenance_record_id`, and contain exactly four rows in `files`. Each row must bind `cache_path`, manifest-relative `relative_file`, `size_bytes`, `sha256`, `source`, `capture_date`, and `permission_reference`. The separate authorization record must set `scope` to `private-local-S6.4-test`, bind the SHA-256 of the exact manifest bytes in `manifest_sha256`, and include a nonempty `decision_reference`. The setup checks the manifest's four destinations, safe relative paths, exact file sizes and SHA-256 values, and that each file is a nonempty UTF-8 JSON object. It checks that provenance and permission fields are present and dates parse, but cannot establish that those statements are true or that the owner has rights to use the snapshots; the owner must verify both.
+
+This route reuses only the 64 previously verified package archives; it still requires the pinned Foul Play checkout, replay/team inputs, Rust toolchain, fresh environments and native engine build described above. The three absolute-path variables below are required for the owner-local invocation. A new scoped authorization is required before any execution; the earlier feed-based attempt does not authorize this route. The mode choice is explicit and exclusive: missing or mixed inputs fail closed, with no automatic network fallback.
 
 ```bash
 : "${PACKAGE_ARCHIVE_ROOT:?absolute path to the verified 64 package/crate archive outputs}" "${OWNER_DATA_MANIFEST:?absolute path to the private four-snapshot manifest}" "${OWNER_AUTHORIZATION_RECORD:?absolute path to the owner authorization record}"
