@@ -319,13 +319,47 @@
               h("p", null, "The bot chose ", ownCitation(d.chosen), "; its logged legal candidate score was ", ownCitation(d.chosen_score), "."),
               h("p", null, "Best other logged legal candidate: ", ownCitation(d.other), ", score ", ownCitation(d.other_score), "."),
               h("p", { class: "footnote" }, "These are search scores on the same recorded scale; they are not calibrated win probabilities. Score order: ", ownCitation(d.score_order), "; scale: ", ownCitation(d.scale), "; unit: ", d.score_unit ? ownCitation(d.score_unit) : "unavailable", ". Legality sources: ", ownCitation(d.chosen_legal), " and ", ownCitation(d.other_legal), "."));
-          }));
+          }), recordedFacts ? postgamePane(game) : null);
       });
       show([h("a", { class: "back", href: "#/" }, "← Home"), h("h1", null, "Why the bot played this"),
         recordedFacts ? h("p", null, h("span", { class: "badge-model" }, "Recorded decision facts")) : null,
         h("p", { class: "lede" }, recordedFacts ? "The bot’s recorded choices and search work, captured before it acted." : "Examples selected from pre-action decision evidence. Template-only explanations."),
         recordedFacts ? h("p", { class: "footnote" }, "Detailed candidate comparisons are unavailable in these logs.") : null, cards], "Why the bot played this");
     });
+  }
+
+  function postgamePane(game) {
+    var p = game.postgame;
+    var section = h("section", { class: "dis", "aria-label": game.alias + " postgame engine review" }, h("h3", null, "Postgame engine review"));
+    if (!p) { section.appendChild(h("p", { class: "empty" }, "Postgame engine review pending.")); return section; }
+    if (p.status !== "ok") {
+      section.appendChild(h("p", { class: "empty" }, p.reason === "cache_missing" ? "Native review unavailable: required local cache is missing." : "Native review unavailable.")); return section;
+    }
+    section.appendChild(h("p", { class: "footnote" }, "Postgame estimates from the existing review search and calibration; they are not the bot’s logged beliefs. Luck is measured after observed outcomes. Choices includes both players."));
+    if (p.human_fit) section.appendChild(h("p", { class: "footnote" }, "Calibration was fitted on human games."));
+    if (p.percent_hp_approx) section.appendChild(h("p", { class: "footnote" }, "Own HP was approximated from recorded percentages."));
+    var b=p.bridge;
+    section.appendChild(bridgeWidget({ bridge:b, summary_text:"", result:p.result }, { subject:"HardReadBot" }));
+    if (b.available) section.appendChild(h("p", { class:"footnote" }, "Bridge values: [bridge.s], [bridge.l], [bridge.c], [bridge.r]."));
+    var points=p.wp || [], W=640, H=160, vals=points.filter(function(x){return x.wp !== null;});
+    if (vals.length) {
+      var sv=s("svg",{viewBox:"0 0 640 160",role:"img","aria-label":"HardReadBot win probability by turn; detailed values follow"});
+      var lo=points[0].turn, hi=points[points.length-1].turn, span=Math.max(1,hi-lo), path="", open=false;
+      points.forEach(function(x){if(x.wp===null){open=false;return;} var xx=20+(x.turn-lo)/span*600, yy=10+(1-x.wp)*140; path+=(open?" L":" M")+xx+","+yy; open=true;});
+      sv.appendChild(s("path",{d:path,fill:"none",stroke:"currentColor","stroke-width":"2"}));
+      section.appendChild(sv);
+    } else section.appendChild(h("p", { class:"empty" }, "Win probability data unavailable."));
+    section.appendChild(h("p", { class:"footnote" }, "Percentages use Math.round(100 × the cited probability)."));
+    var rows=points.map(function(x,i){return h("tr",null,h("td",null,String(x.turn)," [wp["+i+"].turn]"), h("td",null,x.wp===null?"Unavailable":pct(x.wp),x.wp===null?"":" [wp["+i+"].wp]"));});
+    section.appendChild(h("details",null,h("summary",null,"Turn-by-turn numbers"),h("div",{class:"table-scroll"},h("table",{class:"data"},h("thead",null,h("tr",null,h("th",null,"Turn"),h("th",null,"Win probability"))),h("tbody",null,rows)))));
+    if (!p.disagreements.length) section.appendChild(h("p",{class:"empty"},"No decisions meet the existing disagreement rule."));
+    else p.disagreements.forEach(function(d,i){
+      section.appendChild(h("article",{class:"dis"},h("p",null,"Turn ",String(d.turn)," [disagreements["+i+"].turn]: ",d.chosen," [disagreements["+i+"].chosen]; engine choice ",d.best," [disagreements["+i+"].best]."),
+        h("p",null,"Gap ",String(d.gap_pts)," points [disagreements["+i+"].gap_pts]; win chance before ",String(d.wp_before_pct),"% [disagreements["+i+"].wp_before_pct]."),
+        h("p",null,"Chosen option ",pct(d.chosen_wp)," [disagreements["+i+"].chosen_wp]; engine option ",pct(d.best_wp)," [disagreements["+i+"].best_wp].")));
+    });
+    section.appendChild(h("details",{class:"ex-sources"},h("summary",null,"Native-view citations"),h("p",null,"Run receipt ",h("code",null,p.run_receipt_sha256)),h("ul",null,p.citations.map(function(c){return h("li",null,h("code",null,c.pointer)," = ",String(c.value)," · view ",h("code",null,c.view_sha256));}))));
+    return section;
   }
 
   function miniBridge(b) {
@@ -463,16 +497,17 @@
   }
 
   // ---- the bridge: four bars on one points axis, each anchored at zero (never a running total)
-  function bridgeWidget(v) {
+  function bridgeWidget(v, options) {
     var b = v.bridge;
+    var subject = options && options.subject;
     if (!b || !b.available) {
       return h("div", { class: "empty" }, b && b.tie ? "This game ended in a tie, so there is no luck/choices bridge." : "No bridge for this game.");
     }
     var rows = [
       { key: "start", label: "Start", sub: "win chance at team preview", val: b.s, unit: "%", kind: "level" },
       { key: "luck", label: "Luck", sub: "crits, misses, rolls, speed ties", val: b.l, unit: " pts", kind: "signed" },
-      { key: "choices", label: "Choices, yours and your opponent's", sub: "everything that wasn't dice", val: b.c, unit: " pts", kind: "signed" },
-      { key: "result", label: "Result", sub: b.result === "win" ? "you won" : "you lost", val: b.r, unit: "%", kind: "level" }];
+      { key: "choices", label: subject ? "Choices, HardReadBot and its opponent" : "Choices, yours and your opponent's", sub: "everything that wasn't dice", val: b.c, unit: " pts", kind: "signed" },
+      { key: "result", label: "Result", sub: subject ? (b.result === "win" ? subject + " won" : subject + " lost") : (b.result === "win" ? "you won" : "you lost"), val: b.r, unit: "%", kind: "level" }];
     var maxAbs = 100;
     var grid = h("div", { class: "bridge", role: "list", "aria-label": "Bridge from start to result" });
     rows.forEach(function (r, i) {
@@ -483,7 +518,7 @@
       var val = h("div", { class: "b-val num" },
         r.kind === "signed" ? h("span", { class: "glyph", "aria-hidden": "true" }, glyph(r.val)) : null,
         valTxt, r.kind === "signed" ? h("span", { class: "unit" }, "pts") : null,
-        h("span", { class: "sr-only" }, r.kind === "signed" ? " points, " + favour(r.val) : ""));
+        h("span", { class: "sr-only" }, r.kind === "signed" ? " points, " + (subject ? (r.val > 0 ? "in HardReadBot’s favour" : r.val < 0 ? "against HardReadBot" : "neutral") : favour(r.val)) : ""));
       grid.appendChild(h("div", { class: "b-row", role: "listitem" }, lbl, barBox, val));
     });
     var ax = s("svg", { viewBox: "0 0 400 14", preserveAspectRatio: "none", "aria-hidden": "true" });
@@ -496,16 +531,16 @@
       h("b", null, b.s), " start ", b.l < 0 ? MINUS + " " : "+ ", h("b", null, Math.abs(b.l)), " luck ",
       b.c < 0 ? MINUS + " " : "+ ", h("b", null, Math.abs(b.c)), " choices = ", h("b", null, b.r), " (" + (b.result === "win" ? "win" : "loss") + ")");
     var legend = h("div", { class: "bridge-legend" },
-      legendKey("pos", "▲ solid: in your favour"), legendKey("neg", "▼ striped: against you"),
+      legendKey("pos", subject ? "▲ solid: in HardReadBot’s favour" : "▲ solid: in your favour"), legendKey("neg", subject ? "▼ striped: against HardReadBot" : "▼ striped: against you"),
       legendKey("level", "grey: a win chance, not a change"));
     var extra = [];
     if (b.tag) extra.push(h("div", { class: "notice" }, b.tag + "." + (b.tag_wp !== null && b.tag_wp !== undefined && b.tag_wp >= 0.05 && b.tag_wp <= 0.95 ?
       " The jump from " + pct(b.tag_wp) + " to the result is the resignation itself; it counts under choices." : "")));
     if (b.swingy) extra.push(h("div", { class: "notice" }, "Unusually swingy game: " +
-      (Math.abs(b.L) > 0.5 ? "luck alone moved your win chance by more than 50 points" : "choices moved more than a whole game's worth of win chance") +
+      (Math.abs(b.L) > 0.5 ? (subject ? "luck alone moved HardReadBot’s win chance by more than 50 points" : "luck alone moved your win chance by more than 50 points") : "choices moved more than a whole game's worth of win chance") +
       ". The numbers still add up exactly; read the split with care."));
     return h("div", null, grid, eq, legend,
-      h("p", { class: "footnote" }, "Choices = everything that wasn't dice: both players' moves and switches, what each side revealed, and resigning. It is not a score of your play alone."),
+      h("p", { class: "footnote" }, subject ? "Choices = everything that wasn't dice: both players' moves and switches, what each side revealed, and resigning. It is not a score of HardReadBot’s play alone." : "Choices = everything that wasn't dice: both players' moves and switches, what each side revealed, and resigning. It is not a score of your play alone."),
       extra, h("p", { class: "summary-text" }, v.summary_text));
   }
 

@@ -582,6 +582,22 @@ def create_app(concurrency=1, processes=4):
                                                        receipt_sha, json.loads(sidecar_bytes))
                     except (OSError, ValueError, TypeError, KeyError):
                         pass  # Fail to the original template-only view.
+                post_path = os.environ.get("HARDREAD_OWN_LADDER_POSTGAME_SIDECAR")
+                post_sha = os.environ.get("HARDREAD_OWN_LADDER_POSTGAME_SHA256")
+                native_sha = os.environ.get("HARDREAD_OWN_LADDER_NATIVE_RECEIPT_SHA256")
+                mapping_sha = os.environ.get("HARDREAD_OWN_LADDER_NATIVE_MAPPING_SHA256")
+                if post_path and post_sha and native_sha and mapping_sha:
+                    try:
+                        import own_ladder_postgame as postgame
+                        with open(post_path, "rb") as source:
+                            post_bytes = source.read(4_000_001)
+                        if len(post_bytes) > 4_000_000 or postgame.digest(post_bytes) != post_sha:
+                            raise ValueError("postgame sidecar differs")
+                        view = postgame.apply_sidecar(view, postgame.read_json(post_bytes),
+                                                      postgame.digest(projection_bytes), mapping_sha,
+                                                      native_sha, postgame.own_hash())
+                    except (OSError, ValueError, TypeError, KeyError):
+                        pass  # Recorded facts and selector results remain unchanged.
                 return view
         except (OSError, ValueError, TypeError):
             pass
