@@ -291,7 +291,9 @@
 
   function ownCitation(field) {
     return h("span", { class: "own-citation" }, String(field.value),
-      h("small", null, " [", h("code", null, field.field), "; source ", h("code", null, field.ref), "]"));
+      h("details", { class: "own-citation-source" },
+        h("summary", { "aria-label": "Show source for " + field.field }, "source"),
+        h("small", null, h("code", null, field.field), "; source ", h("code", null, field.ref))));
   }
 
   function renderOwnLadder() {
