@@ -1,0 +1,95 @@
+{
+  "schema": "hardread-g1-epoch2-arena-qualified-result/1",
+  "recorded_utc": "2026-10-30T01:10:23.048678+00:00",
+  "status": "ACCEPTED_COMPLETE_QUALIFIED_DEVELOPMENT_ARENA",
+  "job_name": "hrarena-g1e2-seed2000-20c9e8e3f9c34bb4",
+  "owner": "benchmark",
+  "observed_completed_utc": "2026-10-30T00:45:34.164430+00:00",
+  "metric": {
+    "name": "wins per scheduled game",
+    "unit": "percent",
+    "numerator": 178,
+    "denominator": 200,
+    "value": 89.0,
+    "display": "178/200 = 89.0%",
+    "wilson_95_ci_percent": [
+      83.91,
+      92.62
+    ],
+    "scheduled_games": 200,
+    "completed_games": 199,
+    "timeouts": 1,
+    "timeout_counted_as": "non-win",
+    "seed": 2000,
+    "side_swapped_pairs": 100,
+    "recorded_decisions": 5202,
+    "illegal_decisions": 0,
+    "fallback_decisions": 0,
+    "server_rejections": 0,
+    "decision_p95_seconds": 3.579,
+    "numerical_gate": "PASS on specified arena criteria",
+    "history_parity": {
+      "exact_matches": 5191,
+      "total_decisions": 5202,
+      "mismatches": 11,
+      "status": "open; investigate mismatches"
+    }
+  },
+  "model_artifacts": {
+    "selected_adapter_sha256": "f48a310273789bda35c85266196e0b15459d9447b351787d3b9cf3fca87357cd",
+    "arena_gguf_sha256": "283a83ddd40e29e4fdca5122dbee0d29b397c80ca1bd302b405a8a685a4ba72c"
+  },
+  "selection_commit": "06c276a",
+  "selection_unchanged": true,
+  "sources_as_captured": [
+    {
+      "path": "benchmarks/SCORES.md",
+      "anchor": "441-445; heading 2026-10-30 selected Glimmer G1 epoch-2 versus Abyssal",
+      "sha256": "4d7fd19705edf46d0915f62e769050603e804c961648818a5dbbbf4a2b424a05",
+      "source_state": "working_tree_modified_not_committed"
+    },
+    {
+      "path": "benchmarks/STRENGTH.md",
+      "anchor": "28,32",
+      "sha256": "23c1d2897baf20d84ed3a9ab682360d2636329e10b9e767639353fb7d67ddde1",
+      "source_state": "working_tree_untracked_not_committed"
+    },
+    {
+      "path": "../data/ladder/g1-epoch2-arena-20261029-readout/validated-readout.json",
+      "anchor": "typed aggregate result and provenance",
+      "sha256": "c62441aba256ee02ef75998d7fb6ae9916cf22378d17f701a26594bdf616e202",
+      "source_state": "private_validated_readout"
+    }
+  ],
+  "source_snapshot_manifest": {
+    "path": "scratch_ds/codex/owner15-g1e2-arena-20261030/root-source-snapshot.private/manifest.private.json",
+    "sha256": "2d8c2ebeadc0d16d548cb7afc09f9d3848dd871a016441796c284f75c33fcdc3"
+  },
+  "original_review": {
+    "path": "scratch_ds/codex/owner15-g1e2-arena-20261030/SOL-ORIGINAL-G1E2-ARENA-CLAIM-REVIEW.private.md",
+    "sha256": "3ce30a05e249351ad20329c58da64e2feb1f9f7666a918c186faacb8c2408511"
+  },
+  "root_check": {
+    "path": "scratch_ds/codex/owner15-g1e2-arena-20261030/root-preintegration-check.private.json",
+    "sha256": "81e1502c5ca6ebc25d46abec8560daf8f09183279e4b81ac8d9c1baab21d13b4"
+  },
+  "qualification": "Partly seen development-team evidence, not held-out or human-ladder evidence. One timeout is a non-win. History parity has 11/5,202 mismatches open. No paired causal, teacher, SOTA, shipping or general-strength claim; no selection or training change.",
+  "later_source_only_diagnosis": {
+    "source": "../data/ladder/g1-epoch2-arena-20261029-readout/parity-diagnosis.json",
+    "published_by": "Benchmark",
+    "finding": "All11third-decision/two-switch cases: checker reused prior reconstructed boundary; reconstruction5\u201312lines shorter than logged served history.",
+    "limits": "Diagnostic explanation only; no demonstrated effect on strength or proof of original training history. Does not convert11mismatches into passes.",
+    "new_model_or_battle_call": false
+  },
+  "source_mutability_note": "Exact3 reviewed source bodies were copied privately before current pages appended diagnosis/other updates. Snapshot hashes match candidate; no stable-current-page claim. Original local assertion on current page hashes stopped before shared changes and is retained.",
+  "video_number_condition": {
+    "selected_before_test": true,
+    "arena_completed_before_2026_10_31_10UTC": true,
+    "owner16_numbers_may_enter_video": true,
+    "current_video_changed": false,
+    "numbers_frozen": false
+  },
+  "historical_launch_target_miss_seconds": 768,
+  "overall_ship_or_teacher_strength_acceptance": false,
+  "new_training_or_inference_job_by_root": false
+}

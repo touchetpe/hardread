@@ -1944,3 +1944,13 @@ The separate policy-argmax agreement is 224/400; top-2 is 309/400 and top-3 is 3
 Job `hrval-20261029-g1e2-fixed400-405667bc` was observed Completed at 22:14:29 UTC; its existing watcher ended normally. Exactly three result bodies (227,692 bytes) were acquired once. The initial environment-format parser stopped before listing, then reused the saved job-show after exact name/version normalization; no job-show retry or repeated body acquisition. Root's local adaptation/path/parser errors are retained privately; no model, source or result changed.
 
 [Result and provenance card](experiments/cards/G1-EPOCH2-FIXED400-RESULT-20261029.json). Original independent review `5820c626` accepts this descriptive readout. Arena outcome, legal-action rate and p95 latency are still unknown and belong to Benchmark. The original request is 200 games, seed 2000, subject to its existing safety pause and source/cost/admission guards. The frozen A4 engine, explainer and current video are unchanged.
+
+
+<a id="g1-epoch2-arena-20261030"></a>
+## Selected Glimmer G1 epoch-2 — complete Abyssal arena, 2026-10-30
+
+The original Benchmark-owned seed2000 arena completed: **178/200 scheduled games = 89.0%**, Wilson95% **83.91–92.62%**. There were100side-swapped pairs,199completed games and one timeout counted as a non-win. Across5,202recorded decisions:0illegal,0fallback and0server-rejection decisions; recorded decision p95 **3.579seconds**. The specified numerical arena checks pass. This is partly seen development-team evidence, separate from XL6clean161/200; it supports no paired superiority, teacher-level, SOTA or shipping claim.
+
+The history diagnostic matched5,191/5,202 decisions; **11mismatches remain a qualification**. Benchmark's later bounded local diagnosis found all11at a third decision after two switches, with the checker reusing the preceding history boundary; it does not establish an effect on play or original training-data history. No model rerun, source repair or battle was performed for that diagnosis.
+
+Selected adapterf48a3102/GGUF283a83dd identity and exact hashes are in [the qualified result card](experiments/cards/G1-EPOCH2-ARENA-QUALIFIED-RESULT-20261030.json). The original independent source/claim review and root actual typed projection passed; exact reviewed source bodies are preserved privately. Selection06c276a remains unchanged and preceded fixed400. The original Running-target miss12m48 is retained. The working ledger now has42entries; previous41metrics/sources/selection are unchanged, two pending-arena caveats are updated. The ledger remains unfrozen and current video unchanged. Owner16's selected-plus-arena-complete-before-Sat10UTC condition is met; final video/other release acceptance remains separate.
