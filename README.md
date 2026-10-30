@@ -8,6 +8,8 @@ Foul Play is pmariglia’s independent GPL-3.0 open-source search bot and winner
 
 **Dated ladder snapshot.** HardRead builds on Foul Play. The frozen engine’s record was 77–34 across 111 official Gen 9 OU ladder games. Separately, the shared registered HardReadBot account ranked #199 at 00:13 CET on 30 October 2026; other agents also used it. Games against bots do not affect human ratings.
 
+**Own-game showcase (local, 30 October 2026).** The local app displays three of HardReadBot’s own ladder games. Recorded decisions cite the bot’s choices captured before it acted. A separate engine review later estimates luck and a remaining swing from both players’ choices and other effects. Its win-probability calibration was fitted on human games, and own HP was approximated from public percentages; these estimates are not the bot’s original reasoning. These explanations currently use labeled templates; successful Glimmer selection for this showcase has not been demonstrated. Its private game inputs and derived per-game artifacts are not bundled with the source. See the [data policy](DATA.md).
+
 **Fan-made, not affiliated with Nintendo, The Pokémon Company or Game Freak. 18+.**
 [Open-weight evidence (status as of 2026-10-29)](OPEN_WEIGHTS.md)
 

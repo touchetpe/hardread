@@ -451,3 +451,22 @@ git -C foul-play log --reverse --format='%h %cI %s' 8f541f80f91f960603673796559f
 ```
 
 Git timestamps come from commit metadata. They describe the recorded history; they are evidence of ordering, not proof of when work was performed.
+
+## W5 selected milestone supplement through exact main commit `35830d613ac9478da6fe911605783fea817efb5a` (partial; not final or release-locked)
+
+- This selected milestone supplement is bounded to first-party judged-artifact source and documentation changes after `2db38a9a921ca43ac90614cd4cefbcc81c66ab9f` (committer time 2026-10-29T16:19:32Z) through `35830d613ac9478da6fe911605783fea817efb5a` (committer time 2026-10-30T07:23:36Z). It is not a full history audit. The original time bands, earlier feature rows, existing commit rows, and prior cutoff disclosures remain unchanged.
+- Git committer timestamps below record ordering, not the time when work was performed. A source or artifact entry does not establish a successful build, installation, rendering, runtime, or release readiness.
+- The tournament result belongs to Foul Play, not HardRead. Third-party work is not claimed as ours. This supplement makes no licence-compatibility, adoption, or redistribution determination.
+
+| Selected milestone | Kind | Commit timestamp(s), UTC | Source/artifact paths |
+|---|---|---|---|
+| Ladder headline metadata | artifact-metadata | `616c4f59021b` 2026-10-30T04:45:14Z | `ops/video/ladder-headline.json` |
+| Own-ladder review component | product | `0b830907eb7c` 2026-10-30T04:50:54Z | `app/own_ladder_review.py` |
+| Own-ladder selector component | product | `47706563720d` 2026-10-30T06:02:29Z | `app/own_ladder_selection.py`, `tools/agent/run_own_ladder_selector.py` |
+| Own-ladder postgame pane | product | `bb3102342a21` 2026-10-30T06:13:02Z, `a3f03c5c07e7` 2026-10-30T06:17:19Z, `e8e742fa93e0` 2026-10-30T06:32:55Z | `app/own_ladder_postgame.py`, `app/server.py`, `app/static/app.js`, `app/static/index.html`, `app/static/style.css` |
+| Science-chart visualization | artifact | `97b82438e542` 2026-10-30T05:38:14Z | `ops/video/science-charts-v3/chart-data.json`, `ops/video/science-charts-v3/five-abyssal-studies.png`, `ops/video/science-charts-v3/five-abyssal-studies.svg`, `ops/video/science-charts-v3/render.py` |
+| Manual setup documentation update | documentation | `54deabd521ea` 2026-10-30T04:29:23Z | `README.md` |
+| Selector diagnostics source refinement | product-maintenance | `35830d613ac9` 2026-10-30T07:23:36Z | `tools/agent/run_own_ladder_selector.py` |
+
+- A separate actual-render evidence-record commit is `dcbf5fe09c93` at 2026-10-30T07:19:45Z; its private filename is omitted here. This records an evidence milestone, not a new product component or a release claim.
+- This supplement deliberately selects source milestones; it does not reproduce every commit in the interval or revise earlier counts.
