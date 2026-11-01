@@ -1,3 +1,5 @@
+> Lab notebook, kept as written during the hackathon. Paths under `scratch_ds/`, `experiments/` and `handoff/` point to private evidence that is not in this repository (raw games, logs and reviews).
+
 # HardRead engineering results ledger
 
 These are tool and infrastructure measurements only, not scientific claims. Every run is listed, failures included.

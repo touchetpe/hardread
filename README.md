@@ -51,9 +51,9 @@ For comparison, the same model with only the battle log and no engine put number
 
 | Question | Result |
 |---|---|
-| Does the luck meter behave? | In self-play, the two players' luck mirrors at r = −0.81 over 500 games. Luck explains about 23% of outcome variance there. |
-| How often does the read test wrongly flag a strong move? | Given 184 moves chosen by a deeper search, it called 18 clear misplays (9.8%; 95% CI 6.3–14.9%). Our first two settings failed this test, at 75% and 21%. |
-| How much is reading the opponent worth? | Seeing the full sets instead of 25% of them was worth 14.67 ± 4.96 win-rate points over 300 paired games. |
+| Does the luck meter behave? | In bot self-play over 500 games, the two players' luck mirrors at r = −0.81, and subtracting measured luck cut outcome variance by 23%. |
+| How often does the read test wrongly flag a strong move? | In bot self-play, on 184 moves chosen by a deeper search, it called 18 clear misplays (9.8%; 95% CI 6.3–14.9%), all wrong by the test's design. Our first two settings failed, at 75% and 21%. This wasn't measured on human games. |
+| How much does hidden information matter to the engine? | Between bots, giving the engine the opponent's full sets instead of 25% of them was worth 14.67 ± 4.96 win-rate points over 300 paired games. This measures forced revelation, not the value of a human's reads. |
 | Did our engine changes beat Foul Play? | **No.** A pre-registered sealed test of 10,000 games gave 50.05% (95% CI 49.16–50.94%, p = .91). |
 | Did a better calibration help? | **No.** It failed its gate and was not switched on. |
 
@@ -66,7 +66,9 @@ Full lab notes: [RESULTS.md](RESULTS.md) (detailed, in working shorthand). Pre-r
 
 ## What was built here
 
-**Built during the hackathon:** replay reconstruction, the luck meter, the start/luck/choices bridge, verdicts, the Glimmer agent and checker, the web app and the fine-tuning pipeline. [BUILT_DURING_HACKATHON.md](BUILT_DURING_HACKATHON.md) lists first commits with timestamps, including a small self-play harness committed before kickoff.
+**Built during the hackathon:** replay reconstruction, the luck meter, the start/luck/choices bridge, verdicts, the Glimmer agent and checker, the web app and the fine-tuning pipeline.
+
+**Before kickoff (disclosed):** about two hours of self-play harness work on kickoff morning: a match runner, cloud job scripts, team validation, an oracle hook and decision logging. None of it is a demo feature, but two pieces carried over: the review engine reuses and extends the decision-log serializer, and the hidden-information experiment above uses the oracle hook. [BUILT_DURING_HACKATHON.md](BUILT_DURING_HACKATHON.md) lists every first commit with its timestamp.
 
 **Not ours:** the search engine and its tournament win belong to Foul Play by pmariglia (GPL-3.0). Our bot on the public ladder ran on it: the account's best photographed rank was #157 (Elo 1727, 30 October 2026), other agents also used that account, and it later left the top 500. See [THIRD_PARTY.md](THIRD_PARTY.md) and [DATA.md](DATA.md).
 
@@ -76,4 +78,4 @@ Full lab notes: [RESULTS.md](RESULTS.md) (detailed, in working shorthand). Pre-r
 python3 app/server.py   # http://127.0.0.1:18051
 ```
 
-Showcases work with just `fastapi` and `uvicorn`. Reviewing new games needs the Foul Play environment, and live explanations need a `llama-server` running Muse Glimmer: see [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md). Hosting recipe: [deploy/modal_public.py](deploy/modal_public.py).
+Showcases work with just `fastapi` and `uvicorn`. To review new games, clone [the engine fork](FORK_URL_PENDING) into `foul-play/` and install its `requirements.txt` in a Python 3.13 environment (it needs Rust 1.89), then set `HARDREAD_FP_PYTHON` to that Python. Live explanations need a `llama-server` running Muse Glimmer. More in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md); hosting recipe in [deploy/modal_public.py](deploy/modal_public.py).
