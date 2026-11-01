@@ -429,3 +429,11 @@ details.dropped b { font-weight: 600; color: var(--ink); }
 .own-game { margin-top: 18px; }
 .own-game .dis { margin-top: 12px; }
 .own-citation small { font-size: 11px; color: var(--ink-3); overflow-wrap: anywhere; }
+/* Glimmer's visible work and the plain-prompt comparison */
+.ex-work ol { padding-left: 1.3em; margin: .5em 0 0; }
+.ex-work li { margin: .35em 0; }
+.ex-work .check-pass b { color: var(--good, #2f7d4f); }
+.ex-work .check-fail b { color: var(--bad, #b5473c); }
+.check-why { font-size: .9em; margin-top: .15em; }
+.plain-compare { margin-top: .75em; }
+mark.no-source { background: rgba(181, 71, 60, .18); color: inherit; border-bottom: 1px dashed currentColor; padding: 0 .1em; }

@@ -7,6 +7,7 @@ The page inlines style.css, app.js and the views (window.HARDREAD_STATIC); open 
 """
 import argparse
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -24,10 +25,11 @@ def build(views, showcases, start):
     theme = (APP / "static" / "theme.js").read_text()
     data = json.dumps({"views": views, "showcases": showcases}).replace("</", "<\\/")
     html = html.replace('href="/#/', 'href="#/')
-    html = html.replace('<link rel="stylesheet" href="/static/style.css">', f"<style>\n{css}\n</style>")
+    html = re.sub(r'<link rel="stylesheet" href="/static/style\.css[^"]*">', lambda _: f"<style>\n{css}\n</style>", html)
     html = html.replace('<script src="/static/theme.js"></script>', f"<script>\n{theme}\n</script>")
     boot = f"<script>window.HARDREAD_STATIC = {data};\nif (!location.hash) location.hash = {json.dumps(start)};</script>"
-    html = html.replace('<script src="/static/app.js" defer></script>', f"{boot}\n<script>\n{js}\n</script>")
+    html = re.sub(r'<script src="/static/app\.js[^"]*" defer></script>',
+                  lambda _: f"{boot}\n<script>\n{js}\n</script>", html)
     return html
 
 

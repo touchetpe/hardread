@@ -259,12 +259,26 @@ class OfferedListIntegrationTests(unittest.TestCase):
 
 
 class TemplateGateTests(unittest.TestCase):
+    def setUp(self):   # these tests cover the cache and fallback rules; saved showcase answers are tested on their own
+        saved = patch.object(S, "SHOW_SAVED_ANSWERS", False)
+        saved.start()
+        self.addCleanup(saved.stop)
+
+    def test_saved_showcase_answers_are_shown_and_labelled(self):
+        with patch.object(S, "SHOW_SAVED_ANSWERS", True), patch.object(S, "_jsonfile", side_effect=lambda p, d=None: (
+                {"q1": {"final": "glimmer_raw", "rendered": {"text": "saved"}}, "q2": {"final": "template"}}
+                if str(p).endswith(".explain.json") else (REVIEW if str(p).endswith(".review.json") else
+                (CTX if str(p).endswith(".ctx.json") else d)))):
+            view = S.load_view("showcase-1")
+        self.assertTrue(view["explanations"]["q1"]["precomputed"])
+        self.assertNotIn("q2", view["explanations"])
+
     def test_unset_default_and_template_cache_for_review_and_showcase(self):
         env = dict(os.environ)
         env.pop("HARDREAD_EXPLAIN_MODE", None)
         default = subprocess.check_output([sys.executable, "-c", "import server; print(server.EXPLAIN_MODE)"],
                                           cwd=Path(__file__).parent, env=env, text=True).strip()
-        self.assertEqual(default, "template")
+        self.assertEqual(default, "auto")
         _, offered = P.build_view_with_offered(REVIEW, CTX)
         keys = S._offered_keys(offered)
         showcase_file = S.SHOWCASES / "showcase-1.explain.json"

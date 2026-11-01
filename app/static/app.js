@@ -807,6 +807,21 @@
     glimmer_repaired: "Written by Muse Glimmer-30B (base); it passed the checks after one repair.",
     template: "Fixed template: the words come from application code."
   };
+  // The same model on the same game with no engine: what a one-prompt analyzer gives you.
+  var PLAIN_NUM = /(\b\d+(?:\.\d+)?\s*(?:%|percent|points?|pts)\b|\b\d+(?:\.\d+)?%|\b\d+\s*(?:in|out of)\s*\d+\b)/gi;
+  function plainCompare(v) {
+    var pc = v.plain_compare;
+    if (!pc || !pc.answer) return null;
+    var p = h("p", { class: "ex-text plain-answer" }), parts = pc.answer.split(PLAIN_NUM), n = 0;
+    parts.forEach(function (t, i) {
+      if (i % 2) { n++; p.appendChild(h("mark", { class: "no-source", title: "No citation" }, t)); }
+      else p.appendChild(document.createTextNode(t));
+    });
+    return h("details", { class: "ex-sources plain-compare" },
+      h("summary", null, "Compare: the same model with a plain prompt and no engine"),
+      h("p", { class: "muted" }, "Muse Glimmer given only the battle log and the question “" + pc.question + "”. " +
+        (n ? "Nothing links the " + n + " marked number" + (n > 1 ? "s" : "") + " to a source: some may come from the log, others may be guesses, and you can't tell which." : "Nothing in it links back to a calculation.")), p);
+  }
   function explainCard(id, v) {
     var qs = v.questions || {};
     var body = h("div", { class: "explain-body", "aria-live": "polite" });
@@ -840,15 +855,33 @@
       var cites = [];
       (r.sentences || []).forEach(function (snt) { (snt.citations || []).forEach(function (c) { cites.push(c); }); });
       body.appendChild(p);
+      if (ex.precomputed) body.appendChild(h("p", { class: "ex-mode" }, "Saved answer for this showcase, so you don't have to wait."));
       body.appendChild(h("p", { class: "ex-mode" }, pending ? "Fixed template, shown while Muse Glimmer writes." :
         ex.policy_rejected ? "Fixed template: Muse Glimmer's draft used wording HardRead does not allow (for example “cost” for choices)." : (MODE_TEXT[ex.final] || "")));
       if (pending) body.appendChild(h("p", { class: "muted ex-wait ex-pending" }, h("span", { class: "spinner", "aria-hidden": "true" }), h("span", null, "Muse Glimmer is writing its own version…")));
+      var work = pending ? null : workLog(ex);
+      if (work) body.appendChild(work);
       if (cites.length) {
         body.appendChild(h("details", { class: "ex-sources" }, h("summary", null, "Sources for each number (" + cites.length + ")"),
           h("ul", null, cites.map(function (c) {
             return h("li", null, h("b", null, c.shown), " ← ", h("code", null, c.tool + "." + c.field), " = " + JSON.stringify(c.value));
           }))));
       }
+    }
+    function workLog(ex) {
+      var calls = (ex.trace || []), checks = (ex.checks || []);
+      if (ex.final === "template" || (!calls.length && !checks.length)) return null;
+      var items = calls.map(function (c) {
+        var a = c.args || {}, arg = Object.keys(a).map(function (k) { return k + " " + a[k]; }).join(", ");
+        return h("li", null, "Looked up ", h("code", null, c.name), arg ? " (" + arg + ")" : "");
+      });
+      checks.forEach(function (c, i) {
+        items.push(h("li", { class: c.pass ? "check-pass" : "check-fail" },
+          h("b", null, "Draft " + (i + 1) + (c.pass ? ": passed the checker" : ": rejected by the checker")),
+          c.draft ? h("div", { class: "muted" }, c.draft) : null,
+          (c.failures || []).map(function (f) { return h("div", { class: "check-why" }, f); })));
+      });
+      return h("details", { class: "ex-sources ex-work" }, h("summary", null, "How Muse Glimmer worked this out (" + items.length + " steps)"), h("ol", null, items));
     }
     function waiting(msg) { clear(body); body.appendChild(h("p", { class: "muted ex-wait" }, h("span", { class: "spinner", "aria-hidden": "true" }), msg)); }
     function load(q) {
@@ -882,7 +915,7 @@
           return;
         }
         var msg = (st.pending || st.stage === "pending") ? (st.message || "Explanation pending") + "; the template stands meanwhile." :
-          st.state === "queued" ? "Muse Glimmer is queued…" : "Muse Glimmer is writing its own version (it runs on this machine)… " + Math.round(st.elapsed || 0) + " s";
+          st.state === "queued" ? "Muse Glimmer is queued…" : "Muse Glimmer is looking through the engine's results… " + Math.round(st.elapsed || 0) + " s";
         var w = body.querySelector(".ex-pending");
         if (hasTemplate && w) w.lastChild.textContent = msg; else if (!hasTemplate) waiting(msg);
         setTimeout(function () { poll(jid, q, hasTemplate); }, 1500);
@@ -892,6 +925,8 @@
       getView(id).then(function (nv) { if (nv && nv.explanations) { v.explanations = nv.explanations; } if (current === q && v.explanations[q]) draw(v.explanations[q]); });
     }
     if (!v.features || v.features.explain === false) return null;
+    var plain = plainCompare(v);
+    if (plain) card.appendChild(plain);
     load(current);
     return card;
   }

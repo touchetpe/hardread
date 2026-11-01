@@ -160,6 +160,17 @@ def _finish_template(res, session, question, t0):
     return res
 
 
+def checks_of(res):
+    """Each draft the model submitted and what the verifier said about it (shown on the review page)."""
+    out = []
+    for a in res.get("attempts") or []:
+        report, payload = a.get("report") or {}, a.get("payload") or {}
+        out.append({"phase": a.get("phase"), "pass": bool(report.get("pass")),
+                    "draft": " ".join(str(s.get("text", "")) for s in payload.get("sentences") or [] if isinstance(s, dict)),
+                    "failures": [f.get("message") for f in report.get("failures") or []][:5]})
+    return out
+
+
 def _trace(session):
     """Receipts: every tool call with its exact output (what the answer may cite)."""
     return [{"name": c["name"], "args": c["args"], "output": json.loads(session.model_view(c["output"]))}

@@ -53,8 +53,9 @@ LLM_URL = os.environ.get("HARDREAD_LLM_URL", "http://127.0.0.1:18131").rstrip("/
 GLIMMER_URL = LLM_URL + "/v1/chat/completions"
 EVAL_LOCK = HARDREAD / "scratch_ds" / "agent" / "EVAL_LOCK"   # present = a recorded evaluation is running: no calls
 LLM_GATE = threading.Lock()   # at most one model call in flight from this app (the server runs --parallel 1)
-EXPLAIN_MODE = os.environ.get("HARDREAD_EXPLAIN_MODE", "template")   # auto | loop | prefetch | template | off
+EXPLAIN_MODE = os.environ.get("HARDREAD_EXPLAIN_MODE", "auto")   # auto | loop | prefetch | template | off
 EXPLANATION_POLICY_VERSION = "offered-scope-v2"
+SHOW_SAVED_ANSWERS = True
 VERDICTS_ON = os.environ.get("HARDREAD_DISABLE_VERDICT", "") != "1"
 
 RATES = {"review": int(os.environ.get("HARDREAD_RATE_REVIEWS", "5")),
@@ -68,6 +69,13 @@ QUESTIONS = {   # the three fixed questions (EVAL_PROTOCOL_AGENT.md Q1-Q3); free
     "q1": "Was this game decided by luck or by my choices?",
     "q2": "What was the biggest piece of luck in this game, and how much did it matter?",
     "q3": "Where did the engine disagree most with my choices, and by how much?",
+    "q4": "What was the turning point of this game?",
+}
+# What the model is asked, when it differs from the label on the button. q4 is an investigation: it must look up the turn.
+AGENT_QUESTIONS = {
+    "q4": ("What was the turning point of this game? Call list_key_moments and then get_turn on the most important "
+           "turn before you answer. In three or four sentences, say what happened on that turn, how win chance moved, "
+           "and what the engine preferred if it disagreed."),
 }
 _SALT = secrets.token_hex(16)   # per process: hashed client addresses are never written anywhere
 
@@ -448,6 +456,12 @@ def load_view(rid):
     mode = _effective_explain_mode()
     view["explanations"] = {q: _public_explanation(ex, mode) for q, ex in cached.items()
                              if _explanation_cache_current(ex, saved_keys.get(q), keys, mode)}
+    if SHOW_SAVED_ANSWERS and is_showcase(rid):   # saved model answers: a showcase never waits, and needs no GPU
+        saved = _jsonfile(SHOWCASES / f"{rid}.explain.json", {}) or {}
+        for q, ex in saved.items():
+            if q in QUESTIONS and ex.get("final") != "template":
+                view["explanations"][q] = dict(ex, precomputed=True)
+        view["plain_compare"] = _jsonfile(SHOWCASES / f"{rid}.plain.json")
     view["questions"] = QUESTIONS
     return view
 
@@ -931,7 +945,7 @@ def create_app(concurrency=1, processes=4):
             _write_json(store, cur)
             _save_explain_keys(rid, qid, offered_keys, mode)
             return qid
-        files = {"review.json": json.dumps(review), "question.txt": QUESTIONS[qid],
+        files = {"review.json": json.dumps(review), "question.txt": AGENT_QUESTIONS.get(qid, QUESTIONS[qid]),
                  "verdicts.json": json.dumps(visible_verdicts), "offered.json": json.dumps(offered),
                  "offered_keys.json": json.dumps(offered_keys)}
         jid = jobs.submit("explain", key, files, cmd, done)

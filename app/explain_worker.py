@@ -69,7 +69,7 @@ def main():
            "rendered": res.get("rendered"), "raw_pass": res.get("raw_pass"),
            "after_repair_pass": res.get("after_repair_pass"), "latency_s": round(time.time() - t0, 1),
            "data_tool_calls": res.get("data_tool_calls"), "llm_requests": res.get("llm_requests"),
-           "errors": res.get("errors"), "trace": res.get("trace"),
+           "errors": res.get("errors"), "trace": res.get("trace"), "checks": explain.checks_of(res),
            "prompt_version": res.get("prompt_version"), "verifier_version": res.get("verifier_version"),
            "created": time.time(), "pending_eval_lock": state["locked_out"]}
     (d / "explain.json").write_text(json.dumps(out))
