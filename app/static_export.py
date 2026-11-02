@@ -35,15 +35,21 @@ def build(views, showcases, start):
 
 QUESTIONS = {"q1": "Was this game decided by luck or by my choices?",
              "q2": "What was the biggest piece of luck in this game, and how much did it matter?",
-             "q3": "Where did the engine disagree most with my choices, and by how much?"}
+             "q3": "Where did the engine disagree most with my choices, and by how much?",
+             "q4": "What was the turning point of this game?"}
 
 
-def explanations(review, offered):
-    """Generate deterministic answers scoped to the visible offered decisions."""
+def explanations(review, offered, saved=None):
+    """Saved Muse Glimmer answers where they exist, else deterministic answers scoped to the visible offered decisions."""
     sys.path.insert(0, str(APP.parent / "tools" / "agent"))
     import explain
     result = {}
     for q, text in QUESTIONS.items():
+        ex = (saved or {}).get(q)
+        if ex and ex.get("final") != "template":
+            result[q] = {k: ex[k] for k in ("question", "final", "rendered", "trace", "checks") if k in ex}
+            result[q]["precomputed"] = True
+            continue
         res = explain.run(review, text, mode="template", offered=offered)
         result[q] = {"question": text, "final": "template", "rendered": res.get("rendered")}
     return result
@@ -64,7 +70,10 @@ def main():
             ctx = json.loads((SHOW / f"{sc['id']}.ctx.json").read_text())
             v, offered = P.build_view_with_offered(review, ctx)
             v.update(id=sc["id"], showcase=True, private=False)
-            v["explanations"] = explanations(review, offered)
+            saved = SHOW / f"{sc['id']}.explain.json"
+            v["explanations"] = explanations(review, offered, json.loads(saved.read_text()) if saved.exists() else None)
+            plain = SHOW / f"{sc['id']}.plain.json"
+            v["plain_compare"] = json.loads(plain.read_text()) if plain.exists() else None
             v["questions"], v["features"] = QUESTIONS, {"explain": True, "verdict": False, "share": False}
             views[sc["id"]] = v
     if a.review:

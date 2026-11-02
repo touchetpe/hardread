@@ -469,7 +469,7 @@ class TemplateGateTests(unittest.TestCase):
                     self.assertEqual(app.state.jobs.on_done({"dir": job}), "withheld")
                 self.assertFalse(S.explain_store("showcase-1").exists())
 
-    def test_static_showcase_uses_templates_and_exact_offered(self):
+    def test_static_showcase_keeps_saved_answers_and_exact_offered(self):
         _, offered = P.build_view_with_offered(REVIEW, CTX)
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
@@ -477,7 +477,7 @@ class TemplateGateTests(unittest.TestCase):
             (root / "showcase-1.review.json").write_text(json.dumps(REVIEW))
             (root / "showcase-1.ctx.json").write_text(json.dumps(CTX))
             (root / "showcase-1.explain.json").write_text(json.dumps({"q3": {"final": "glimmer_raw",
-                                                                          "rendered": {"text": "MODEL LEAK"}}}))
+                                                                          "rendered": {"text": "SAVED ANSWER"}}}))
             S._agent("explain")
             model = sys.modules["explain"]
             with patch.object(static_export, "SHOW", root), \
@@ -485,13 +485,13 @@ class TemplateGateTests(unittest.TestCase):
                  patch.object(model, "run", wraps=model.run) as run:
                 static_export.main()
             html = (root / "out.html").read_text()
-            self.assertNotIn("MODEL LEAK", html)
+            self.assertIn("SAVED ANSWER", html)
             self.assertEqual(len(run.call_args_list), 3)
             self.assertTrue(all(call.kwargs["mode"] == "template" and call.kwargs["offered"] == offered
                                 for call in run.call_args_list))
             data = json.loads(html.split("window.HARDREAD_STATIC = ", 1)[1].split(";\nif (!location.hash)", 1)[0])
-            self.assertEqual([x["final"] for x in data["views"]["showcase-1"]["explanations"].values()],
-                             ["template"] * 3)
+            self.assertEqual({q: x["final"] for q, x in data["views"]["showcase-1"]["explanations"].items()},
+                             {"q1": "template", "q2": "template", "q3": "glimmer_raw", "q4": "template"})
 
 
 class ReadContextTests(unittest.TestCase):
