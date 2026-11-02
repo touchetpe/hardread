@@ -17,7 +17,9 @@ docker network inspect hardread-public >/dev/null 2>&1 || docker network create 
 # LAN, and nothing on the VM itself.
 colima ssh -p "$PROFILE" -- sudo sh -s <<'RULES'
 iptables -D INPUT -s 172.30.0.0/24 -j DROP 2>/dev/null || true
+iptables -D INPUT -s 172.30.0.0/24 -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT 2>/dev/null || true
 iptables -I INPUT -s 172.30.0.0/24 -j DROP
+iptables -I INPUT -s 172.30.0.0/24 -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
 iptables -F DOCKER-USER
 iptables -A DOCKER-USER -s 172.30.0.0/24 -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
 iptables -A DOCKER-USER -d 172.30.0.0/24 -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
@@ -45,6 +47,6 @@ docker run -d --name hardread-public --restart unless-stopped --network hardread
   --read-only --tmpfs /tmp:size=256m --tmpfs /state:size=2g,uid=10001,gid=10001,mode=0700 \
   --cap-drop ALL --security-opt no-new-privileges --pids-limit 256 --memory 6g --cpus 5 \
   --add-host glimmer-gate:192.168.5.2 -e HARDREAD_LLM_URL=http://glimmer-gate:18140 \
-  -e HARDREAD_PUBLIC_ORIGIN="${HARDREAD_PUBLIC_ORIGIN:-}" \
+  -e HARDREAD_PUBLIC_ORIGIN="${HARDREAD_PUBLIC_ORIGIN:-https://touchetpe.github.io}" \
   -p 127.0.0.1:18095:8080 hardread-public >/dev/null
 echo "public copy on http://127.0.0.1:18095 (no tunnel)"
