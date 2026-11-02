@@ -6,6 +6,7 @@
   "use strict";
 
   var STATIC = window.HARDREAD_STATIC || null;
+  var PUBLIC_COPY = !!document.querySelector('meta[name="hardread-public"]');
   var SVGNS = "http://www.w3.org/2000/svg";
   var MINUS = "−";
 
@@ -170,7 +171,7 @@
       h("p", { class: "section-sub", style: "margin-bottom:12px" }, "Gen 9 OU singles. Saved replays only: HardRead never looks at a live battle."),
       h("label", { class: "field-label", for: "paste" }, "Replay link or battle log"),
       input,
-      h("p", { id: "paste-hint", class: "hint" }, "Public or private (password) replay links both work. Private replays are kept 24 hours and never get a share page."),
+      h("p", { id: "paste-hint", class: "hint" }, PUBLIC_COPY ? "Paste a public replay.pokemonshowdown.com link. This copy runs on the builder's own computer, one review at a time, so you may have to wait." : "Public or private (password) replay links both work. Private replays are kept 24 hours and never get a share page."),
       h("details", { class: "export-box" },
         h("summary", null, "Add your team export (optional, for exact sets)"),
         h("label", { class: "field-label sr-only", for: "export" }, "Your team export"),
@@ -311,8 +312,8 @@
         h("div", { class: "step" }, h("b", null, "Muse Glimmer explains it"),
           h("p", null, "Meta's open model chooses which engine results to look up, then explains them in plain words.")),
         h("div", { class: "step" }, h("b", null, "The model can't write a number"),
-          h("p", null, "It writes sentences with slots pointing at engine results. Code fills in the values, and a checker rejects bad drafts."))),
-      h("p", { class: "hint" }, "On a fixed set of 60 questions about 20 games, 59 explanations passed the checker after at most one repair. ", h("a", { href: "#/about" }, "How this was measured")));
+          h("p", null, "It writes sentences with slots pointing at engine results. Code fills in the values, and a checker rejects drafts with uncited or wrongly typed numbers. It doesn't check whether the words are true."))),
+      h("p", { class: "hint" }, "On a fixed set of 60 questions about 20 games, 59 explanations passed the number checks after at most one repair. ", h("a", { href: "#/about" }, "How this was measured")));
 
     show([h("section", { class: "hero" },
       h("h1", null, "Was it luck, or was it you?", h("span", { class: "h1-sub" }, "An engine review for competitive Pokémon")),
@@ -854,15 +855,15 @@
         h("li", null, "Luck counts damage rolls only where a roll decides a KO. Small gaps between moves are within search noise."),
         h("li", null, "When the replay hides a move (fainted first, paralysis, sleep, flinch), the choice is unknown and its gap is given as a range."),
         h("li", null, "We haven't yet run a study with human players."))),
-      STATIC ? null : h("p", null, h("a", { href: "/api/review/" + encodeURIComponent(id) + "/receipts", target: "_blank", rel: "noopener" }, "Open the full engine output (JSON)")));
+      (STATIC || PUBLIC_COPY) ? null : h("p", null, h("a", { href: "/api/review/" + encodeURIComponent(id) + "/receipts", target: "_blank", rel: "noopener" }, "Open the full engine output (JSON)")));
     return h("details", { class: "card receipts" }, h("summary", null, "Engine settings, timings and exact numbers"), body);
   }
   function fmt(x) { return x === null || x === undefined ? "–" : Number(x).toFixed(3); }
 
   // ------------------------------------------------------------------ explanation (Muse Glimmer, async)
   var MODE_TEXT = {
-    glimmer_raw: "Written by Muse Glimmer-30B (base model, no fine-tuning). It passed the checker on the first draft.",
-    glimmer_repaired: "Written by Muse Glimmer-30B (base model, no fine-tuning). It passed the checker after one repair.",
+    glimmer_raw: "Written by Muse Glimmer-30B (base model, no fine-tuning). It passed the number checks on the first draft. Plain-word claims aren't checked.",
+    glimmer_repaired: "Written by Muse Glimmer-30B (base model, no fine-tuning). It passed the number checks after one repair. Plain-word claims aren't checked.",
     template: "Fixed template: the words come from application code, not the model."
   };
   // The same model on the same game with no engine: what a one-prompt analyzer gives you.
@@ -895,7 +896,7 @@
     var badge = h("span", { class: "badge-model" }, "Muse Glimmer");
     var card = h("section", { class: "card explain-card", "aria-labelledby": "ex-title" },
       h("div", { class: "ex-head" }, h("h2", { id: "ex-title" }, "In plain words"), badge),
-      h("p", { class: "card-sub" }, "The engine did the analysis. Muse Glimmer, Meta's open model, explains it, but it can't write a number: it writes sentences with slots pointing at engine results, code fills in the values, and a checker rejects bad drafts."),
+      h("p", { class: "card-sub" }, "The engine did the analysis. Muse Glimmer, Meta's open model, explains it, but it can't write a number: it writes sentences with slots pointing at engine results, code fills in the values, and a checker rejects drafts with uncited or wrongly typed numbers. It doesn't check whether the words are true."),
       tabs, body);
     var pcBtn = null;
     function select(q) {
@@ -973,7 +974,7 @@
       });
       checks.forEach(function (c, i) {
         items.push(h("li", { class: c.pass ? "check-pass" : "check-fail" },
-          h("b", null, "Draft " + (i + 1) + (c.pass ? ": passed the checker" : ": rejected by the checker")),
+          h("b", null, "Draft " + (i + 1) + (c.pass ? ": passed the number checks" : ": rejected by the checker")),
           c.draft ? h("div", { class: "muted" }, c.draft) : null,
           (c.failures || []).map(function (f) { return h("div", { class: "check-why" }, f); })));
       });
@@ -1307,8 +1308,8 @@
       h("p", null, "Chess players get an engine review after every game. Competitive Pokémon players don't, because the opponent's sets (moves, items) are hidden and dice decide many turns. HardRead reviews a finished Gen 9 OU game anyway, and tells you how much was luck."),
       h("p", null, "The analysis comes from Foul Play (GPL-3.0), an open-source search engine by pmariglia that won the 2025 PokéAgent Gen 9 OU track, running on poke-engine. For each decision it samples teams your opponent could have and searches each of them; for each turn it goes through the chance outcomes and measures the one that happened against the rest."),
       h("h2", null, "How Muse Glimmer is used"),
-      h("p", null, "Muse Glimmer-30B, Meta's open model, writes the explanations as an agent: it chooses which read-only engine tools to call, then submits an explanation. It cannot write a number. It writes sentences with empty slots that point at engine results, code fills in the values, and a checker rejects any draft with an uncited number, a mislabeled quantity or a verdict the engine didn't give. It gets one repair, then a labeled template takes over."),
-      h("p", null, "On a fixed set of 60 questions about 20 games (base model, no fine-tuning), 41 passed the checker on the first draft and 59 after at most one repair. Sentences flagged in a blind review: 3 of 60. The checker guarantees where numbers come from, not that every sentence is wise, which is why we ran that review too. It was done by an AI reviewer; the human label check is still pending."),
+      h("p", null, "Muse Glimmer-30B, Meta's open model, writes the explanations as an agent: it chooses which read-only engine tools to call, then submits an explanation. It cannot write a number. It writes sentences with empty slots that point at engine results, code fills in the values, and a checker rejects any draft with an uncited or wrongly typed number, or a verdict the engine didn't give. It gets one repair, then a labeled template takes over. Passing means each number comes from an engine result and has the right type. It doesn't mean the explanation is true: a real number can still be the wrong one for its sentence, and plain-word claims aren't checked."),
+      h("p", null, "On a fixed set of 60 questions about 20 games (base model, no fine-tuning), 41 passed the number checks on the first draft and 59 after at most one repair. Sentences flagged in a blind review: 3 of 60. We ran that review because the checker only covers numbers. It was done by an AI reviewer; the human label check is still pending, so we don't claim the prose is accurate."),
       h("p", null, "For comparison, the same model with only the battle log and no engine put numbers in 27 of 30 answers, with nothing linking them to a source. That is a small sample, and the engine's estimate is not ground truth."),
       h("p", null, "Separately, we fine-tuned Glimmer to play. It won 178 of 200 games against the Abyssal heuristic bot. Those teams were partly seen in development, so this doesn't measure general strength. The fine-tuned model doesn't write the explanations."),
       h("h2", null, "What the numbers mean"),
@@ -1320,7 +1321,7 @@
         h("li", null, "Without your team export, your own sets are assumed, and that can change a verdict. We haven't yet run a study with human players.")),
       h("h2", { id: "privacy" }, "Privacy"),
       h("ul", null,
-        h("li", null, "HardRead runs on its own server: your machine if you started it yourself, rented cloud servers on the public site. The open Muse Glimmer weights run in the same setup, so nothing goes to an outside AI service. The only other outside request is fetching the replay link you paste, from replay.pokemonshowdown.com."),
+        h("li", null, "HardRead runs on its own server: your machine if you started it yourself, the builder's own computer for the public copy. The open Muse Glimmer weights run in the same setup, so nothing goes to an outside AI service. The only other outside request is fetching the replay link you paste, from replay.pokemonshowdown.com."),
         h("li", null, "Player names and chat are removed before the review runs; the review says “You” and “Opponent”. Names are shown once, on the side picker, and never stored."),
         h("li", null, "Reviews of public replays are kept 14 days so a reload is instant; private (password) replays 24 hours, with no share page and no card."),
         h("li", null, "The pasted log is deleted when the review finishes, unless you added your team export: then the name-free log and the export stay with the review, for the same time, so you can check decisions. A note you write about a decision is read by the same server and not stored; the details you confirm are kept with that check."),

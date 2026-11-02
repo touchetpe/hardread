@@ -1044,6 +1044,9 @@ def create_app(concurrency=1, processes=4):
 
     @app.get("/")
     def index():
+        if PUBLIC:
+            html = (APP / "static" / "index.html").read_text()
+            return HTMLResponse(html.replace("<head>", '<head>\n<meta name="hardread-public" content="1">', 1))
         return FileResponse(str(APP / "static" / "index.html"))
 
     return app

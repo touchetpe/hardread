@@ -13,8 +13,11 @@ export DOCKER_HOST=unix://$HOME/.colima/$PROFILE/docker.sock
 docker build -q -t hardread-public -f "$HERE/Dockerfile" "$CONTEXT" >/dev/null
 docker network inspect hardread-public >/dev/null 2>&1 || docker network create --subnet 172.30.0.0/24 hardread-public >/dev/null
 
-# Firewall inside the VM. The container may reach: DNS, public HTTPS, and the model gate. Nothing else on this Mac or LAN.
+# Firewall inside the VM. The container may reach: DNS, public HTTPS, and the model gate. Nothing else on this Mac or
+# LAN, and nothing on the VM itself.
 colima ssh -p "$PROFILE" -- sudo sh -s <<'RULES'
+iptables -D INPUT -s 172.30.0.0/24 -j DROP 2>/dev/null || true
+iptables -I INPUT -s 172.30.0.0/24 -j DROP
 iptables -F DOCKER-USER
 iptables -A DOCKER-USER -s 172.30.0.0/24 -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
 iptables -A DOCKER-USER -d 172.30.0.0/24 -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT

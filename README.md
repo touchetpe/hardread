@@ -26,22 +26,22 @@ Most analyzers paste a game into a language model and return whatever it says. O
 |---|---|---|
 | **Who does the analysis** | A language model reads the log. | [Foul Play](https://github.com/pmariglia/foul-play), an open-source search engine that won the 2025 PokéAgent Gen 9 OU track, samples the hidden sets and searches the continuations. |
 | **Where numbers come from** | The model writes them. | The model **cannot write a number**. It writes sentences with empty slots that point at engine results, and code fills in the values. |
-| **What stops a bad answer** | Nothing. | A checker rejects any draft with an uncited number, a mislabeled quantity or a verdict the engine didn't give. The model gets one repair, then a labeled template takes over. |
+| **What stops a bad answer** | Nothing. | A checker rejects any draft with an uncited or wrongly typed number, or a verdict the engine didn't give. The model gets one repair, then a labeled template takes over. |
 | **What you can inspect** | The final text. | Every lookup Glimmer made, every rejected draft and the source of every number. |
 
 ## How Meta's models are used
 
-**Muse Glimmer-30B runs the explanations as an agent.** It chooses which read-only engine tools to call, then submits an explanation that must pass the checker. The same open weights run on a laptop or a rented GPU.
+**Muse Glimmer-30B runs the explanations as an agent.** It chooses which read-only engine tools to call, then submits an explanation that must pass the number checks. The same open weights run on a laptop or a rented GPU.
 
 Results on a fixed set of 60 questions about 20 games (base model, no fine-tuning):
 
 | Measure | Result |
 |---|---|
-| Passed the checker on the first draft | 41/60 (68%) |
+| Passed the number checks on the first draft | 41/60 (68%) |
 | Passed after at most one repair | 59/60 (98%) |
 | Sentences flagged in a blind review | 3/60 (5%; 95% CI 1.7–13.7%) |
 
-The checker guarantees where numbers come from, not that every sentence is wise, which is why we ran the blind review too. It was done by an AI reviewer; the human label check is still pending.
+Passing means each number comes from an engine result and has the right type. It doesn't mean the explanation is true: a real number can still be the wrong one for its sentence, and plain-word claims aren't checked. That's why we also ran the blind review, which was done by an AI reviewer. The human label check is still pending, so we don't claim the prose is accurate.
 
 For comparison, the same model with only the battle log and no engine put numbers in 27 of 30 answers, with nothing linking them to a source. Asked for the biggest piece of luck, it named the same turn as the engine in 3 of 10 games. That is a small sample, and the engine's estimate is not ground truth.
 
