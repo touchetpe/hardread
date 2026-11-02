@@ -16,5 +16,11 @@
   "license": "GPL-3.0",
   "role": "reconstructs each decision, searches sampled opponent sets (4 worlds x 1 s per decision), prices luck (luck v2)"
  },
- "calibration": "absolute-value calibrator fitted on top-ladder replays (tools/review/calibrator.json, key absolute_human)"
+ "calibration": "absolute-value calibrator fitted on top-ladder replays (tools/review/calibrator.json, key absolute_human)",
+ "species_profiles": {
+  "file": "app/data/species_profiles.json",
+  "what": "Aggregated per-species rates of items, abilities, Tera types and moves for 80 species, used only to fill moves when a reviewed player's set has no entry in the most-common-set table.",
+  "source": "2,154 public Pok\u00e9mon Showdown replays",
+  "built": "Aggregated counts only; no usernames, replay ids or teams are in the file."
+ }
 }
