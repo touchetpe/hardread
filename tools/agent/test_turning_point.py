@@ -139,6 +139,76 @@ class TurningPointTemplate(unittest.TestCase):
         self.assertNotIn("turning point", text)
 
 
+class RequiredFacts(unittest.TestCase):
+    """The answer's wording is free; the facts of the moment it chose are not."""
+
+    def moments(self, s):
+        return s.call("list_key_moments", {"kind": "win_chance", "k": 3})["moments"]
+
+    def payload(self, m, fields):
+        words = {"turn": "On turn {turn},", "what_happened": "{what_happened}.", "wp_before_pct": "Win chance was {wp_before_pct}",
+                 "wp_after_pct": "and then win chance was {wp_after_pct}.", "luck_pts": "Luck was {luck_pts}.",
+                 "choices_pts": "Choices, yours and your opponent's, were {choices_pts}."}
+        return {"sentences": [{"text": " ".join(words[f] for f in fields),
+                               "slots": {f: f"{m['id']}.{f}" for f in fields}}]}
+
+    def test_a_lower_ranked_moment_counts_as_a_choice(self):
+        s = session()
+        m = self.moments(s)[1]
+        fields = [f for f in explain.TURNING_POINT_REQUIRED if f in m]
+        self.assertEqual(explain.chosen_moment(self.payload(m, fields), s)["turn"], m["turn"])
+        self.assertEqual(explain.turning_point_failures(self.payload(m, fields), s), [])
+
+    def test_a_missing_fact_is_named(self):
+        s = session()
+        m = self.moments(s)[1]
+        fails = explain.turning_point_failures(self.payload(m, ["turn", "wp_before_pct", "wp_after_pct"]), s)
+        self.assertEqual(fails[0]["rule"], "content")
+        self.assertIn(f"{m['id']}.what_happened", fails[0]["message"].replace("##", "#"))
+
+    def test_a_field_the_moment_does_not_have_is_not_required(self):
+        s = session()
+        m = self.moments(s)[0]
+        self.assertNotIn("luck_pts", m)
+        fields = [f for f in explain.TURNING_POINT_REQUIRED if f in m]
+        self.assertEqual(explain.turning_point_failures(self.payload(m, fields), s), [])
+
+    def test_an_unused_slot_does_not_count(self):
+        s = session()
+        m = self.moments(s)[1]
+        p = self.payload(m, ["turn", "wp_before_pct", "wp_after_pct"])
+        p["sentences"][0]["slots"]["what_happened"] = f"{m['id']}.what_happened"
+        self.assertIsNone(explain.chosen_moment(p, s))
+
+    def test_must_look_up_the_moments(self):
+        s = session()
+        rec = s.call("get_summary", {})
+        fails = explain.turning_point_failures({"sentences": [{"text": "Luck was {l}.", "slots": {"l": f"{rec['id']}.luck_pts"}}]}, s)
+        self.assertIn("win_chance", fails[0]["message"])
+
+    def test_loop_repairs_then_falls_back_and_template_still_catches(self):
+        class Client:
+            def __init__(self):
+                self.n = 0
+
+            def chat(self, msgs, tools=None, tool_choice=None):
+                self.n += 1
+                if self.n == 1:
+                    calls = [("list_key_moments", {"kind": "win_chance", "k": 3})]
+                else:  # passes the checker, but never shows the facts of a moment
+                    calls = [("submit_explanation", {"sentences": [{"text": "Luck decided it.", "slots": {}}]})]
+                tcs = [{"id": f"c{self.n}", "name": n, "arguments": a, "parse_error": None, "raw_arguments": ""}
+                       for n, a in calls]
+                return {"message": {"content": ""}, "tool_calls": tcs, "finish_reason": "tool_calls", "wall_s": 0,
+                        "prompt_tokens": 0, "completion_tokens": 0, "cached_tokens": 0, "decode_tps": 0, "reasoning": ""}
+        res = explain.run(review(), Q4_LABEL, client=Client(), mode="loop", offered=[])
+        self.assertEqual(res["final"], "template")
+        self.assertEqual(len(res["attempts"]), 2)
+        self.assertTrue(res["attempts"][0]["report"]["checker_pass"])
+        self.assertFalse(res["attempts"][0]["report"]["pass"])
+        self.assertIn("The turning point was turn 5", res["rendered"]["text"])
+
+
 class ChoicesRepairText(unittest.TestCase):
     """The rule is unchanged; only the message that tells the model how to satisfy it is clearer."""
 

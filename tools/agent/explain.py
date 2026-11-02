@@ -19,6 +19,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
+from lexicon import PLACEHOLDER_RE  # noqa: E402
 from llm import GlimmerClient, LLMError, assistant_message, tool_message  # noqa: E402
 from render import render  # noqa: E402
 import templates  # noqa: E402
@@ -57,6 +58,64 @@ def repair_text(report):
     if any("choices_pts" in (f.get("message") or "") for f in report["failures"]):
         text += CHOICES_REPAIR
     return text
+
+
+# The turning-point answer is in the model's own words, but it must show these facts of the moment it chose, by slot.
+TURNING_POINT_REQUIRED = ("turn", "what_happened", "wp_before_pct", "wp_after_pct", "luck_pts", "choices_pts")
+
+
+def _turning_point_moments(session):
+    seen, out = set(), []
+    for c in session.calls:
+        if c["name"] == "list_key_moments" and (c["args"] or {}).get("kind") == "win_chance":
+            for m in (c["output"] or {}).get("moments") or []:
+                if m["turn"] not in seen:
+                    seen.add(m["turn"])
+                    out.append(m)
+    return out
+
+
+def _cited_facts(payload, session):
+    """[(field, value)] of every slot the sentences actually use, in order."""
+    out = []
+    for s in (payload.get("sentences") if isinstance(payload, dict) else None) or []:
+        if not isinstance(s, dict) or not isinstance(s.get("text"), str) or not isinstance(s.get("slots"), dict):
+            continue
+        for name in PLACEHOLDER_RE.findall(s["text"]):
+            try:
+                _, field, value = session.resolve(s["slots"].get(name))
+            except KeyError:
+                continue
+            out.append((field, value))
+    return out
+
+
+def chosen_moment(payload, session):
+    """The listed win_chance moment whose required facts the answer all cites; None if there is none."""
+    cited = set(_cited_facts(payload, session))
+    for m in _turning_point_moments(session):
+        if all((f, m[f]) in cited for f in TURNING_POINT_REQUIRED if f in m):
+            return m
+    return None
+
+
+def turning_point_failures(payload, session):
+    """Failures in the checker's format if the answer does not show the required facts of a listed moment."""
+    def fail(msg):
+        return [{"rule": "content", "sentence": None, "slot": None, "message": msg}]
+    if not any(c["name"] == "list_key_moments" and (c["args"] or {}).get("kind") == "win_chance"
+               for c in session.calls):
+        return fail("call list_key_moments with kind \"win_chance\" and choose one of its moments")
+    moments = _turning_point_moments(session)
+    if not moments or chosen_moment(payload, session) is not None:
+        return []
+    cited = _cited_facts(payload, session)
+    turns = [v for f, v in cited if f == "turn"]
+    target = next((m for t in turns for m in moments if m["turn"] == t), None)
+    if target is None:
+        return fail("name the turn of one of the listed win_chance moments, citing its turn field")
+    missing = [f"#{target['id'][1:]}.{f}" for f in TURNING_POINT_REQUIRED if f in target and (f, target[f]) not in cited]
+    return fail("the answer must cite these facts of the moment you chose, each in a slot: " + ", ".join(missing))
 
 
 def _now():
@@ -134,6 +193,11 @@ def run(review, question, client=None, mode="loop", verdicts=None, luck_referenc
                                                    "message": submit["parse_error"]}]}
         else:
             report = verify(payload, session)
+            if turning_point:  # stricter than the checker, never looser: its report is kept and only added to
+                extra = turning_point_failures(payload, session)
+                report["checker_pass"] = report["pass"]
+                report["failures"] += extra
+                report["pass"] = report["pass"] and not extra
         phase = "repair" if repaired else "raw"
         res["attempts"].append({"phase": phase, "payload": payload, "report": report})
         submitted = payload
@@ -142,6 +206,8 @@ def run(review, question, client=None, mode="loop", verdicts=None, luck_referenc
             res["after_repair_pass"] = True
             res["final"] = "glimmer_raw" if phase == "raw" else "glimmer_repaired"
             res["rendered"] = render(payload, session, res["final"])
+            if turning_point:
+                res["chosen_turn"] = (chosen_moment(payload, session) or {}).get("turn")
             break
         if repair and not repaired:
             repaired = True

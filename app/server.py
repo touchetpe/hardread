@@ -55,7 +55,7 @@ GLIMMER_URL = LLM_URL + "/v1/chat/completions"
 EVAL_LOCK = HARDREAD / "scratch_ds" / "agent" / "EVAL_LOCK"   # present = a recorded evaluation is running: no calls
 LLM_GATE = threading.Lock()   # at most one model call in flight from this app (the server runs --parallel 1)
 EXPLAIN_MODE = os.environ.get("HARDREAD_EXPLAIN_MODE", "auto")   # auto | loop | prefetch | template | off
-EXPLANATION_POLICY_VERSION = "offered-scope-v2"
+EXPLANATION_POLICY_VERSION = "offered-scope-v3"
 SHOW_SAVED_ANSWERS = True
 # Public copy (reached only through the tunnel): public replay links only, no owner-only or path-revealing endpoints.
 PUBLIC = os.environ.get("HARDREAD_PUBLIC") == "1"
@@ -117,20 +117,21 @@ AGENT_QUESTIONS = {
            "signs. If they are less than five points apart: \"So luck and choices mattered about equally.\" Otherwise "
            "\"So this game was decided more by luck than by choices.\" or \"So this game was decided more by choices "
            "than by luck.\""),
-    "q4": ("What was the turning point of this game? Call list_key_moments with kind \"win_chance\". Its first moment "
-           "is the turning point, the largest move of your win chance toward the final result; do not pick another "
-           "turn, even one with more luck. Answer in two or three sentences, in this shape, leaving out any field the "
-           "moment does not have.\n"
-           "First: \"The turning point was turn {t}, when {w}: your win chance went from {a} to {b}.\" ({w} is "
-           "what_happened, {a} is wp_before_pct, {b} is wp_after_pct.) If the tool's note says no single turn stands "
-           "out, begin instead \"No single turn stands out in this game; the largest move toward the final result came "
-           "on turn {t}, when {w}: your win chance went from {a} to {b}.\"\n"
-           "Second, following main_cause. If it is \"luck\": \"Luck on that turn was {l}, the main cause of that "
-           "move.\", ending \"...of that move: {e}.\" if the moment has event. If it is \"choices\": \"Luck on that "
-           "turn was {l}; most of the move came from choices, yours and your opponent's ({c}).\", or without luck_pts, "
-           "\"That move came from choices, yours and your opponent's ({c}).\"\n"
-           "Third, only if the moment has engine_best: \"Instead of {chosen}, the engine preferred {best} by {g}.\" "
-           "Otherwise say nothing about the engine."),
+    "q4": ("What was the turning point of this game? First call get_summary for the result, then list_key_moments with "
+           "kind \"win_chance\" and k 3: the three largest moves of your win chance toward the final result, largest "
+           "first. Decide which of the three really turned the game. The largest is not automatically the answer: a "
+           "move that takes a close game to one side can matter more than a bigger move later, when the game was "
+           "already going that way. You may look closer with get_turn or get_luck_events.\n"
+           "Then explain in your own words, in two to four sentences, which turn you chose and why it mattered more "
+           "than the other two, for example that it put a different side ahead or came while the game was still open. "
+           "Your answer must cite these fields of the moment you chose, each in a slot: turn, what_happened, wp_before_pct, "
+           "wp_after_pct, and luck_pts and choices_pts if the moment has them. Its main_cause says which of the two "
+           "pushed the move most; do not contradict it. You may add what the engine preferred only if the moment has "
+           "engine_best. Keep the words for each number right next to it, and put the luck and choices numbers in "
+           "separate clauses.\n"
+           "If the eventual winner already led by a lot before the turn you chose, roughly seventy percent or more, say "
+           "in your own words that the game was already leaning that way rather than presenting it as a turn. If the "
+           "tool's note says no single turn stands out, say that too."),
 }
 _SALT = secrets.token_hex(16)   # per process: hashed client addresses are never written anywhere
 

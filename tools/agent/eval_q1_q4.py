@@ -85,10 +85,23 @@ def one(label, review, ctx, repeat_of, qid, url):
     out["wording_guard_replaced"] = bool(guarded.get("policy_rejected"))
     if qid == "q4":
         any_dir, toward = largest_moves(review)
-        out.update(turn_chosen=chosen_turn(res), largest_any_turn=any_dir and any_dir["turn"],
+        top3 = ToolSession(review, offered=[]).win_chance_moves()[:3]
+        template = explain.run(review, S.QUESTIONS[qid], mode="template", offered=offered)
+        first = (res.get("attempts") or [{}])[0].get("report") or {}
+        out.update(turn_chosen=res.get("chosen_turn") if res.get("chosen_turn") is not None else chosen_turn(res),
+                   largest_any_turn=any_dir and any_dir["turn"],
                    largest_any_pts=any_dir and any_dir["move"], largest_toward_turn=toward and toward["turn"],
-                   largest_toward_pts=toward and toward["move"], biggest_luck_turn=(ToolSession(review, offered=[]).luck_turns() or [{}])[0].get("turn"))
+                   largest_toward_pts=toward and toward["move"], biggest_luck_turn=(ToolSession(review, offered=[]).luck_turns() or [{}])[0].get("turn"),
+                   top3=[{"turn": m["turn"], "before": m["before"], "after": m["after"], "luck": m["luck"]} for m in top3],
+                   matches_template=row_text(res) == template["rendered"]["text"],
+                   checker_first_pass=first.get("checker_pass"),
+                   content_rejected=sum(f.get("rule") == "content" for a in res.get("attempts") or []
+                                        for f in (a.get("report") or {}).get("failures") or []))
     return out
+
+
+def row_text(res):
+    return (res.get("rendered") or {}).get("text")
 
 
 def p95(xs):
@@ -106,6 +119,12 @@ def metrics(rows):
     if rows and rows[0]["question"] == "q4":
         out["turn_is_largest_any_direction"] = sum(r["turn_chosen"] == r["largest_any_turn"] for r in rows)
         out["turn_is_largest_toward_result"] = sum(r["turn_chosen"] == r["largest_toward_turn"] for r in rows)
+        out["turn_differs_from_top_ranked"] = sum(r["final"] != "template" and r["turn_chosen"] != r["largest_toward_turn"]
+                                                  for r in rows)
+        out["matches_template_word_for_word"] = sum(r["matches_template"] for r in rows)
+        out["model_answers_matching_template"] = sum(r["matches_template"] and r["final"] != "template" for r in rows)
+        out["checker_passed_first_draft"] = sum(bool(r["checker_first_pass"]) for r in rows)
+        out["answers_with_a_required_field_rejection"] = sum(r["content_rejected"] > 0 for r in rows)
     return out
 
 

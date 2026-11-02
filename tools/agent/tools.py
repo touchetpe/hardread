@@ -579,5 +579,5 @@ class ToolSession:
         outs = [("get_summary", {}), ("list_key_moments", {"kind": "luck", "k": 2}),
                 ("list_key_moments", {"kind": "disagreement", "k": 2})]
         if turning_point:
-            outs = [("list_key_moments", {"kind": "win_chance", "k": 3})]
+            outs = [("get_summary", {}), ("list_key_moments", {"kind": "win_chance", "k": 3})]
         return [(n, a, self.call(n, a)) for n, a in outs]
