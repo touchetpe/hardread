@@ -6,8 +6,8 @@ CONTEXT=${1:?clean export directory}
 HERE=$(cd "$(dirname "$0")" && pwd)
 PROFILE=hardread-public
 RUN_DIR=${HARDREAD_PUBLIC_RUN:-$HOME/.hardread-public}
-mkdir -p "$RUN_DIR"
-colima status -p "$PROFILE" >/dev/null 2>&1 || colima start "$PROFILE" --cpu 6 --memory 8 --disk 20 >/dev/null 2>&1
+mkdir -p "$RUN_DIR/vm-empty"
+colima status -p "$PROFILE" >/dev/null 2>&1 || colima start "$PROFILE" --cpu 6 --memory 8 --disk 20 --mount "$RUN_DIR/vm-empty:w" >/dev/null 2>&1
 export DOCKER_HOST=unix://$HOME/.colima/$PROFILE/docker.sock
 
 docker build -q -t hardread-public -f "$HERE/Dockerfile" "$CONTEXT" >/dev/null
