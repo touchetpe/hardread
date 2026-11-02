@@ -437,3 +437,87 @@ details.dropped b { font-weight: 600; color: var(--ink); }
 .check-why { font-size: .9em; margin-top: .15em; }
 .plain-compare { margin-top: .75em; }
 mark.no-source { background: rgba(181, 71, 60, .18); color: inherit; border-bottom: 1px dashed currentColor; padding: 0 .1em; }
+
+/* ---------- judge-first layout: landing hero, differentiator, review order, phone ---------- */
+[hidden] { display: none !important; }
+.btn-wide { width: 100%; }
+.h1-sub { display: block; font-size: clamp(19px, 2.6vw, 26px); font-weight: 600; letter-spacing: -0.01em; color: var(--ink-2); margin-top: 10px; line-height: 1.2; }
+.hero h1 { max-width: none; }
+.hero-cta { margin-top: 4px; }
+.hero-sample { display: grid; gap: 4px; max-width: 640px; padding: 14px 18px; border-radius: 12px; background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--accent); text-decoration: none; color: inherit; }
+.hero-sample:hover { border-color: var(--line-strong); border-left-color: var(--accent); }
+.hs-label { font-size: 13px; font-weight: 600; color: var(--ink-3); }
+.hero-sample .sum-line { font-size: clamp(18px, 2.4vw, 22px); color: var(--ink-2); }
+.hs-note { font-size: 13px; color: var(--ink-3); }
+.sum-line b { color: var(--ink); font-weight: 700; }
+.differ { margin-top: 18px; }
+.differ .section-title { margin-bottom: 12px; }
+.differ .hint { margin-top: 10px; }
+.sc-sum { display: none; margin-top: 8px; font-size: 14px; color: var(--ink-2); }
+
+.head-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+.head-top .back { margin-bottom: 0; }
+.jump-ex { display: none; }
+.review-grid { grid-template-columns: 1.08fr 0.92fr; }
+.b-axis { position: relative; height: 16px; font-size: 11px; color: var(--ink-3); }
+.b-axis span { position: absolute; top: 0; transform: translateX(-50%); white-space: nowrap; }
+.b-axis span.first { transform: none; }
+.b-axis span.last { transform: translateX(-100%); }
+.bridge-eq { margin: 0 0 12px; font-size: clamp(17px, 2vw, 20px); }
+
+/* the explanation card: the part of the page only Muse Glimmer does */
+.explain-card { border-top: 3px solid var(--accent); }
+.explain-card .card-sub { margin-bottom: 12px; }
+.badge-model { color: var(--pos-ink); background: var(--pos-wash); border-color: color-mix(in srgb, var(--pos) 35%, transparent); }
+.q-tabs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.q-tab { min-height: 42px; text-align: center; font-size: 13.5px; font-weight: 500; line-height: 1.25; }
+.q-tab[aria-pressed="true"] { font-weight: 650; }
+.ex-q { margin: 0 0 6px; font-size: 13.5px; font-weight: 600; color: var(--ink-2); }
+button.cite { display: inline; font: inherit; line-height: inherit; cursor: pointer; border: 0; background: var(--pos-wash); color: var(--ink); border-bottom: 2px solid var(--pos); border-radius: 3px; padding: 0 2px; font-weight: 650; font-variant-numeric: tabular-nums; }
+button.cite:hover { background: color-mix(in srgb, var(--pos) 26%, transparent); }
+details.proof { margin-top: 10px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-2); }
+details.proof > summary { display: flex; color: var(--ink); align-items: baseline; }
+details.proof .muted { color: var(--ink-2); }
+details.proof code { overflow-wrap: anywhere; }
+details.proof li.hit { background: var(--pos-wash); border-radius: 4px; }
+.plain-answer { font-size: 14.5px; line-height: 1.55; }
+.ex-work .check-pass b { color: var(--pos-ink); }
+.ex-work .check-fail b { color: var(--neg-ink); }
+
+@media (max-width: 860px) {
+  /* one column, with the explanation straight after the sum */
+  .jump-ex { display: inline-flex; width: 100%; margin-bottom: 14px; }
+  .review-grid { display: flex; flex-direction: column; gap: 14px; }
+  .review-grid > .stack { display: contents; }
+  .review-grid .card { margin-top: 0; width: 100%; min-width: 0; }
+  .review-grid > .stack:first-child > :nth-child(1) { order: 1; }
+  .review-grid > .stack:last-child > .explain-card { order: 2; }
+  .review-grid > .stack:first-child > :nth-child(2) { order: 3; }
+  .review-grid > .stack:last-child > :nth-last-child(2) { order: 4; }
+  .review-grid > .stack:first-child > :nth-child(3) { order: 5; }
+  .review-grid > .stack:last-child > :last-child { order: 6; }
+}
+@media (max-width: 560px) {
+  .hero { padding: 10px 0 14px; gap: 12px; }
+  .hero-cta .btn { flex: 1 1 100%; }
+  .showcases { gap: 10px; }
+  a.showcase { padding: 12px 14px; }
+  a.showcase .small { display: none !important; }   /* the mini bars: phone cards show the sum as one line instead */
+  .sc-sum { display: block; }
+  a.showcase .go { margin-top: 6px; }
+  .review-head { margin-bottom: 12px; }
+  .bridge .b-label { padding: 8px 0 2px; }
+  .bridge .b-bar, .bridge .b-bar svg { height: 22px; }
+  .bridge-legend { display: none; }   /* every value already carries its sign and a glyph */
+  .chip-side { display: none; }
+  .how .step { padding: 12px 14px; }
+  section[aria-labelledby="bridge-title"] .summary-text { display: none; }   /* same facts as the sum above it; saves a screen */
+  .moments li { grid-template-columns: auto 1fr; gap: 2px 10px; }
+  .moments .m-pts { text-align: left; }
+  .moments li > :last-child { grid-column: 1 / -1; }
+  .opt-bars { grid-template-columns: 1fr auto; }
+  .opt-bars > span:not(.num) { grid-column: 1 / -1; margin-top: 4px; }
+  .tooltip { max-width: 240px; min-width: 160px; }
+  .chart-wrap { touch-action: pan-y; }
+  dialog.gate .g-body { padding: 20px 18px 18px; }
+}
