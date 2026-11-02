@@ -1,7 +1,7 @@
 #!/bin/bash
-# Kill switch: closes the tunnel first, then stops the app, the model gate and the VM. Models and other projects are untouched.
+# Kill switch: stops the watcher, closes the tunnel, then stops the app, the model gate and the VM. Models and other projects are untouched.
 RUN_DIR=${HARDREAD_PUBLIC_RUN:-$HOME/.hardread-public}
-for f in tunnel gate; do
+for f in watch tunnel gate; do
   pidfile="${RUN_DIR:?}/${f:?}.pid"
   if [ -f "$pidfile" ]; then
     kill "$(cat "$pidfile")" 2>/dev/null
