@@ -127,11 +127,14 @@ AGENT_QUESTIONS = {
            "Your answer must cite these fields of the moment you chose, each in a slot: turn, what_happened, wp_before_pct, "
            "wp_after_pct, and luck_pts and choices_pts if the moment has them. Its main_cause says which of the two "
            "pushed the move most; do not contradict it. You may add what the engine preferred only if the moment has "
-           "engine_best. Keep the words for each number right next to it, and put the luck and choices numbers in "
-           "separate clauses.\n"
+           "engine_best. what_happened is already a whole clause that starts with its own subject, so do not put \"you\" "
+           "in front of it. The checker rejects a choices_pts number unless its sentence also says \"yours and your "
+           "opponent's\" beside the word choices, so give that number its own sentence, with no mention of luck. "
+           "A placeholder straight after the word \"turn\" must be the turn number.\n"
            "If the eventual winner already led by a lot before the turn you chose, roughly seventy percent or more, say "
-           "in your own words that the game was already leaning that way rather than presenting it as a turn. If the "
-           "tool's note says no single turn stands out, say that too."),
+           "in your own words that the game was already leaning that way rather than presenting it as a turn, and do "
+           "not call the game still open. If that is true of all three moments, say so. If the tool's note says no "
+           "single turn stands out, say that too."),
 }
 _SALT = secrets.token_hex(16)   # per process: hashed client addresses are never written anywhere
 
