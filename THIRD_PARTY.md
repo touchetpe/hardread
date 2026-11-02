@@ -1,3 +1,5 @@
+> Status notes below are dated records. The README is current; where they differ, trust the README. Modal and Starlette hosting entries describe an unused option.
+
 # Third-party software, models and data
 
 HardRead builds on the open-source projects, open model weights and public data listed here. A SHA-256 shown for a locally available source-checkout `LICENSE` or policy file is the hash of that file at the pinned commit; a hash labelled as an embedded wheel `LICENSE`/notice file is the hash of that member in the named package-version wheel. Other rows cite package metadata or the upstream's declared licence, as identified in each row; *not verified locally* means no local copy of the licence file was available to inspect.

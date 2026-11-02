@@ -326,19 +326,19 @@
     });
 
     var differ = h("section", { "aria-labelledby": "diff-title", class: "differ" },
-      h("h2", { id: "diff-title", class: "section-title" }, "The engine analyzes. The model explains. Every number traces back."),
+      h("h2", { id: "diff-title", class: "section-title" }, "The engine analyzes. The model explains. Code fills in every number."),
       h("div", { class: "how" },
         h("div", { class: "step" }, h("b", null, "A search engine does the analysis"),
           h("p", null, "Foul Play, the open-source engine that won the 2025 PokéAgent Gen 9 OU track, samples the hidden sets and searches the continuations.")),
         h("div", { class: "step" }, h("b", null, "Muse Glimmer explains it"),
           h("p", null, "Meta's open model chooses which engine results to look up, then explains them in plain words.")),
         h("div", { class: "step" }, h("b", null, "The model can't write a number"),
-          h("p", null, "It writes sentences with slots pointing at engine results. Code fills in the values, and a checker rejects drafts with uncited or wrongly typed numbers. It doesn't check whether the words are true."))),
-      h("p", { class: "hint" }, "On a fixed set of 60 questions about 20 games, 59 explanations passed the number checks after at most one repair. ", h("a", { href: "#/about" }, "How this was measured")));
+          h("p", null, "It writes sentences with slots pointing at engine results. Code fills in the values. A checker rejects uncited numbers and citations of the wrong kind of value. It can't tell if a number is the right one, and it doesn't check the words."))),
+      h("p", { class: "hint" }, "On 28 October's versions of three questions, 41 of 60 explanations passed the checker first time and 59 after one repair. ", h("a", { href: "#/about" }, "How this was measured")));
 
     show([h("section", { class: "hero" },
       h("h1", null, "Was it luck, or was it you?", h("span", { class: "h1-sub" }, "An engine review for competitive Pokémon")),
-      h("p", { class: "lede" }, "Chess players get an engine review after every game. Competitive Pokémon players don't, because the opponent's sets (moves, items) are hidden and dice decide many turns. HardRead reviews a finished game anyway, and estimates how much was luck."),
+      h("p", { class: "lede" }, "Chess players get an engine review after every game. Pokémon has luck calculators and win-chance tools, but none we found splits a game into start, luck and both players' choices using search over hidden sets. You can't see the opponent's moves and items, and dice decide many turns. HardRead reviews a finished game anyway, and estimates how much was luck."),
       h("div", { class: "form-row hero-cta" }, seeBtn,
         h("button", { type: "button", class: "btn btn-ghost", onclick: function () {
           form.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -551,7 +551,7 @@
     var oneDecision = oneDecisionCard(v);
     var disCard = h("section", { class: "card", "aria-labelledby": "dis-title" },
       h("h2", { id: "dis-title" }, "Biggest disagreements with the engine"),
-      h("p", { class: "card-sub" }, "Up to three decisions made while the game was still open (win chance 20–80%) where the engine preferred another option by 5 points or more. Never added up: one search can be off by about 3 points."),
+      h("p", { class: "card-sub" }, "Up to three decisions made while the game was still open (win chance 20–80%) where the engine preferred another option by 5 points or more. Never added up: searches differ by a few points from run to run. Most offered disagreements aren't decisive: when 184 like these from bot games were rechecked with a deeper search, 139 came out within noise."),
       disagreementsList(v, id));
 
     var luckCard = h("section", { class: "card", "aria-labelledby": "luck-title" },
@@ -578,7 +578,7 @@
     return h("section", { class: "card one-decision", "aria-labelledby": "one-title" },
       h("h2", { id: "one-title" }, "The one decision to look at again"),
       h("p", null, h("b", null, "Turn " + top.turn + ". "), "You chose ", h("b", null, top.chosen), ". The engine preferred ", h("b", null, top.best),
-        " by " + top.gap_pts + " points of win chance (search noise about ±3)."),
+        " by " + top.gap_pts + " points of win chance. Searches differ by a few points from run to run."),
       h("p", { class: "hint" }, (top.ev_caveat ? "This may depend on your exact EVs, so add your team export to check. " : "") +
         "It's the largest gap on the list below, and a place to start thinking, not a verdict: the engine can be wrong, especially about what you knew at the time."));
   }
@@ -833,7 +833,7 @@
           h("span", { class: "dis-turn" }, h("span", { class: "diamond", "aria-hidden": "true" }, "◆"),
             d.kind === "teampreview" ? "Team preview (your lead)" : "Turn " + d.turn + (d.kind === "switch" ? " (switch-in)" : "")),
           h("span", { class: "muted small" }, "your win chance before: " + d.wp_before_pct + "%")),
-        h("p", { class: "claim" }, "The engine prefers ", h("b", null, gerund(d.best)), " over ", h("b", null, gerund(d.chosen)), " by ", h("b", { class: "num" }, gap + " points"), " (search noise ≈ ±3)."),
+        h("p", { class: "claim" }, "The engine prefers ", h("b", null, gerund(d.best)), " over ", h("b", null, gerund(d.chosen)), " by ", h("b", { class: "num" }, gap + " points"), " (searches differ by a few points)."),
         bars,
         opp ? h("p", { class: "opp" }, "The engine expected the opponent to pick: " + opp + ".") : null,
         d.ev_caveat ? h("p", { class: "ev-caveat" }, h("span", { "aria-hidden": "true" }, "⚠ "), v.ev_caveat_text || "May depend on your exact EVs: add your team export to check.") : null,
@@ -896,8 +896,8 @@
 
   // ------------------------------------------------------------------ explanation (Muse Glimmer, async)
   var MODE_TEXT = {
-    glimmer_raw: "Written by Muse Glimmer-30B (base model, no fine-tuning). It passed the number checks on the first draft. Plain-word claims aren't checked.",
-    glimmer_repaired: "Written by Muse Glimmer-30B (base model, no fine-tuning). It passed the number checks after one repair. Plain-word claims aren't checked.",
+    glimmer_raw: "Written by Muse Glimmer-30B (base model, no fine-tuning). It passed the checker on the first draft. The checker doesn't judge the words.",
+    glimmer_repaired: "Written by Muse Glimmer-30B (base model, no fine-tuning). It passed the checker after one repair. The checker doesn't judge the words.",
     template: "Fixed template: the words come from application code, not the model."
   };
   // The same model on the same game with no engine: what a one-prompt analyzer gives you.
@@ -930,7 +930,7 @@
     var badge = h("span", { class: "badge-model" }, "Muse Glimmer");
     var card = h("section", { class: "card explain-card", "aria-labelledby": "ex-title" },
       h("div", { class: "ex-head" }, h("h2", { id: "ex-title" }, "In plain words"), badge),
-      h("p", { class: "card-sub" }, "The engine did the analysis. Muse Glimmer, Meta's open model, explains it, but it can't write a number: it writes sentences with slots pointing at engine results, code fills in the values, and a checker rejects drafts with uncited or wrongly typed numbers. It doesn't check whether the words are true."),
+      h("p", { class: "card-sub" }, "The engine did the analysis. Muse Glimmer, Meta's open model, explains it, but it can't write a number: it writes sentences with slots pointing at engine results, code fills in the values, and a checker rejects uncited numbers and citations of the wrong kind of value. It can't tell if a number is the right one, and it doesn't check the words."),
       tabs, body);
     var pcBtn = null;
     function select(q) {
@@ -1008,7 +1008,7 @@
       });
       checks.forEach(function (c, i) {
         items.push(h("li", { class: c.pass ? "check-pass" : "check-fail" },
-          h("b", null, "Draft " + (i + 1) + (c.pass ? ": passed the number checks" : ": rejected by the checker")),
+          h("b", null, "Draft " + (i + 1) + (c.pass ? ": passed the checker" : ": rejected by the checker")),
           c.draft ? h("div", { class: "muted" }, c.draft) : null,
           (c.failures || []).map(function (f) { return h("div", { class: "check-why" }, f); })));
       });
@@ -1339,11 +1339,11 @@
     show([h("article", { class: "prose" },
       h("p", { class: "eyebrow" }, "About"),
       h("h1", { style: "font-size:36px" }, "About HardRead"),
-      h("p", null, "Chess players get an engine review after every game. Competitive Pokémon players don't, because the opponent's sets (moves, items) are hidden and dice decide many turns. HardRead reviews a finished Gen 9 OU game anyway, and estimates how much was luck."),
+      h("p", null, "Chess players get an engine review after every game. Pokémon has luck calculators and win-chance tools, but none we found splits a game into start, luck and both players' choices using search over hidden sets. You can't see the opponent's moves and items, and dice decide many turns. HardRead reviews a finished Gen 9 OU game anyway, and estimates how much was luck."),
       h("p", null, "The analysis comes from Foul Play (GPL-3.0), an open-source search engine by pmariglia that won the 2025 PokéAgent Gen 9 OU track, running on poke-engine. For each decision it samples teams your opponent could have and searches each of them; for each turn it goes through the chance outcomes and measures the one that happened against the rest."),
       h("h2", null, "How Muse Glimmer is used"),
-      h("p", null, "Muse Glimmer-30B, Meta's open model, writes the explanations as an agent: it chooses which read-only engine tools to call, then submits an explanation. It cannot write a number. It writes sentences with empty slots that point at engine results, code fills in the values, and a checker rejects any draft with an uncited or wrongly typed number, or a verdict the engine didn't give. It gets one repair, then a labeled template takes over. Passing means each number comes from an engine result and has the right type. It doesn't mean the explanation is true: a real number can still be the wrong one for its sentence, and plain-word claims aren't checked."),
-      h("p", null, "On a fixed set of 60 questions about 20 games (base model, no fine-tuning), 41 passed the number checks on the first draft and 59 after at most one repair. Sentences flagged in a blind review: 3 of 60. We ran that review because the checker only covers numbers. It was done by an AI reviewer; the human label check is still pending, so we don't claim the prose is accurate."),
+      h("p", null, "Muse Glimmer-30B, Meta's open model, writes the explanations as an agent: it chooses which read-only engine tools to call, then submits an explanation. It cannot write a number. It writes sentences with empty slots that point at engine results, code fills in the values, and a checker rejects uncited numbers and citations of the wrong kind of value. It gets one repair, then a labeled template takes over. Passing means each number comes from an engine result and has the right type. It doesn't mean the explanation is true: a real number can still be the wrong one for its sentence, and plain-word claims aren't checked."),
+      h("p", null, "On 28 October's versions of three questions, 60 answers about 20 games (base model, no fine-tuning), 41 passed the checker (numbers and required wording) first time and 59 after one repair. The newer turning-point question, tuned on those games, passed 9 of 14 first time and 14 of 14 after repair. Sentences flagged in a blind review: 3 of 60. We ran that review because the checker doesn't judge the words. It was done by an AI reviewer; the human label check is still pending, so we don't claim the prose is accurate."),
       h("p", null, "For comparison, the same model with only the battle log and no engine put numbers in 27 of 30 answers, with nothing linking them to a source. That is a small sample, and the engine's estimate is not ground truth."),
       h("p", null, "Separately, we fine-tuned Glimmer to play. It won 178 of 200 games against the Abyssal heuristic bot. Those teams were partly seen in development, so this doesn't measure general strength. The fine-tuned model doesn't write the explanations."),
       h("h2", null, "What the numbers mean"),

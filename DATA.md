@@ -1,3 +1,5 @@
+> Some files listed below are recorded by name and hash only, and aren't in this public repository.
+
 # Data: what is in these repositories, what is not, and why
 
 **Intended source-release policy.** HardRead is preparing code, results and **hashes** for release, subject to the owner’s publication approval and final privacy and rights checks. It does not publish datasets that we have no right to redistribute, that contain player identities, or that must stay sealed until the pre-registered test has run. Licences of the sources are listed in `THIRD_PARTY.md`.
@@ -7,7 +9,7 @@
 | File | What it contains | Why it is safe to publish |
 |---|---|---|
 | `DATA_SNAPSHOT.json` | SHA-256 and sizes of the Foul Play data caches every engine run used (Smogon Gen 9 OU usage statistics for 2026-09 and Foul Play's set files), plus the Foul Play commit | Hashes only, no data. Anyone can re-fetch the same files and check the hashes. |
-| `app/data/showcases/` | Precomputed showcase JSON artifacts used as display examples | The directory is listed from source-path metadata only. Payload/privacy review and the final integrated source scan remain pending before publication; this is not a local battle-log/team fixture bundle or evidence that a fresh engine review can run. |
+| `app/data/showcases/` | Precomputed showcase JSON artifacts used as display examples | The directory is listed from source-path metadata only. Names are removed, and the public export was scanned before release; this is not a local battle-log/team fixture bundle or evidence that a fresh engine review can run. |
 | `data/pools-v1.json` | How the development team pools were split (rule, seed, counts), the SHA-256 of each pool and of the pool tarball, and digests of the 596 held-out (`hr_val`) rosters | No team sets or raw roster species lists are published. The versioned digests support deterministic membership checks without disclosing roster contents. |
 | `data/sealed-v1.json` | The rule that drew the 1,000 sealed teams, file names, and SHA-256 of their content | Names and a hash only. The frozen sealed evaluation is complete; raw team files remain excluded. Recorded names, digests, and aggregate results are documented without publishing team contents. |
 | `tools/review/calibrator.json` | Fitted calibration parameters (a few numbers per calibrator) and the size of the data they were fitted on | Aggregate parameters, no game data |

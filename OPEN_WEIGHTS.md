@@ -2,7 +2,7 @@
 
 ## Replay-review model
 
-HardRead’s accepted source integration uses base Muse Glimmer-30B for read-only engine-evidence selection and stated-read parsing into editable fields. Application code fills displayed numeric slots from cited tool fields so the supporting receipts can be inspected. This supports numeric provenance, not correctness. Current explanations use a labeled template; the complete C10 stated-read/verdict flow and A1 live-prose ship checks remain pending. The A1 v2 recorder returned 59/60 answers after at most one repair. Separately, a blinded review flagged 3/60 sentences in a seeded sample of 60 from a 120-sentence pool. Fifteen owner labels and a bound-score review remain pending; neither check is a live-prose PASS. [D1 engineering-flow record](RESULTS.md#d1-template-ui-20261028) [A1 v2 record](RESULTS.md#src-a1-v2-owner-pending)
+HardRead’s accepted source integration uses base Muse Glimmer-30B for read-only engine-evidence selection and stated-read parsing into editable fields. Application code fills displayed numeric slots from cited tool fields so the supporting receipts can be inspected. This supports numeric provenance, not correctness. The product now defaults to live Glimmer explanations with a labeled template as fallback; see the README for what has and hasn't been evaluated.
 
 At the Oct 27 and Oct 28 capture times, local `llama.cpp` process and model/file provenance were recorded. Those snapshots bind identity at capture time; they do not show current serving, uptime, or resident-memory state.
 
