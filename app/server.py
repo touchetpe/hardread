@@ -14,6 +14,7 @@ posted anywhere; the only outbound request is the replay link you paste.
 """
 import argparse
 import hashlib
+import ipaddress
 import json
 import os
 import re
@@ -70,6 +71,15 @@ _public_explains = deque()
 _public_fetches = deque()
 _public_notes = deque()
 _public_lock = threading.Lock()
+
+
+def _client_key(address):
+    """One person on IPv6 usually controls a whole /64, so limits apply to the /64."""
+    try:
+        ip = ipaddress.ip_address(address)
+    except ValueError:
+        return address
+    return str(ipaddress.ip_network(f"{ip}/64", strict=False)) if ip.version == 6 else address
 
 
 def within_hourly_cap(events, cap):
@@ -397,8 +407,13 @@ def verdicts_of(rid, expected_identities=None):
     return out
 
 
+_runtime_provenance = {"at": 0, "manifest": None}
+
+
 def _engine_runtime_provenance():
     """Ask the pinned verdict interpreter for hashes only; this command runs no search."""
+    if PUBLIC and _runtime_provenance["manifest"] and time.time() - _runtime_provenance["at"] < 600:
+        return _runtime_provenance["manifest"]   # the public image doesn't change, and this starts a process
     try:
         result = subprocess.run([str(FP_PY), str(VERDICT_SCRIPT), "fingerprint"], cwd=str(HARDREAD),
                                 capture_output=True, text=True, timeout=30, check=False)
@@ -412,6 +427,7 @@ def _engine_runtime_provenance():
         raise ValueError("the verdict runtime returned invalid provenance JSON") from exc
     if not isinstance(manifest, dict) or manifest.get("schema") != VI.RUNTIME_SCHEMA:
         raise ValueError("the verdict runtime returned an unsupported provenance manifest")
+    _runtime_provenance.update(at=time.time(), manifest=manifest)
     return manifest
 
 
@@ -577,7 +593,7 @@ def create_app(concurrency=1, processes=4):
 
     def client_of(request):
         if PUBLIC:   # everyone arrives through the tunnel, so the address is in its header
-            return request.headers.get("cf-connecting-ip") or "unknown"
+            return _client_key(request.headers.get("cf-connecting-ip") or "unknown")
         return request.client.host if request.client else "unknown"
 
     def public_review_allowed():
@@ -918,7 +934,7 @@ def create_app(concurrency=1, processes=4):
             return {"identity_sha256": identity_digest, "decision": f"{v['turn']}:{v['k']}"}
         jid = jobs.submit("verdict", job_key,
                           {"belief.json": json.dumps(belief, sort_keys=True),
-                           "identity.json": json.dumps(identity, sort_keys=True)}, cmd, done)
+                           "identity.json": json.dumps(identity, sort_keys=True)}, cmd, done, client=client_of(request))
         if jid is None:
             return err(503, "The queue is full right now. Try again in a few minutes.")
         return {"ok": True, "job_id": jid, "identity_sha256": identity_digest,
@@ -1172,9 +1188,16 @@ def _too_large(content_length):
 
 async def _body(request):
     try:
-        raw = await request.body()
-        if len(raw) > MAX_BODY:
-            return None
+        if PUBLIC:   # a chunked upload has no declared length, so count it as it arrives
+            raw = b""
+            async for chunk in request.stream():
+                raw += chunk
+                if len(raw) > MAX_BODY:
+                    return None
+        else:
+            raw = await request.body()
+            if len(raw) > MAX_BODY:
+                return None
         d = json.loads(raw.decode("utf-8"))
         return d if isinstance(d, dict) else None
     except (ValueError, UnicodeDecodeError):

@@ -62,6 +62,7 @@ For comparison, the same model with only the battle log and no engine put number
 **Limits you should know:**
 - "Choices" is what remains after estimated luck. It includes both players, later information and model error, so it isn't a skill score.
 - Without your team export, your own sets are assumed, and that can change a verdict.
+- Roaring Moon joined OU on 30 October, so the usage statistics don't cover it yet. Reviews of games with it still work, but the engine knows less about what it may be holding.
 - We haven't yet run a study with human players.
 
 Full lab notes: [RESULTS.md](RESULTS.md) (detailed, in working shorthand). Pre-registration: [PREREGISTRATION.md](PREREGISTRATION.md).

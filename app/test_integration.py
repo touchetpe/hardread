@@ -267,6 +267,11 @@ class PublicCopyTests(unittest.TestCase):
             S.resolve_input(123)
         self.assertEqual(S._text_field(123), "")
 
+    def test_ipv6_clients_share_a_limit_per_64(self):
+        self.assertEqual(S._client_key("2001:db8:1:2::1"), S._client_key("2001:db8:1:2:ffff::9"))
+        self.assertNotEqual(S._client_key("2001:db8:1:2::1"), S._client_key("2001:db8:1:3::1"))
+        self.assertEqual(S._client_key("198.51.100.7"), "198.51.100.7")
+
     def test_hourly_cap_stops_at_its_limit(self):
         events = S.deque()
         self.assertEqual([S.within_hourly_cap(events, 2) for _ in range(3)], [True, True, False])

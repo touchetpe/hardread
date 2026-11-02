@@ -13,15 +13,22 @@ publish() {
     && git -C "$SITE" push -q origin main
 }
 echo $$ > "$RUN_DIR/watch.pid"
+failures=0
 while true; do
-  if ! "$HERE/check_isolation.sh" >/dev/null 2>&1; then
-    publish null
-    "$HERE/offline.sh"
-    exit 1
-  fi
   if ! lsof -nP -iTCP:18140 -sTCP:LISTEN >/dev/null 2>&1; then
     nohup python3 "$HERE/glimmer_gate.py" >/dev/null 2>&1 &
     echo $! > "$RUN_DIR/gate.pid"
+  fi
+  if "$HERE/check_isolation.sh" >/dev/null 2>&1; then
+    failures=0
+  else
+    failures=$((failures + 1))
+    if [ "$failures" -ge 2 ]; then   # two in a row, so a brief hiccup or the Mac waking doesn't take it down
+      ( publish null ) >/dev/null 2>&1 &   # never wait on the network before closing the tunnel
+      exec "$HERE/offline.sh"
+    fi
+    sleep 10
+    continue
   fi
   if ! { [ -f "$RUN_DIR/tunnel.pid" ] && kill -0 "$(cat "$RUN_DIR/tunnel.pid")" 2>/dev/null; }; then
     url=$("$HERE/tunnel.sh" 2>/dev/null) && publish "\"$url\""
