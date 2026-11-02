@@ -1,6 +1,6 @@
 {
- "note": "Descriptive run outside the fixed A1 evaluation; see RESULTS.md, 2026-11-02. Labels hide replay ids.",
- "code_commit": "09066ae",
+ "note": "Descriptive runs outside the fixed A1 evaluation; see RESULTS.md, 2026-11-02. Labels hide replay ids.",
+ "q4_code_commit": "74e0c73",
  "verifier_version": "agent-verifier-v6 (agent-lex-v6)",
  "prompt_version": "explain-prompt-v3",
  "settings": {
@@ -14,36 +14,51 @@
   "q4": {
    "unique": {
     "n": 14,
-    "first_draft_pass": 14,
+    "first_draft_pass": 9,
     "pass_after_repair": 14,
     "template": 0,
     "wording_guard_replaced": 0,
-    "latency_median_s": 36.900000000000006,
-    "latency_p95_s": 46.1,
-    "turn_is_largest_any_direction": 13,
-    "turn_is_largest_toward_result": 14
+    "latency_median_s": 88.9,
+    "latency_p95_s": 101.4,
+    "turn_is_largest_any_direction": 6,
+    "turn_is_largest_toward_result": 6,
+    "turn_differs_from_top_ranked": 8,
+    "matches_template_word_for_word": 0,
+    "model_answers_matching_template": 0,
+    "checker_passed_first_draft": 9,
+    "answers_with_a_required_field_rejection": 2
    },
    "showcases": {
     "n": 6,
-    "first_draft_pass": 6,
+    "first_draft_pass": 5,
     "pass_after_repair": 6,
     "template": 0,
     "wording_guard_replaced": 0,
-    "latency_median_s": 43.900000000000006,
-    "latency_p95_s": 61.0,
-    "turn_is_largest_any_direction": 5,
-    "turn_is_largest_toward_result": 6
+    "latency_median_s": 87.7,
+    "latency_p95_s": 99.0,
+    "turn_is_largest_any_direction": 1,
+    "turn_is_largest_toward_result": 1,
+    "turn_differs_from_top_ranked": 5,
+    "matches_template_word_for_word": 0,
+    "model_answers_matching_template": 0,
+    "checker_passed_first_draft": 5,
+    "answers_with_a_required_field_rejection": 0
    },
    "others": {
     "n": 8,
-    "first_draft_pass": 8,
+    "first_draft_pass": 4,
     "pass_after_repair": 8,
     "template": 0,
     "wording_guard_replaced": 0,
-    "latency_median_s": 34.900000000000006,
-    "latency_p95_s": 40.9,
-    "turn_is_largest_any_direction": 8,
-    "turn_is_largest_toward_result": 8
+    "latency_median_s": 91.1,
+    "latency_p95_s": 154.0,
+    "turn_is_largest_any_direction": 5,
+    "turn_is_largest_toward_result": 5,
+    "turn_differs_from_top_ranked": 3,
+    "matches_template_word_for_word": 0,
+    "model_answers_matching_template": 0,
+    "checker_passed_first_draft": 4,
+    "answers_with_a_required_field_rejection": 2
    },
    "repeats": {
     "n": 0,
@@ -94,90 +109,49 @@
    }
   }
  },
- "first_full_run_summary": {
-  "q4": {
-   "unique": {
-    "n": 14,
-    "first_draft_pass": 14,
-    "pass_after_repair": 14,
-    "template": 0,
-    "wording_guard_replaced": 0,
-    "latency_median_s": 34.8,
-    "latency_p95_s": 42.2,
-    "turn_is_largest_any_direction": 13,
-    "turn_is_largest_toward_result": 14
-   },
-   "showcases": {
-    "n": 6,
-    "first_draft_pass": 6,
-    "pass_after_repair": 6,
-    "template": 0,
-    "wording_guard_replaced": 0,
-    "latency_median_s": 35.15,
-    "latency_p95_s": 42.2,
-    "turn_is_largest_any_direction": 5,
-    "turn_is_largest_toward_result": 6
-   },
-   "others": {
-    "n": 8,
-    "first_draft_pass": 8,
-    "pass_after_repair": 8,
-    "template": 0,
-    "wording_guard_replaced": 0,
-    "latency_median_s": 33.650000000000006,
-    "latency_p95_s": 47.0,
-    "turn_is_largest_any_direction": 8,
-    "turn_is_largest_toward_result": 8
-   },
-   "repeats": {
-    "n": 6,
-    "first_draft_pass": 6,
-    "pass_after_repair": 6,
-    "template": 0,
-    "wording_guard_replaced": 0,
-    "latency_median_s": 37.75,
-    "latency_p95_s": 45.6,
-    "turn_is_largest_any_direction": 5,
-    "turn_is_largest_toward_result": 6
-   }
+ "earlier_q4_runs_same_14": {
+  "scripted_matching_template": {
+   "n": 14,
+   "first_draft_pass": 14,
+   "pass_after_repair": 14,
+   "template": 0,
+   "wording_guard_replaced": 0,
+   "latency_median_s": 36.900000000000006,
+   "latency_p95_s": 46.1,
+   "turn_is_largest_any_direction": 13,
+   "turn_is_largest_toward_result": 14
   },
-  "q1": {
-   "unique": {
-    "n": 14,
-    "first_draft_pass": 14,
-    "pass_after_repair": 14,
-    "template": 0,
-    "wording_guard_replaced": 0,
-    "latency_median_s": 33.7,
-    "latency_p95_s": 37.4
-   },
-   "showcases": {
-    "n": 6,
-    "first_draft_pass": 6,
-    "pass_after_repair": 6,
-    "template": 0,
-    "wording_guard_replaced": 0,
-    "latency_median_s": 34.7,
-    "latency_p95_s": 36.2
-   },
-   "others": {
-    "n": 8,
-    "first_draft_pass": 8,
-    "pass_after_repair": 8,
-    "template": 0,
-    "wording_guard_replaced": 0,
-    "latency_median_s": 33.7,
-    "latency_p95_s": 46.2
-   },
-   "repeats": {
-    "n": 0,
-    "first_draft_pass": 0,
-    "pass_after_repair": 0,
-    "template": 0,
-    "wording_guard_replaced": 0,
-    "latency_median_s": null,
-    "latency_p95_s": null
-   }
+  "free_form_first": {
+   "n": 14,
+   "first_draft_pass": 1,
+   "pass_after_repair": 13,
+   "template": 1,
+   "wording_guard_replaced": 0,
+   "latency_median_s": 108.25,
+   "latency_p95_s": 123.8,
+   "turn_is_largest_any_direction": 7,
+   "turn_is_largest_toward_result": 8,
+   "turn_differs_from_top_ranked": 6,
+   "matches_template_word_for_word": 1,
+   "model_answers_matching_template": 0,
+   "checker_passed_first_draft": 1,
+   "answers_with_a_required_field_rejection": 2
+  },
+  "free_form_second": {
+   "n": 14,
+   "first_draft_pass": 11,
+   "pass_after_repair": 12,
+   "template": 2,
+   "wording_guard_replaced": 0,
+   "latency_median_s": 73.9,
+   "latency_p95_s": 101.3,
+   "turn_is_largest_any_direction": 8,
+   "turn_is_largest_toward_result": 9,
+   "turn_differs_from_top_ranked": 5,
+   "matches_template_word_for_word": 2,
+   "model_answers_matching_template": 0,
+   "checker_passed_first_draft": 11,
+   "answers_with_a_required_field_rejection": 2
   }
  },
  "answers": [
@@ -185,20 +159,42 @@
    "label": "showcase-1",
    "question": "q4",
    "result": "win",
-   "final": "glimmer_raw",
-   "raw_pass": true,
+   "final": "glimmer_repaired",
+   "raw_pass": false,
    "after_repair_pass": true,
    "wording_guard_replaced": false,
-   "latency_s": 61.0,
-   "data_tool_calls": 1,
-   "llm_requests": 2,
-   "text": "The turning point was turn 17, when you used Crunch: your win chance went from 70% to 98%. Luck on that turn was +51 points, the main cause of that move. Instead of Crunch, the engine preferred switch to Dragonite by 19 points.",
-   "turn_chosen": 17,
+   "latency_s": 82.2,
+   "data_tool_calls": 2,
+   "llm_requests": 4,
+   "text": "The turning point was turn 7 when you used Make It Rain, moving your win chance from 34% to 53%. It mattered more than the later swings because the game was still open before it, whereas turn 17 started from an already strong lead. Luck was the main cause and contributed 19 points toward you.",
+   "turn_chosen": 7,
    "largest_any_turn": 17,
    "largest_any_pts": 28,
    "largest_toward_turn": 17,
    "largest_toward_pts": 28,
-   "biggest_luck_turn": 17
+   "biggest_luck_turn": 17,
+   "top3": [
+    {
+     "turn": 17,
+     "before": 70,
+     "after": 98,
+     "luck": 51
+    },
+    {
+     "turn": 14,
+     "before": 62,
+     "after": 85,
+     "luck": 9
+    },
+    {
+     "turn": 7,
+     "before": 34,
+     "after": 53,
+     "luck": 19
+    }
+   ],
+   "matches_template": false,
+   "content_rejected": 0
   },
   {
    "label": "showcase-2",
@@ -208,16 +204,38 @@
    "raw_pass": true,
    "after_repair_pass": true,
    "wording_guard_replaced": false,
-   "latency_s": 45.1,
-   "data_tool_calls": 1,
-   "llm_requests": 2,
-   "text": "The turning point was turn 10, when your opponent used Gunk Shot: your win chance went from 47% to 28%. Luck on that turn was −4 points; most of the move came from choices, yours and your opponent's (−15 points).",
-   "turn_chosen": 10,
+   "latency_s": 99.0,
+   "data_tool_calls": 4,
+   "llm_requests": 5,
+   "text": "The turning point was turn 3 when you used Thunder Wave and your opponent switched to Zapdos, dropping your win chance from 58% to 48%. Choices, yours and your opponent's, contributed −10 points on that turn.",
+   "turn_chosen": 3,
    "largest_any_turn": 10,
    "largest_any_pts": -19,
    "largest_toward_turn": 10,
    "largest_toward_pts": -19,
-   "biggest_luck_turn": 5
+   "biggest_luck_turn": 5,
+   "top3": [
+    {
+     "turn": 10,
+     "before": 47,
+     "after": 28,
+     "luck": -4
+    },
+    {
+     "turn": 12,
+     "before": 34,
+     "after": 23,
+     "luck": 0
+    },
+    {
+     "turn": 3,
+     "before": 58,
+     "after": 48,
+     "luck": 0
+    }
+   ],
+   "matches_template": false,
+   "content_rejected": 0
   },
   {
    "label": "showcase-3",
@@ -227,16 +245,38 @@
    "raw_pass": true,
    "after_repair_pass": true,
    "wording_guard_replaced": false,
-   "latency_s": 35.9,
-   "data_tool_calls": 1,
-   "llm_requests": 2,
-   "text": "The turning point was turn 22, when your opponent used Shadow Ball: your win chance went from 35% to 2%. Luck on that turn was −4 points; most of the move came from choices, yours and your opponent's (−29 points).",
-   "turn_chosen": 22,
+   "latency_s": 85.9,
+   "data_tool_calls": 4,
+   "llm_requests": 6,
+   "text": "I chose turn 8 when you used Ceaseless Edge and your opponent switched to Landorus-Therian, your win chance fell from 44% to 33% and luck went 9 points against you. Choices, yours and your opponent's, contributed −2 points.",
+   "turn_chosen": 8,
    "largest_any_turn": 22,
    "largest_any_pts": -33,
    "largest_toward_turn": 22,
    "largest_toward_pts": -33,
-   "biggest_luck_turn": 8
+   "biggest_luck_turn": 8,
+   "top3": [
+    {
+     "turn": 22,
+     "before": 35,
+     "after": 2,
+     "luck": -4
+    },
+    {
+     "turn": 9,
+     "before": 33,
+     "after": 21,
+     "luck": 2
+    },
+    {
+     "turn": 8,
+     "before": 44,
+     "after": 33,
+     "luck": -9
+    }
+   ],
+   "matches_template": false,
+   "content_rejected": 0
   },
   {
    "label": "showcase-4",
@@ -246,16 +286,38 @@
    "raw_pass": true,
    "after_repair_pass": true,
    "wording_guard_replaced": false,
-   "latency_s": 42.7,
-   "data_tool_calls": 1,
-   "llm_requests": 2,
-   "text": "No single turn stands out in this game; the largest move toward the final result came on turn 5, when you used Hurricane and your opponent switched to Kyurem: your win chance went from 41% to 34%. Luck on that turn was −6 points, the main cause of that move: your move missed.",
-   "turn_chosen": 5,
+   "latency_s": 77.8,
+   "data_tool_calls": 2,
+   "llm_requests": 3,
+   "text": "The engine notes no single turn stands out, but turn 6 when you switched to Fezandipiti and your opponent used Ice Beam is the most telling, with win chance dropping from 34% to 27%. Luck was 11 points against you on that turn. Choices, yours and your opponent's, contributed +4 points.",
+   "turn_chosen": 6,
    "largest_any_turn": 14,
    "largest_any_pts": 8,
    "largest_toward_turn": 5,
    "largest_toward_pts": -7,
-   "biggest_luck_turn": 16
+   "biggest_luck_turn": 16,
+   "top3": [
+    {
+     "turn": 5,
+     "before": 41,
+     "after": 34,
+     "luck": -6
+    },
+    {
+     "turn": 6,
+     "before": 34,
+     "after": 27,
+     "luck": -11
+    },
+    {
+     "turn": 13,
+     "before": 11,
+     "after": 5,
+     "luck": -2
+    }
+   ],
+   "matches_template": false,
+   "content_rejected": 0
   },
   {
    "label": "showcase-5",
@@ -265,16 +327,38 @@
    "raw_pass": true,
    "after_repair_pass": true,
    "wording_guard_replaced": false,
-   "latency_s": 36.7,
-   "data_tool_calls": 1,
-   "llm_requests": 2,
-   "text": "The turning point was turn 23, when you used Scale Shot: your win chance went from 68% to 96%. Luck on that turn was +8 points; most of the move came from choices, yours and your opponent's (+20 points).",
-   "turn_chosen": 23,
+   "latency_s": 98.0,
+   "data_tool_calls": 4,
+   "llm_requests": 5,
+   "text": "Turn 5 was the turning point, when you used Rock Slide, moving your win chance from 45% to 59% while the game was still open. Luck helped you by 10 points on that turn, with the main cause being luck. Yours and your opponent's choices contributed +4 points on that turn.",
+   "turn_chosen": 5,
    "largest_any_turn": 23,
    "largest_any_pts": 28,
    "largest_toward_turn": 23,
    "largest_toward_pts": 28,
-   "biggest_luck_turn": 22
+   "biggest_luck_turn": 22,
+   "top3": [
+    {
+     "turn": 23,
+     "before": 68,
+     "after": 96,
+     "luck": 8
+    },
+    {
+     "turn": 5,
+     "before": 45,
+     "after": 59,
+     "luck": 10
+    },
+    {
+     "turn": 4,
+     "before": 33,
+     "after": 45,
+     "luck": 4
+    }
+   ],
+   "matches_template": false,
+   "content_rejected": 0
   },
   {
    "label": "showcase-6",
@@ -284,35 +368,79 @@
    "raw_pass": true,
    "after_repair_pass": true,
    "wording_guard_replaced": false,
-   "latency_s": 46.1,
-   "data_tool_calls": 1,
-   "llm_requests": 2,
-   "text": "The turning point was turn 16, when you used Nasty Plot and your opponent used Kowtow Cleave: your win chance went from 34% to 18%. Luck on that turn was −2 points; most of the move came from choices, yours and your opponent's (−14 points). Instead of switch to Corviknight, the engine preferred switch to Volcanion by 8 points.",
+   "latency_s": 89.5,
+   "data_tool_calls": 4,
+   "llm_requests": 6,
+   "text": "The turning point was turn 16 when you used Nasty Plot and your opponent used Kowtow Cleave, dropping your win chance from 34% to 18%. Luck went against you by 2 points on that turn. Choices, yours and your opponent's, contributed −14 points.",
    "turn_chosen": 16,
    "largest_any_turn": 16,
    "largest_any_pts": -16,
    "largest_toward_turn": 16,
    "largest_toward_pts": -16,
-   "biggest_luck_turn": 15
+   "biggest_luck_turn": 15,
+   "top3": [
+    {
+     "turn": 16,
+     "before": 34,
+     "after": 18,
+     "luck": -2
+    },
+    {
+     "turn": 20,
+     "before": 13,
+     "after": 1,
+     "luck": 0
+    },
+    {
+     "turn": 19,
+     "before": 24,
+     "after": 13,
+     "luck": -1
+    }
+   ],
+   "matches_template": false,
+   "content_rejected": 0
   },
   {
    "label": "other-01",
    "question": "q4",
    "result": "win",
-   "final": "glimmer_raw",
-   "raw_pass": true,
+   "final": "glimmer_repaired",
+   "raw_pass": false,
    "after_repair_pass": true,
    "wording_guard_replaced": false,
-   "latency_s": 34.2,
-   "data_tool_calls": 1,
-   "llm_requests": 2,
-   "text": "The turning point was turn 13, when you used Armor Cannon: your win chance went from 73% to 98%. That move came from choices, yours and your opponent's (+25 points).",
-   "turn_chosen": 13,
+   "latency_s": 96.2,
+   "data_tool_calls": 2,
+   "llm_requests": 4,
+   "text": "The turning point was turn 2 when you used Icicle Spear and your opponent switched to Gengar, moving your win chance from 39% to 62% with luck contributing +18 points. Yours and your opponent's choices contributed +5 points to that swing. It mattered more than the later moves because the game was still open before it and it put you ahead, whereas the move on turn 13 came after you were already leading.",
+   "turn_chosen": 2,
    "largest_any_turn": 13,
    "largest_any_pts": 25,
    "largest_toward_turn": 13,
    "largest_toward_pts": 25,
-   "biggest_luck_turn": 2
+   "biggest_luck_turn": 2,
+   "top3": [
+    {
+     "turn": 13,
+     "before": 73,
+     "after": 98,
+     "luck": 0
+    },
+    {
+     "turn": 2,
+     "before": 39,
+     "after": 62,
+     "luck": 18
+    },
+    {
+     "turn": 5,
+     "before": 59,
+     "after": 81,
+     "luck": 9
+    }
+   ],
+   "matches_template": false,
+   "content_rejected": 0
   },
   {
    "label": "other-02",
@@ -322,54 +450,120 @@
    "raw_pass": true,
    "after_repair_pass": true,
    "wording_guard_replaced": false,
-   "latency_s": 40.9,
-   "data_tool_calls": 1,
-   "llm_requests": 2,
-   "text": "The turning point was turn 2, when you switched to Gengar and your opponent used Icicle Spear: your win chance went from 64% to 32%. That move came from choices, yours and your opponent's (−32 points). Instead of switch to Gengar, the engine preferred Thunderbolt by 11 points.",
+   "latency_s": 81.1,
+   "data_tool_calls": 2,
+   "llm_requests": 3,
+   "text": "The turning point was turn 2 when you switched to Gengar and your opponent used Icicle Spear your win chance fell from 64% to 32%. Choices yours and your opponent's contributed −32 points to that move. It flipped the lead while the game was still open, unlike later drops when you were already behind.",
    "turn_chosen": 2,
    "largest_any_turn": 2,
    "largest_any_pts": -32,
    "largest_toward_turn": 2,
    "largest_toward_pts": -32,
-   "biggest_luck_turn": 4
+   "biggest_luck_turn": 4,
+   "top3": [
+    {
+     "turn": 2,
+     "before": 64,
+     "after": 32,
+     "luck": 0
+    },
+    {
+     "turn": 13,
+     "before": 31,
+     "after": 2,
+     "luck": 0
+    },
+    {
+     "turn": 5,
+     "before": 44,
+     "after": 22,
+     "luck": -12
+    }
+   ],
+   "matches_template": false,
+   "content_rejected": 0
   },
   {
    "label": "other-03",
    "question": "q4",
    "result": "loss",
-   "final": "glimmer_raw",
-   "raw_pass": true,
+   "final": "glimmer_repaired",
+   "raw_pass": false,
    "after_repair_pass": true,
    "wording_guard_replaced": false,
-   "latency_s": 33.6,
-   "data_tool_calls": 1,
-   "llm_requests": 2,
-   "text": "The turning point was turn 23, when your opponent used Scale Shot: your win chance went from 43% to 12%. Luck on that turn was −6 points; most of the move came from choices, yours and your opponent's (−25 points).",
-   "turn_chosen": 23,
+   "latency_s": 101.4,
+   "data_tool_calls": 2,
+   "llm_requests": 4,
+   "text": "The turning point was turn 5 when your opponent used Rock Slide, which moved your win chance from 62% to 46%. Luck was against you by 14 points. Choices, yours and your opponent's, contributed −2 points. It flipped the lead while the game was still open, unlike later swings that came when you were already behind.",
+   "turn_chosen": 5,
    "largest_any_turn": 23,
    "largest_any_pts": -31,
    "largest_toward_turn": 23,
    "largest_toward_pts": -31,
-   "biggest_luck_turn": 22
+   "biggest_luck_turn": 22,
+   "top3": [
+    {
+     "turn": 23,
+     "before": 43,
+     "after": 12,
+     "luck": -6
+    },
+    {
+     "turn": 5,
+     "before": 62,
+     "after": 46,
+     "luck": -14
+    },
+    {
+     "turn": 10,
+     "before": 33,
+     "after": 21,
+     "luck": -2
+    }
+   ],
+   "matches_template": false,
+   "content_rejected": 1
   },
   {
    "label": "other-04",
    "question": "q4",
    "result": "win",
-   "final": "glimmer_raw",
-   "raw_pass": true,
+   "final": "glimmer_repaired",
+   "raw_pass": false,
    "after_repair_pass": true,
    "wording_guard_replaced": false,
-   "latency_s": 37.1,
-   "data_tool_calls": 1,
-   "llm_requests": 2,
-   "text": "The turning point was turn 22, when you used Shadow Ball: your win chance went from 82% to 100%. Luck on that turn was +11 points, the main cause of that move.",
-   "turn_chosen": 22,
+   "latency_s": 154.0,
+   "data_tool_calls": 2,
+   "llm_requests": 4,
+   "text": "The game ended in a win from a start win chance of 53%. The biggest win-chance moves all came after you were already ahead, for example turn 20 when you used Ivy Cudgel and your opponent used Sucker Punch your win chance moved from 71% to 83%, so the game was already leaning your way. Choices, yours and your opponent's, contributed +12 points to that move.",
+   "turn_chosen": 20,
    "largest_any_turn": 22,
    "largest_any_pts": 18,
    "largest_toward_turn": 22,
    "largest_toward_pts": 18,
-   "biggest_luck_turn": 22
+   "biggest_luck_turn": 22,
+   "top3": [
+    {
+     "turn": 22,
+     "before": 82,
+     "after": 100,
+     "luck": 11
+    },
+    {
+     "turn": 20,
+     "before": 71,
+     "after": 83,
+     "luck": 0
+    },
+    {
+     "turn": 9,
+     "before": 71,
+     "after": 82,
+     "luck": -1
+    }
+   ],
+   "matches_template": false,
+   "content_rejected": 1
   },
   {
    "label": "other-05",
@@ -379,16 +573,38 @@
    "raw_pass": true,
    "after_repair_pass": true,
    "wording_guard_replaced": false,
-   "latency_s": 37.9,
-   "data_tool_calls": 1,
-   "llm_requests": 2,
-   "text": "The turning point was turn 14, when you used Earth Power: your win chance went from 62% to 83%. Luck on that turn was +5 points; most of the move came from choices, yours and your opponent's (+16 points).",
+   "latency_s": 58.7,
+   "data_tool_calls": 2,
+   "llm_requests": 3,
+   "text": "The turning point was turn 14 when you used Earth Power, moving your win chance from 62% to 83%. The move was driven by choices, with luck contributing 5 points toward you. Choices, yours and your opponent's, accounted for +16 points.",
    "turn_chosen": 14,
    "largest_any_turn": 14,
    "largest_any_pts": 21,
    "largest_toward_turn": 14,
    "largest_toward_pts": 21,
-   "biggest_luck_turn": 5
+   "biggest_luck_turn": 5,
+   "top3": [
+    {
+     "turn": 14,
+     "before": 62,
+     "after": 83,
+     "luck": 5
+    },
+    {
+     "turn": 20,
+     "before": 86,
+     "after": 95,
+     "luck": 0
+    },
+    {
+     "turn": 10,
+     "before": 61,
+     "after": 65,
+     "luck": 0
+    }
+   ],
+   "matches_template": false,
+   "content_rejected": 0
   },
   {
    "label": "other-06",
@@ -398,35 +614,79 @@
    "raw_pass": true,
    "after_repair_pass": true,
    "wording_guard_replaced": false,
-   "latency_s": 35.6,
-   "data_tool_calls": 1,
-   "llm_requests": 2,
-   "text": "The turning point was turn 14, when your opponent used Earth Power: your win chance went from 42% to 23%. Luck on that turn was −8 points; most of the move came from choices, yours and your opponent's (−11 points).",
+   "latency_s": 88.3,
+   "data_tool_calls": 2,
+   "llm_requests": 3,
+   "text": "The turning point was turn 14 when your opponent used Earth Power, dropping your win chance from 42% to 23%. The main cause was choices, and the game was still open before this turn unlike the later drops when you were already behind. Luck was 8 points against you on that turn. Choices, yours and your opponent's, contributed −11 points.",
    "turn_chosen": 14,
    "largest_any_turn": 14,
    "largest_any_pts": -19,
    "largest_toward_turn": 14,
    "largest_toward_pts": -19,
-   "biggest_luck_turn": 5
+   "biggest_luck_turn": 5,
+   "top3": [
+    {
+     "turn": 14,
+     "before": 42,
+     "after": 23,
+     "luck": -8
+    },
+    {
+     "turn": 20,
+     "before": 19,
+     "after": 10,
+     "luck": 0
+    },
+    {
+     "turn": 3,
+     "before": 48,
+     "after": 41,
+     "luck": 0
+    }
+   ],
+   "matches_template": false,
+   "content_rejected": 0
   },
   {
    "label": "other-07",
    "question": "q4",
    "result": "loss",
-   "final": "glimmer_raw",
-   "raw_pass": true,
+   "final": "glimmer_repaired",
+   "raw_pass": false,
    "after_repair_pass": true,
    "wording_guard_replaced": false,
-   "latency_s": 34.2,
-   "data_tool_calls": 1,
-   "llm_requests": 2,
-   "text": "The turning point was turn 7, when your opponent used Make It Rain: your win chance went from 72% to 48%. Luck on that turn was −18 points, the main cause of that move: a critical hit on your Pokémon.",
+   "latency_s": 79.2,
+   "data_tool_calls": 2,
+   "llm_requests": 4,
+   "text": "Turn 7 was the turning point when your opponent used Make It Rain, dropping your win chance from 72% to 48% with luck 18 points against you. Yours and your opponent's choices contributed −6 points on that turn. It flipped the lead while the game was still open, whereas the later drops came after you were already behind.",
    "turn_chosen": 7,
    "largest_any_turn": 7,
    "largest_any_pts": -24,
    "largest_toward_turn": 7,
    "largest_toward_pts": -24,
-   "biggest_luck_turn": 7
+   "biggest_luck_turn": 7,
+   "top3": [
+    {
+     "turn": 7,
+     "before": 72,
+     "after": 48,
+     "luck": -18
+    },
+    {
+     "turn": 14,
+     "before": 45,
+     "after": 21,
+     "luck": -17
+    },
+    {
+     "turn": 16,
+     "before": 33,
+     "after": 10,
+     "luck": 0
+    }
+   ],
+   "matches_template": false,
+   "content_rejected": 0
   },
   {
    "label": "other-08",
@@ -436,16 +696,38 @@
    "raw_pass": true,
    "after_repair_pass": true,
    "wording_guard_replaced": false,
-   "latency_s": 30.9,
-   "data_tool_calls": 1,
-   "llm_requests": 2,
-   "text": "The turning point was turn 10, when you used Gunk Shot: your win chance went from 63% to 79%. Luck on that turn was +5 points; most of the move came from choices, yours and your opponent's (+11 points).",
+   "latency_s": 93.9,
+   "data_tool_calls": 2,
+   "llm_requests": 3,
+   "text": "The turning point was turn 10 when you used Gunk Shot your win chance rose from 63% to 79%. The shift was driven mainly by choices and came while the game was still open, whereas the later increases happened after you were already ahead. Choices, yours and your opponent's, contributed +11 points to that move. Luck added 5 points toward you on that turn.",
    "turn_chosen": 10,
    "largest_any_turn": 10,
    "largest_any_pts": 16,
    "largest_toward_turn": 10,
    "largest_toward_pts": 16,
-   "biggest_luck_turn": 7
+   "biggest_luck_turn": 7,
+   "top3": [
+    {
+     "turn": 10,
+     "before": 63,
+     "after": 79,
+     "luck": 5
+    },
+    {
+     "turn": 12,
+     "before": 74,
+     "after": 84,
+     "luck": 0
+    },
+    {
+     "turn": 4,
+     "before": 56,
+     "after": 65,
+     "luck": 0
+    }
+   ],
+   "matches_template": false,
+   "content_rejected": 0
   },
   {
    "label": "showcase-1",

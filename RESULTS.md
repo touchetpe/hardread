@@ -1979,39 +1979,56 @@ Descriptive readout of the existing A0 record (base Glimmer, battle log only, no
 
 **What this is.** A descriptive check of the turning-point question (q4) and a reworded luck-or-choices question (q1). The turning-point question is new and sits outside the fixed 60-question A1 evaluation. The q1 wording measured here is also not the wording A1 v2 measured, so the A1 v2 figures (41/60 first draft, 59/60 after repair, blind review 3/60) say nothing about either answer below. No protocol or gate was run, and nothing here is a ship decision.
 
-**What changed.** The turning-point question now gets a new lookup that lists each turn's move in win chance, with moves toward the final result ranked first, and splits each move into luck and everything else. Its fallback template now stays on the question. Q1 now spells out the required wording and lets near-ties be called about equal, and the repair message explains how to phrase the choices number. The checker (`verifier.py`, `lexicon.py`) did not change. Q2 and Q3 keep the same question text and tool schema as before; the only difference they can see is the longer repair message, if a draft is rejected over the choices number.
+**An earlier scripted version matched the template word for word.** The first version of this work had code pick the turn and dictated the sentences. It scored 14/14 on first draft and 14/14 on naming the top-ranked turn, and every one of its 14 q4 answers was word for word the same as the deterministic template. Those scores showed the model following instructions, not judging the game, so that version was dropped.
 
-**What was measured.** Base Muse Glimmer, one request at a time, with the product's loop settings (temperature 0, reasoning low, 2048 tokens, one repair, template fallback). The request was 20 reviews, but 6 of the 14 candidate reviews are the same game and side as a showcase. That leaves 14 different game-sides from 8 games, and those 14 are the denominator. The 8 non-showcase sides are the opposite seat of games already in the set, so they are not independent of it. On the 6 repeats, the first full run gave word-for-word the same q4 answer as the showcase each time, and they are not counted.
+**What q4 does now.** A new lookup lists the three largest moves of win chance toward the final result, and splits each into luck and everything else. The model chooses one and explains it in its own words, in two to four sentences. It is not given sentences to copy. Code does require the answer to cite the chosen moment's turn, what happened, win chance before and after, and its luck and choices numbers if it has them. A draft that omits them goes to the repair turn, and if the repair also fails, the template answers. This requirement is added on top of the checker, which did not change (`verifier.py`, `lexicon.py`). The question also tells the model what the checker requires for the choices number and where one slot reads correctly. Cached answers from before this change are no longer reused, because the explanation policy version was bumped; saved showcase answers are a separate file and need regenerating.
 
-| | Q4 saved answers (6 showcases) | Q4 now (6 showcases) | Q4 now (all 14) | Q1 saved answers (6 showcases) | Q1 now (6 showcases) | Q1 now (all 14) |
-|---|---|---|---|---|---|---|
-| First draft passes the checker | 6/6 | 6/6 | 14/14 | 1/6 | 6/6 | 14/14 |
-| Passes after repair | 6/6 | 6/6 | 14/14 | 3/6 | 6/6 | 14/14 |
-| Template fallback | 0/6 | 0/6 | 0/14 | 3/6 | 0/6 | 0/14 |
-| Replaced by the product's wording guard | not recomputed | 0/6 | 0/14 | not recomputed | 0/6 | 0/14 |
-| Median latency | 132 s | 43.9 s | 36.9 s | 96 s | 23.4 s | 23.4 s |
-| 95th-percentile latency (nearest rank) | not computed | 61.0 s | 46.1 s | not computed | 26.0 s | 26.4 s |
-| Turn named is the largest win-chance move in any direction | 1/6 | 5/6 | 13/14 | n/a | n/a | n/a |
-| Turn named is the largest move toward the final result | 1/6 | 6/6 | 14/14 | n/a | n/a | n/a |
+**What was measured.** Base Muse Glimmer, one request at a time, with the product's loop settings (temperature 0, reasoning low, 2048 tokens, one repair, template fallback). The server was shared with another job during these runs, so latency is on the high side. The denominator is 14 different game-sides from 8 games. Six other candidate reviews repeat a showcase's game and side and are excluded, and the 8 non-showcase sides are the opposite seat of games already in the set, so they are not independent of it.
 
-The saved answers are those committed in e05424e. Every saved q4 answer named the game's biggest luck turn (6/6). Latency is not a fair before-and-after: the saved answers were made while the server was shared, and the new answers each used one lookup where the saved ones used up to four. The single q4 miss on the any-direction measure is showcase-4 and is by design: the largest move there was a rise from 5% to 13% in a game that was then lost, and the answer names the largest fall (41% to 34%) and says no single turn stands out.
+| Turning-point question (q4) | Saved answers, 6 showcases | Scripted version, 14 | **Current version, 14** | Current, 6 showcases |
+|---|---|---|---|---|
+| First draft passes | 6/6 | 14/14 | **9/14** | 5/6 |
+| Passes after repair | 6/6 | 14/14 | **14/14** | 6/6 |
+| Template fallback | 0/6 | 0/14 | **0/14** | 0/6 |
+| Matches the template word for word | not computed | 14/14 | **0/14** | 0/6 |
+| Turn differs from the top-ranked move | 5/6 | 0/14 | **8/14** | 5/6 |
+| Median latency | 132 s | 36.9 s | **88.9 s** | 87.7 s |
+| 95th-percentile latency (nearest rank) | not computed | 46.1 s | **101.4 s** | 99.0 s |
 
-**These pass rates are not independent evidence.** The final run is the second full run, and no game was held out. Five showcases were used to pilot the wording, the ranking and thresholds were set after looking at the win-chance curves of all 14 game-sides, and the first full run's answers on all 14 were read before the last wording changes. That first full run also scored 14/14 on first-draft pass for both questions, with the same turn counts (median latency 34.8 s for q4 and 33.7 s for q1).
+The saved answers are those committed in e05424e; all six named the game's biggest luck turn. The slowest current answer took 154 s. None of the current answers was replaced by the product's wording guard. The five first-draft failures were a digit written in the text (3), a placeholder with no slot (1) and a number word (1).
 
-**The turn is chosen by code, and q4's wording is dictated.** The lookup ranks the turns and names the main cause, and the question tells the model to take the first turn and gives it the sentence shapes. On all 14 game-sides, the model's q4 answer is word for word the same as the deterministic template. So 14/14 on the turn measure shows the model followed instructions, not that it judged the game. Here the model adds no visible text beyond what the template would have said, at a cost of about 37 seconds. An earlier pilot with a looser question, on 5 showcases, passed 4/5 on first draft and left the numbers out of the cause sentence; it also produced awkward lines such as "with choices as the main cause". Q1 answers do not match its template (0/14), but their wording is also largely dictated.
+**These numbers are not independent evidence, and they moved between runs.** The current version is the third full run of the free-form question on the same 14 game-sides, and I changed the question after reading each of the first two. No game was held out. The first run passed 1/14 on first draft (13/14 after repair, 1 template, median 108 s), mostly for leaving out the required words for the choices number. The second passed 11/14 (12/14 after repair, 2 templates, median 74 s, one of the templates from a server error on invalid tool-call JSON), but 7 of its 12 model answers were ungrammatical because of a line I had added. Small wording changes also changed which turn was chosen: showcase-2 was turn 10 in the first run and turn 3 in the final run, and one other game was turn 9 and then turn 20. Treat the final figures as one sample of a sensitive process, not a stable rate. A regenerated showcase answer should be read before it is published.
 
-**Reading the answers.** I read all 28 final answers against their tool outputs. This is an AI review by the author of the change, not human labels and not the blind A1 audit. Every number shown matched its cited field.
+**The eight turns that differ from the top-ranked move.** This is my read, and win chances are the engine's estimates, not ground truth.
 
-- **Q4 misleading: 3/14.** In three wins the player already had at least 70% before the named turn, so the turn closed out a lead rather than turned the game: showcase-1 (70% to 98%), and two others (73% to 98%, and 82% to 100% on the turn before the game ended). This threshold was chosen while reading.
-- **Q4 awkward: 3/14.** All three are the engine sentence, for example "Instead of switch to Gengar, the engine preferred Thunderbolt". One of them (showcase-6) also names a different action from the one in its first sentence, because the disagreement was a later switch on the same turn. Showcase-1 is in both counts, so 5 of 14 answers have at least one problem. The earlier faults, "a gap of 0 points" and "a swing helped by luck of 51 points", appear in none of the 14.
-- **Q1: 0/14 misleading, 0/14 awkward.** The answers are correct but plain, and the five-point line for "about equally" (4 of 14 answers) is a judgement call.
+- **Clearly sensible (5):** in four, the model chose an earlier move that put a different side ahead, and in three of those it said a later, larger move came when the game was already going that way (for example turn 7, 34% to 53%, over turn 17, 70% to 98%). The fifth is a win where the player never trailed: the model said the biggest moves all came after the player was already ahead, and that the game was already leaning that way.
+- **Defensible but unexplained (2):** showcase-2 names the turn the lead changed (turn 3, 58% to 48%) over a larger fall on turn 10, but gives no reason. Showcase-4 is a tie on rounded numbers (turn 6 over turn 5), and "the most telling" is the only reason it gives.
+- **Questionable (1):** showcase-3 names turn 8 (44% to 33%) over turn 22 (35% to 2%), with no reason. Turn 8 is the game's biggest luck turn, in a game where luck was −15 and choices −38. That is the original weakness this work set out to fix, and it has not fully gone.
+
+**Reading the answers.** I read all 14 final q4 answers against their tool outputs. This is an AI review by the author of the change, not human labels and not the blind A1 audit. The numbers come from cited fields, but words such as "flipped the lead" or "still open" are not checked by the checker, so I compared them with the tool outputs by hand.
+
+- **Misleading: 2/14.** Showcase-3, as above. In another win, the answer says a move from 63% to 79% came "while the game was still open", unlike later moves "after you were already ahead", which implies the player was not already ahead at 63%. They were, and they never trailed.
+- **Awkward: 4/14.** Three run-on sentences with missing punctuation, for example "when you used Gunk Shot your win chance rose". One opens "I chose turn 8 when…" and joins two clauses with a comma. Showcase-3 and the 63% answer are in both counts, so 4 of 14 have a problem under these two counts.
+- **Milder roughness, not counted above: 4 more.** "Yours and your opponent's choices" appears in three answers, and one says "the engine notes" for a note that comes from a fixed threshold in code.
+- **No reason given: 5/14.** Five answers state the turn and its numbers without saying why it mattered more than the others, which the question asked for. Nine do say why.
+- **"Already leaning":** one chosen turn started with the eventual winner at 70% or more, and that answer said so in its own words.
+
+**Luck-or-choices question (q1).** This was measured before the changes above, which do not touch q1's question or path. The repair message and question now spell out the choices wording, and near-ties may be called about equal.
+
+| Q1 | Saved answers, 6 showcases | Now, 6 showcases | Now, 14 |
+|---|---|---|---|
+| First draft passes | 1/6 | 6/6 | 14/14 |
+| Passes after repair | 3/6 | 6/6 | 14/14 |
+| Template fallback | 3/6 | 0/6 | 0/14 |
+| Median latency | 96 s | 23.4 s | 23.4 s |
+
+I read all 14: 0 misleading, 0 awkward, but plain, and the wording is largely dictated by the question, though it does not match the template (0/14). The five-point line for "about equally" (4 of 14 answers) is a judgement call. The same caveat about tuning applies: pilots used the showcases, and the wording changed after reading a first full run.
 
 **Limits to keep in mind.**
 
-- "Largest move" is one definition of a turning point. Only 2 of the 14 named turns moved the win chance across 50%. The turn when the lead last changed is not obviously better: in the showcases it is often an early, small move, and in 3 of the 14 game-sides the eventual winner never trailed.
-- Two rankings were decided by a tie on rounded numbers (showcase-4 and one other game), and the earlier turn was taken.
-- The choices part of a turn is the move minus its luck. It also includes what each side revealed and the engine changing its estimate, so 10 of 14 answers attribute to "choices" something that is not purely a decision. It does not say either player chose badly.
-- Win chances are the engine's estimates, not ground truth.
-- No first draft failed in the final runs, so the new repair message was not exercised there and its effect is unmeasured.
+- "Largest move" is only where the model starts. Which turn counts as the turning point is its judgement, and there is no ground truth to score it against.
+- The choices part of a turn is the move minus its luck. It also includes what each side revealed and the engine changing its estimate, and it does not say either player chose badly.
+- The new repair message was used in the first free-form run, where 12 of 13 rejected drafts then passed. That is not a controlled comparison.
+- The current q4 is slower than the scripted version, and most of its answers still use similar sentence openings.
 
-The saved answers and summary are in `tools/agent/eval_q1_q4_20261102.json`; `tools/agent/eval_q1_q4.py` re-runs the check.
+The saved answers and summaries are in `tools/agent/eval_q1_q4_20261102.json`; `tools/agent/eval_q1_q4.py` re-runs the check.
