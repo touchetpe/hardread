@@ -2035,9 +2035,11 @@ The saved answers and summaries are in `tools/agent/eval_q1_q4_20261102.json`; `
 
 <a id="luck-information-edge-20261102"></a>
 
-## 2026-11-02 — Luck meter in a test with a known edge (new, exploratory, one level)
+## 2026-11-02 — Luck meter in tests with a known edge (new, exploratory)
 
 Rule written before running. An oracle bot that knows the opponent's sets played vanilla Foul Play over 300 side-swapped pairings (598 games plus 2 timeouts), with the meter settings and calibrator frozen. Plain win rate 68.67 ± 3.43; luck-adjusted win rate 65.14 ± 2.95. That is a bias of −3.52 points, 95% CI [−5.31, −1.73], which fails the rule that the interval must contain 0 and stay within 1.5. So the meter treated about 19% of a real edge as luck. Only one edge level has finished, and the cause isn't established: exploratory follow-ups with unconditioned worlds (−3.48) and a less steep calibrator (−2.60 ± 1.41) didn't remove it. This was a test between bots, not of how the meter reads a single human game.
+
+Second level (bot sees the opponent's sets 25% of the time, p=.25): bias +1.63 points, 95% CI [−0.13, 3.35], which narrowly fails the same rule, in the opposite direction. So "about a fifth of an edge" applies only to the large-edge test. The cause isn't known.
 
 <a id="ladder-snapshots-20261030"></a>
 

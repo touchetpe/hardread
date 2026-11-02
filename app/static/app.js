@@ -866,7 +866,7 @@
       h("h2", { id: "how2-title" }, "How to read this"),
       h("p", { class: "card-sub", style: "margin-bottom:8px" }, "Luck and choices are measured on the same scale, in points of win chance."),
       h("ul", { style: "margin:0;padding-left:18px;color:var(--ink-2);font-size:14px" },
-        h("li", null, "Luck is an estimate. In a test where one bot had a real information edge, about a fifth of that edge showed up as luck, so a large luck number doesn't rule out skill. It measures crits, misses, secondary effects, speed ties and KO-deciding damage rolls. It was checked on 500 engine-vs-engine games, where both seats' luck mirror each other."),
+        h("li", null, "Luck is an estimate. In two tests where one bot had a real information edge, the estimate shifted part of that edge, in opposite directions, and the cause isn't known. So a luck number doesn't rule out skill. It measures crits, misses, secondary effects, speed ties and KO-deciding damage rolls. It was checked on 500 engine-vs-engine games, where both seats' luck mirror each other."),
         h("li", null, "Choices is the rest of the swing, for both players together. A big negative number can come from your opponent's good play as much as from yours."),
         h("li", null, "Win chances come from the engine's search, mapped to real ladder outcomes; early turns carry little signal.")));
   }
