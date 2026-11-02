@@ -62,12 +62,14 @@ class FakeJobs:
     def allow(self, *_args):
         return True, 0
 
-    def submit(self, _kind, key, files, _cmd, _on_done):
+    def submit(self, _kind, key, files, _cmd, _on_done, client=None):
         self.key, self.files, self.on_done = key, dict(files), _on_done
         return "synthetic-job"
 
 
 class RequestBody:
+    headers = {}
+
     def __init__(self, payload):
         self.payload = json.dumps(payload).encode()
         self.client = SimpleNamespace(host="127.0.0.1")
@@ -259,6 +261,15 @@ class OfferedListIntegrationTests(unittest.TestCase):
 
 
 class PublicCopyTests(unittest.TestCase):
+    def test_non_text_input_is_refused_cleanly(self):
+        with self.assertRaises(P.InputError):
+            S.resolve_input(123)
+        self.assertEqual(S._text_field(123), "")
+
+    def test_hourly_cap_stops_at_its_limit(self):
+        events = S.deque()
+        self.assertEqual([S.within_hourly_cap(events, 2) for _ in range(3)], [True, True, False])
+
     def test_public_copy_takes_public_links_only(self):
         with patch.object(S, "PUBLIC", True):
             with self.assertRaises(P.InputError):

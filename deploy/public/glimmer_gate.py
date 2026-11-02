@@ -27,7 +27,8 @@ def clean_request(raw):
         return None
     if not isinstance(body, dict) or set(body) - ALLOWED_FIELDS or not isinstance(body.get("messages"), list):
         return None
-    if not isinstance(body.get("max_tokens", 0), int) or body.get("max_tokens", 0) > MAX_TOKENS:
+    tokens = body.get("max_tokens")
+    if type(tokens) is not int or not 1 <= tokens <= MAX_TOKENS:
         return None
     return json.dumps(body).encode()
 

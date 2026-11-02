@@ -7,7 +7,7 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 PROFILE=hardread-public
 RUN_DIR=${HARDREAD_PUBLIC_RUN:-$HOME/.hardread-public}
 mkdir -p "$RUN_DIR/vm-empty"
-colima status -p "$PROFILE" >/dev/null 2>&1 || colima start "$PROFILE" --cpu 6 --memory 8 --disk 20 --mount "$RUN_DIR/vm-empty:w" >/dev/null 2>&1
+colima status -p "$PROFILE" >/dev/null 2>&1 || colima start "$PROFILE" --cpu 6 --memory 8 --disk 20 --mount "$RUN_DIR/vm-empty" >/dev/null 2>&1
 export DOCKER_HOST=unix://$HOME/.colima/$PROFILE/docker.sock
 
 docker build -q -t hardread-public -f "$HERE/Dockerfile" "$CONTEXT" >/dev/null
@@ -43,7 +43,7 @@ if ! lsof -nP -iTCP:18140 -sTCP:LISTEN >/dev/null 2>&1; then
 fi
 
 docker rm -f hardread-public >/dev/null 2>&1 || true
-docker run -d --name hardread-public --restart unless-stopped --network hardread-public \
+docker run -d --name hardread-public --restart on-failure --init --log-opt max-size=10m --log-opt max-file=2 --network hardread-public \
   --read-only --tmpfs /tmp:size=256m --tmpfs /state:size=2g,uid=10001,gid=10001,mode=0700 \
   --cap-drop ALL --security-opt no-new-privileges --pids-limit 256 --memory 6g --cpus 5 \
   --add-host glimmer-gate:192.168.5.2 -e HARDREAD_LLM_URL=http://glimmer-gate:18140 \

@@ -62,13 +62,32 @@ PUBLIC_ORIGIN = os.environ.get("HARDREAD_PUBLIC_ORIGIN", "")   # the static site
 PUBLIC_REVIEWS_PER_HOUR = int(os.environ.get("HARDREAD_PUBLIC_REVIEWS_PER_HOUR", "60"))
 PUBLIC_BLOCKED = re.compile(r"^/(api/own-ladder|api/provenance|api/share/|api/card/|r/|api/review/[^/]+/receipts)")
 PUBLIC_EXPLAINS_PER_HOUR = int(os.environ.get("HARDREAD_PUBLIC_EXPLAINS_PER_HOUR", "30"))
+PUBLIC_MAX_BODY = 32_000
+PUBLIC_FETCHES_PER_HOUR = 200   # replay downloads: staying polite keeps this address welcome on the replay server
+PUBLIC_NOTES_PER_HOUR = 60
 _public_reviews = deque()
 _public_explains = deque()
+_public_fetches = deque()
+_public_notes = deque()
+_public_lock = threading.Lock()
+
+
+def within_hourly_cap(events, cap):
+    now = time.time()
+    with _public_lock:
+        while events and now - events[0] > 3600:
+            events.popleft()
+        if len(events) >= cap:
+            return False
+        events.append(now)
+        return True
 VERDICTS_ON = os.environ.get("HARDREAD_DISABLE_VERDICT", "") != "1"
 
 RATES = {"review": int(os.environ.get("HARDREAD_RATE_REVIEWS", "5")),
          "verdict": int(os.environ.get("HARDREAD_RATE_VERDICTS", "10")),
-         "explain": int(os.environ.get("HARDREAD_RATE_EXPLAIN", "30"))}
+         "explain": int(os.environ.get("HARDREAD_RATE_EXPLAIN", "30")),
+         "fetch": int(os.environ.get("HARDREAD_RATE_FETCH", "40")),
+         "note": int(os.environ.get("HARDREAD_RATE_NOTE", "20"))}
 QUEUE_CAP = int(os.environ.get("HARDREAD_QUEUE_CAP", "50"))
 TTL_PUBLIC = 14 * 24 * 3600
 TTL_PRIVATE = 24 * 3600
@@ -150,7 +169,13 @@ class Jobs:
         with self.lock:
             return self.by_key.get(key)
 
-    def submit(self, kind, key, files, cmd, on_done):
+    def active_for(self, client):
+        """Does this client already have a job queued or running? (public copy: one at a time)"""
+        h = hashlib.sha256((_SALT + client).encode()).hexdigest()[:16]
+        with self.lock:
+            return any(j.get("client") == h and j["state"] in ("queued", "running") for j in self.jobs.values())
+
+    def submit(self, kind, key, files, cmd, on_done, client=None):
         """files: {name: text} written into the job dir; cmd(jobdir) -> argv; on_done(job) -> result."""
         with self.lock:
             if key in self.by_key:
@@ -163,7 +188,8 @@ class Jobs:
             for name, text in files.items():
                 (d / name).write_text(text)
             self.jobs[jid] = {"id": jid, "kind": kind, "key": key, "dir": d, "cmd": cmd, "on_done": on_done,
-                              "state": "queued", "created": time.time(), "proc": None}
+                              "state": "queued", "created": time.time(), "proc": None,
+                              "client": hashlib.sha256((_SALT + client).encode()).hexdigest()[:16] if client else None}
             self.by_key[key] = jid
             self.queue.append(jid)
             return jid
@@ -195,9 +221,13 @@ class Jobs:
             return out
 
     def _loop(self):
+        last_expire = time.time()
         while not self._stop:
             try:
                 self._tick()
+                if time.time() - last_expire > 3600:
+                    last_expire = time.time()
+                    expire_cache()
             except Exception as e:  # noqa: BLE001
                 print("job loop error:", type(e).__name__, e, file=sys.stderr)
             time.sleep(0.4)
@@ -217,7 +247,7 @@ class Jobs:
                 self.queue.remove(jid)
                 with open(j["dir"] / "stderr.txt", "w") as errf:
                     j["proc"] = subprocess.Popen(j["cmd"](j["dir"]), cwd=str(HARDREAD), stdout=subprocess.DEVNULL,
-                                                 stderr=errf)
+                                                 stderr=errf, start_new_session=True)
                 j["state"], j["started"] = "running", time.time()
                 running.append(j)
                 if j["kind"] == "explain":
@@ -269,7 +299,7 @@ def _stop_job(j):
     except (OSError, ValueError):
         pass
     try:
-        j["proc"].terminate()
+        os.killpg(j["proc"].pid, 15)   # the job leads its own process group, so its search workers stop too
     except OSError:
         pass
 
@@ -494,6 +524,8 @@ _FETCHED = {}   # replay id -> (time, replay dict); in memory only, 10 minutes
 
 
 def resolve_input(text):
+    if not isinstance(text, str):
+        raise P.InputError("Paste a replay link.")
     kind, val, private = P.classify_input(text)
     if PUBLIC and (kind != "url" or private):
         raise P.InputError("This public copy only reviews public replay links.")
@@ -501,6 +533,8 @@ def resolve_input(text):
         hit = _FETCHED.get(val)
         if hit and time.time() - hit[0] < 600:
             return hit[1]
+        if PUBLIC and not within_hourly_cap(_public_fetches, PUBLIC_FETCHES_PER_HOUR):
+            raise P.InputError("This public copy has fetched enough replays for this hour. The showcases still work; try again later.")
         rep = P.fetch_replay(val)
         _FETCHED[val] = (time.time(), rep)
         for k in [k for k, (t, _) in _FETCHED.items() if time.time() - t > 600]:
@@ -543,17 +577,19 @@ def create_app(concurrency=1, processes=4):
             return request.headers.get("cf-connecting-ip") or "unknown"
         return request.client.host if request.client else "unknown"
 
-    def within_hourly_cap(events, cap):
-        now = time.time()
-        while events and now - events[0] > 3600:
-            events.popleft()
-        if len(events) >= cap:
-            return False
-        events.append(now)
-        return True
-
     def public_review_allowed():
         return within_hourly_cap(_public_reviews, PUBLIC_REVIEWS_PER_HOUR)
+
+    def public_fetch_refused(request):
+        """Public copy: limit each client before any replay is downloaded."""
+        if PUBLIC and not jobs.allow(client_of(request), "fetch")[0]:
+            return err(429, "You have checked a lot of replays this hour. The showcases still work; try again later.")
+        return None
+
+    def one_at_a_time(request):
+        if PUBLIC and jobs.active_for(client_of(request)):
+            return err(429, "You already have a job running on this public copy. Try again when it finishes.")
+        return None
 
     def err(status, msg, **kw):
         return JSONResponse({"ok": False, "error": msg, **kw}, status_code=status)
@@ -654,10 +690,13 @@ def create_app(concurrency=1, processes=4):
         body = await _body(request)
         if body is None:
             return err(400, "Send JSON.")
+        refused = public_fetch_refused(request)
+        if refused:
+            return refused
         try:
             rep = await run_in_threadpool(resolve_input, body.get("input", ""))
             game = P.inspect_game(rep)
-            export = P.parse_export(body.get("team") or "")
+            export = P.parse_export(_text_field(body.get("team")))
         except P.InputError as e:
             return err(422, str(e))
         suggested = P.detect_side(game, export)
@@ -671,11 +710,14 @@ def create_app(concurrency=1, processes=4):
         body = await _body(request)
         if body is None:
             return err(400, "Send JSON.")
+        refused = public_fetch_refused(request)
+        if refused:
+            return refused
         side = body.get("side")
         try:
             rep = await run_in_threadpool(resolve_input, body.get("input", ""))
             game = P.inspect_game(rep)
-            lines, ctx, job_input = P.prepare(rep, side, body.get("team"), game)
+            lines, ctx, job_input = P.prepare(rep, side, _text_field(body.get("team")) or None, game)
         except P.InputError as e:
             return err(422, str(e))
         key = P.cache_key(lines, side, job_input.get("team"))
@@ -683,14 +725,17 @@ def create_app(concurrency=1, processes=4):
         if load_parts(rid) is not None:
             return {"ok": True, "review_id": rid, "cached": True}
         jid = jobs.existing("review:" + key)
-        if PUBLIC and not jid and not public_review_allowed():
-            return err(429, "This public copy has reached its reviews for this hour. The showcases still work; try again later.")
         if jid:
             return {"ok": True, "job_id": jid}
+        busy = one_at_a_time(request)
+        if busy:
+            return busy
         ok, wait = jobs.allow(client_of(request), "review")
         if not ok:
             return err(429, f"You have reached {RATES['review']} new reviews this hour. "
                             f"Try again in about {max(1, wait // 60)} minutes.")
+        if PUBLIC and not public_review_allowed():   # after the per-client check, so one person can't spend it all
+            return err(429, "This public copy has reached its reviews for this hour. The showcases still work; try again later.")
         files = {"replay.json": json.dumps({"log": "\n".join(lines)}),
                  "input.json": json.dumps(dict(job_input, processes=jobs.processes))}
         if job_input.get("team"):
@@ -701,7 +746,7 @@ def create_app(concurrency=1, processes=4):
             P.build_view(review, ctx)   # fail here, not on the first page view
             return store_review(key, review, ctx, j["dir"])
         jid = jobs.submit("review", "review:" + key, files,
-                          lambda d: [str(FP_PY), str(APP / "worker.py"), str(d)], done)
+                          lambda d: [str(FP_PY), str(APP / "worker.py"), str(d)], done, client=client_of(request))
         if jid is None:
             return err(503, "The review queue is full right now. Try again in a few minutes.")
         return {"ok": True, "job_id": jid}
@@ -749,9 +794,12 @@ def create_app(concurrency=1, processes=4):
             own_moves = PN.own_moves_from_review(parts[0])
         except Exception:  # noqa: BLE001
             own_moves = None
+        model_allowed = not PUBLIC or (jobs.allow(client_of(request), "note")[0]
+                                       and within_hourly_cap(_public_notes, PUBLIC_NOTES_PER_HOUR))
+
         def read_note():
             explaining = any(j["kind"] == "explain" and j["state"] == "running" for j in list(jobs.jobs.values()))
-            if not explaining and glimmer_up() and LLM_GATE.acquire(blocking=False):
+            if model_allowed and not explaining and glimmer_up() and LLM_GATE.acquire(blocking=False):
                 try:   # one call in flight; short timeout; the keyword reader answers at once otherwise
                     from llm import GlimmerClient
                     if not eval_locked():
@@ -782,6 +830,8 @@ def create_app(concurrency=1, processes=4):
         body = await _body(request)
         if body is None:
             return err(400, "Send JSON.")
+        if PUBLIC and not jobs.allow(client_of(request), "verdict")[0]:
+            return err(429, f"You have reached {RATES['verdict']} decision checks this hour.")
         rid = str(body.get("review_id", ""))
         parts = load_parts(rid)
         d = cache_dir(rid)
@@ -806,7 +856,7 @@ def create_app(concurrency=1, processes=4):
         settings = dict(VI.PRODUCT_SETTINGS)
         settings["seeds"] = list(VI.PRODUCT_SETTINGS["seeds"])
         try:
-            runtime = _engine_runtime_provenance()
+            runtime = await run_in_threadpool(_engine_runtime_provenance)   # starts a process: never on the event loop
             identity = VI.build_request_identity(
                 review_id=rid, replay_path=d / "replay.json", team_path=d / "team.txt", side=ctx["side"],
                 turn=turn, k=k, chosen=dec["action"], engine_best=dec["engine_best"], belief=belief,
@@ -827,8 +877,10 @@ def create_app(concurrency=1, processes=4):
         if jid:
             return {"ok": True, "job_id": jid, "identity_sha256": identity_digest,
                     "belief_sha256": identity["belief_sha256"]}
-        ok, _ = jobs.allow(client_of(request), "verdict")
-        if not ok:
+        busy = one_at_a_time(request)
+        if busy:
+            return busy
+        if not PUBLIC and not jobs.allow(client_of(request), "verdict")[0]:
             return err(429, f"You have reached {RATES['verdict']} decision checks this hour.")
         x = dec["engine_best"]
 
@@ -957,6 +1009,9 @@ def create_app(concurrency=1, processes=4):
         jid = jobs.existing(key)
         if jid:
             return {"ok": True, "job_id": jid, "template": template}
+        busy = one_at_a_time(request)
+        if busy:
+            return busy
         if PUBLIC and not within_hourly_cap(_public_explains, PUBLIC_EXPLAINS_PER_HOUR):
             return err(429, "Live explanations are paused for this hour. The saved showcases still work.")
 
@@ -982,7 +1037,7 @@ def create_app(concurrency=1, processes=4):
         files = {"review.json": json.dumps(review), "question.txt": AGENT_QUESTIONS.get(qid, QUESTIONS[qid]),
                  "verdicts.json": json.dumps(visible_verdicts), "offered.json": json.dumps(offered),
                  "offered_keys.json": json.dumps(offered_keys)}
-        jid = jobs.submit("explain", key, files, cmd, done)
+        jid = jobs.submit("explain", key, files, cmd, done, client=client_of(request))
         if jid is None:
             return err(503, "The queue is full right now.")
         return {"ok": True, "job_id": jid, "template": template}
@@ -1088,10 +1143,19 @@ def _template_explanation(review, question, verdicts, offered=None):
         return None
 
 
+def _text_field(value):
+    """A pasted text field: anything but a string counts as empty."""
+    return value if isinstance(value, str) else ""
+
+
 async def _body(request):
     try:
+        limit = PUBLIC_MAX_BODY if PUBLIC else P.MAX_BYTES + P.MAX_EXPORT_BYTES + 4096
+        declared = request.headers.get("content-length", "")
+        if declared.isdigit() and int(declared) > limit:   # refuse before reading it
+            return None
         raw = await request.body()
-        if len(raw) > P.MAX_BYTES + P.MAX_EXPORT_BYTES + 4096:
+        if len(raw) > limit:
             return None
         d = json.loads(raw.decode("utf-8"))
         return d if isinstance(d, dict) else None
