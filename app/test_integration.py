@@ -258,6 +258,22 @@ class OfferedListIntegrationTests(unittest.TestCase):
                 self.assertEqual(json.loads(app.state.jobs.files["verdicts.json"]), {"2:1": verdicts["2:1"]})
 
 
+class PublicCopyTests(unittest.TestCase):
+    def test_public_copy_takes_public_links_only(self):
+        with patch.object(S, "PUBLIC", True):
+            with self.assertRaises(P.InputError):
+                S.resolve_input("|player|p1|A\n|turn|1\n|win|A")
+            with self.assertRaises(P.InputError):
+                S.resolve_input("https://replay.pokemonshowdown.com/gen9ou-1234-abcdefghijklmnopqrstuvwxyzabcdefpw")
+
+    def test_public_copy_blocks_owner_and_path_revealing_routes(self):
+        for path in ("/api/own-ladder", "/api/provenance", "/api/share/r1", "/api/card/r1.svg", "/r/r1",
+                     "/api/review/r1/receipts"):
+            self.assertTrue(S.PUBLIC_BLOCKED.match(path), path)
+        for path in ("/", "/api/health", "/api/review", "/api/review/r1", "/api/job/j1", "/api/explain"):
+            self.assertFalse(S.PUBLIC_BLOCKED.match(path), path)
+
+
 class TemplateGateTests(unittest.TestCase):
     def setUp(self):   # these tests cover the cache and fallback rules; saved showcase answers are tested on their own
         saved = patch.object(S, "SHOW_SAVED_ANSWERS", False)

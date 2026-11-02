@@ -56,6 +56,12 @@ LLM_GATE = threading.Lock()   # at most one model call in flight from this app (
 EXPLAIN_MODE = os.environ.get("HARDREAD_EXPLAIN_MODE", "auto")   # auto | loop | prefetch | template | off
 EXPLANATION_POLICY_VERSION = "offered-scope-v2"
 SHOW_SAVED_ANSWERS = True
+# Public copy (reached only through the tunnel): public replay links only, no owner-only or path-revealing endpoints.
+PUBLIC = os.environ.get("HARDREAD_PUBLIC") == "1"
+PUBLIC_ORIGIN = os.environ.get("HARDREAD_PUBLIC_ORIGIN", "")   # the static site, allowed to read /api/health
+PUBLIC_REVIEWS_PER_HOUR = int(os.environ.get("HARDREAD_PUBLIC_REVIEWS_PER_HOUR", "60"))
+PUBLIC_BLOCKED = re.compile(r"^/(api/own-ladder|api/provenance|api/share/|api/card/|r/|api/review/[^/]+/receipts)")
+_public_reviews = deque()
 VERDICTS_ON = os.environ.get("HARDREAD_DISABLE_VERDICT", "") != "1"
 
 RATES = {"review": int(os.environ.get("HARDREAD_RATE_REVIEWS", "5")),
@@ -446,7 +452,7 @@ def load_view(rid):
     view["features"] = {"verdict": bool(VERDICTS_ON and ctx.get("mode") == "export" and d is not None
                                         and (d / "team.txt").exists()),
                         "explain": EXPLAIN_MODE != "off",
-                        "share": not extra.get("private")}
+                        "share": not extra.get("private") and not PUBLIC, "receipts": not PUBLIC}
     # A view has no current stated-read identity, so no cached decision result
     # can safely be presented as the answer to a read that has not been checked.
     view["verdicts"] = {}
@@ -486,7 +492,9 @@ _FETCHED = {}   # replay id -> (time, replay dict); in memory only, 10 minutes
 
 
 def resolve_input(text):
-    kind, val, _ = P.classify_input(text)
+    kind, val, private = P.classify_input(text)
+    if PUBLIC and (kind != "url" or private):
+        raise P.InputError("This public copy only reviews public replay links.")
     if kind == "url":
         hit = _FETCHED.get(val)
         if hit and time.time() - hit[0] < 600:
@@ -529,7 +537,18 @@ def create_app(concurrency=1, processes=4):
     app.state.jobs = jobs
 
     def client_of(request):
+        if PUBLIC:   # everyone arrives through the tunnel, so the address is in its header
+            return request.headers.get("cf-connecting-ip") or "unknown"
         return request.client.host if request.client else "unknown"
+
+    def public_review_allowed():
+        now = time.time()
+        while _public_reviews and now - _public_reviews[0] > 3600:
+            _public_reviews.popleft()
+        if len(_public_reviews) >= PUBLIC_REVIEWS_PER_HOUR:
+            return False
+        _public_reviews.append(now)
+        return True
 
     def err(status, msg, **kw):
         return JSONResponse({"ok": False, "error": msg, **kw}, status_code=status)
@@ -543,7 +562,11 @@ def create_app(concurrency=1, processes=4):
     async def headers(request, call_next):
         if blocked and request.method == "POST" and client_of(request) in blocked:
             return JSONResponse({"ok": False, "error": "Not available from this address."}, status_code=403)
+        if PUBLIC and PUBLIC_BLOCKED.match(request.url.path):
+            return JSONResponse({"ok": False, "error": "Not available on this public copy."}, status_code=404)
         resp = await call_next(request)
+        if PUBLIC_ORIGIN and request.url.path == "/api/health":
+            resp.headers["Access-Control-Allow-Origin"] = PUBLIC_ORIGIN
         resp.headers["X-Content-Type-Options"] = "nosniff"
         resp.headers["Referrer-Policy"] = "no-referrer"
         resp.headers["Content-Security-Policy"] = (
@@ -558,6 +581,8 @@ def create_app(concurrency=1, processes=4):
         with jobs.lock:
             q = len(jobs.queue)
             r = sum(1 for j in jobs.jobs.values() if j["state"] == "running")
+        if PUBLIC:
+            return {"ok": True, "queue": q, "running": r}
         import bridge_adapter
         return {"ok": True, "queue": q, "running": r, "concurrency": jobs.concurrency,
                 "engine_python": FP_PY.exists(), "bridge": "tools/review/bridge.py" if bridge_adapter._B else "stub",
@@ -653,6 +678,8 @@ def create_app(concurrency=1, processes=4):
         if load_parts(rid) is not None:
             return {"ok": True, "review_id": rid, "cached": True}
         jid = jobs.existing("review:" + key)
+        if PUBLIC and not jid and not public_review_allowed():
+            return err(429, "This public copy has reached its reviews for this hour. The showcases still work; try again later.")
         if jid:
             return {"ok": True, "job_id": jid}
         ok, wait = jobs.allow(client_of(request), "review")
