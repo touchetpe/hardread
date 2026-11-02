@@ -2,11 +2,11 @@
 
 **Chess players get an engine review after every game. Competitive Pokémon players don't, because you can't see the opponent's moves and held items, and dice decide many turns. HardRead reviews a finished game anyway and estimates how much was luck.**
 
-It's for competitive players who want to see which turns were dice and which decisions deserve a second look. It reviews Gen 9 OU, the most popular competitive format, from a [Pokémon Showdown](https://pokemonshowdown.com) replay.
+It's for competitive players who want to see which turns were dice and which decisions deserve a second look. It reviews Gen 9 OU, a main competitive format, from a [Pokémon Showdown](https://pokemonshowdown.com) replay.
 
 **Try it:** [HardRead site](https://touchetpe.github.io/hardread-site/) (saved showcases, plus a link to live review when it's online) · Theme: *Build for Your World*
 
-Built during the Meta Global AI Developer Hackathon with Meta's open **Muse Glimmer** model. Fan-made and not affiliated with Nintendo, The Pokémon Company or Game Freak. 18+.
+New work built during the Meta Global AI Developer Hackathon, on top of the open-source Foul Play engine, with Meta's open **Muse Glimmer** model. Fan-made and not affiliated with Nintendo, The Pokémon Company or Game Freak. 18+.
 
 ## What it does
 
