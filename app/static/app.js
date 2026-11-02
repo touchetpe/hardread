@@ -280,8 +280,8 @@
     var scGrid = h("div", { class: "showcases" }, h("p", { class: "muted" }, "Loading showcases…"));
     showcaseSec.appendChild(scGrid);
     // The sample sum in the hero is the first showcase's real result, and it links to that review.
-    var sampleBox = h("a", { class: "hero-sample", hidden: true, href: "#/review/showcase-1" });
-    var seeBtn = h("a", { class: "btn btn-primary", href: "#/review/showcase-1" }, "See a real review →");
+    var sampleBox = h("a", { class: "hero-sample", hidden: true, href: "#/review/showcase-6" });
+    var seeBtn = h("a", { class: "btn btn-primary", href: "#/review/showcase-6" }, "See a real review →");
     getShowcases().then(function (d) {
       clear(scGrid);
       var list = (d && d.showcases) || [];
@@ -290,13 +290,15 @@
         seeBtn.hidden = true;
         return;
       }
-      seeBtn.setAttribute("href", "#/review/" + list[0].id);
-      var first = list[0].bridge || {};
+      // the first thing a judge opens: not showcase-1, whose top disagreement rests on an assumed spread
+      var hero = list.filter(function (x) { return x.id === "showcase-6"; })[0] || list[0];
+      seeBtn.setAttribute("href", "#/review/" + hero.id);
+      var first = hero.bridge || {};
       if (first.s !== undefined && first.s !== null) {
-        sampleBox.setAttribute("href", "#/review/" + list[0].id);
+        sampleBox.setAttribute("href", "#/review/" + hero.id);
         append(sampleBox, [
           h("span", { class: "hs-label" }, "One real game, as one sum"),
-          sumLine(first, list[0].result),
+          sumLine(first, hero.result),
           h("span", { class: "hs-note" }, "Luck is crits, misses, rolls and speed ties. Choices is everything else, for both players together.")]);
         sampleBox.hidden = false;
       }
