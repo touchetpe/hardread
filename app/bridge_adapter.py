@@ -61,8 +61,8 @@ def compute(review, end_reason=None):
         blk, source = _B.from_review(rv), "tools/review/bridge.py"
     if not blk:
         blk, source = _stub(review, end_reason), "app stub (research/27 4.2)"
-    if not blk:
-        return {"available": False, "tie": False, "source": source}
+    if not blk:   # review.py leaves a tie's result empty and records it in meta.end_reason
+        return {"available": False, "tie": (review.get("meta") or {}).get("end_reason") == "tie", "source": source}
     if blk.get("result") == "tie":
         return {"available": False, "tie": True, "source": source}
     tag = blk.get("end_tag")

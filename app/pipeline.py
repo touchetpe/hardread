@@ -12,6 +12,7 @@ Privacy rules applied here:
 import hashlib
 import html
 import json
+import os
 import re
 import sys
 import urllib.error
@@ -20,6 +21,7 @@ from pathlib import Path
 
 APP = Path(__file__).resolve().parent
 HARDREAD = APP.parent
+FP_DIR = Path(os.environ.get("HARDREAD_FOULPLAY_DIR", HARDREAD / "foul-play"))
 sys.path.insert(0, str(HARDREAD / "tools" / "human"))
 if str(APP) not in sys.path:
     sys.path.insert(0, str(APP))
@@ -50,10 +52,15 @@ class InputError(ValueError):
     """A problem with what the person pasted; the message is shown to them as is."""
 
 
+UNREADABLE_LOG = "That battle log could not be read: it may be cut off or edited. Paste the replay link instead."
+
+
 # ---------------------------------------------------------------- input
 
 def classify_input(text):
     """Return ("url", replay_id, is_private) or ("log", replay_dict, None) for pasted text."""
+    if text is not None and not isinstance(text, str):
+        raise InputError("Paste a replay link or a battle log first.")
     t = (text or "").strip()
     if not t:
         raise InputError("Paste a replay link or a battle log first.")
@@ -92,8 +99,7 @@ def parse_replay_url(url):
     if not m:
         raise InputError("That link is not a replay link.")
     host, path = m.group(1).lower(), m.group(2).strip("/")
-    if host in ("play.pokemonshowdown.com", "pokemonshowdown.com", "www.pokemonshowdown.com") or \
-            path.startswith("battle-"):
+    if path.startswith("battle-"):
         raise InputError("That is a live battle room. HardRead reviews finished games only: "
                          "save the replay and paste its replay.pokemonshowdown.com link.")
     if host != REPLAY_HOST:
@@ -151,7 +157,10 @@ def inspect_game(rep):
         raise InputError("This game has not finished (no winner in the log). HardRead reviews finished games only.")
     if any(ln.startswith("|gametype|") and "singles" not in ln for ln in lines):
         raise InputError("HardRead reviews singles only.")
-    g = PR.GameParser({"log": log}, None, set()).run()
+    try:
+        g = PR.GameParser({"log": log}, None, set()).run()
+    except Exception:  # noqa: BLE001  (pasted text can be anything: the parser's failure is not the person's to read)
+        raise InputError(UNREADABLE_LOG)
     s1, s2 = g.sides["p1"], g.sides["p2"]
     if len(s1.roster) < 6 or len(s2.roster) < 6:
         raise InputError("This log has no full team preview (6 Pokemon each).")
@@ -166,13 +175,74 @@ def inspect_game(rep):
             if "*" in m.species_preview and m.seen:
                 m.species_preview = m.species
     names = {"p1": s1.name, "p2": s2.name}
-    return {"parser": g, "names": names, "turns": g.turn, "end_reason": g.end_reason,
+    return {"parser": g, "names": names, "turns": g.turn, "end_reason": "tie" if g.winner == "tie" else g.end_reason,
             "winner": g.winner, "flags": dict(g.flags)}
 
 
+# Tags whose fields are the game's own vocabulary: a username can only appear in their Pokemon identifiers (a nickname).
+_NO_FREE_TEXT_TAGS = {"poke", "switch", "drag", "move", "cant", "faint", "turn", "upkeep", "start", "teampreview",
+                      "teamsize", "clearpoke", "tier", "gametype", "gen", "rule", "rated", "t:", "detailschange",
+                      "replace", "swap", "tie", "timer"}
+_IDENT_FIELD = re.compile(r"^(\[of\] )?(p[12])([a-c]?): (.*)$", re.S)
+
+
 def sanitized_lines(rep, names):
-    """Protocol lines with names replaced by Player1/Player2 and chat/html dropped."""
-    return PR.sanitize_log(rep["log"], names, PSEUDO)
+    """Protocol lines with names replaced by Player1/Player2 and chat/html dropped.
+
+    Same output as parse_replays.sanitize_log for ordinary names, but a name is only replaced where the protocol can
+    carry one. Replacing it everywhere corrupts the game when a username is also part of the game's vocabulary: a
+    player called "Rock" turned Stealth Rock into "Stealth Player1", one called "a" broke the |player| and |win| lines.
+    """
+    scrubbers = [(re.compile(re.escape(v), re.I), pseudo) for v, pseudo in sorted(
+        {(v, PSEUDO[sd]) for sd, nm in names.items() for v in (nm, PR.norm(nm)) if len(v) >= 4},
+        key=lambda x: (-len(x[0]), x[0]))]   # longest first: "Bob7" must not eat the start of "Bob7by"
+
+    def scrub(text):
+        for rx, pseudo in scrubbers:
+            text = rx.sub(pseudo, text)
+        return text
+
+    def ident(field):
+        m = _IDENT_FIELD.match(field)
+        if not m:
+            return field
+        of, sd, pos, nick = m.groups()
+        nick = PSEUDO[sd] if not pos and nick == names.get(sd) else scrub(nick)
+        return f"{of or ''}{sd}{pos}: {nick}"
+
+    def message(text):
+        for sd, nm in names.items():
+            if nm and text.startswith(nm + " "):   # "<name> forfeited."
+                return PSEUDO[sd] + text[len(nm):]
+        return scrub(text)
+
+    out = []
+    for ln in rep["log"].split("\n"):
+        if not ln.startswith("|"):
+            continue
+        p = ln.split("|")
+        tag = p[1] if len(p) > 1 else ""
+        if tag in PR.SKIP_LOG_TAGS and tag != "":
+            continue
+        if tag == "" and ln.strip() in ("", "|"):
+            out.append("|")
+            continue
+        if tag == "player":
+            if len(p) > 3 and p[3] and p[2] in PSEUDO:
+                p[3] = PSEUDO[p[2]]
+            if len(p) > 4:   # custom avatars can be named after the user
+                p[4] = ""
+        elif tag == "win":
+            winner = next((PSEUDO[sd] for sd, nm in names.items() if len(p) > 2 and p[2] == nm), None)
+            p[2:] = [winner if winner else scrub(x) for x in p[2:]]
+        elif tag == "-message":
+            p[2:] = [message(x) for x in p[2:]]
+        elif tag in _NO_FREE_TEXT_TAGS or (tag.startswith("-") and tag != "-message"):
+            p[2:] = [ident(x) for x in p[2:]]
+        else:   # anything unexpected is treated as free text: privacy first
+            p[2:] = [scrub(x) for x in p[2:]]
+        out.append("|".join(p))
+    return out
 
 
 def side_rows(game, side):
@@ -212,6 +282,8 @@ def active_by_decision(game, side, which="self_active"):
 
 def parse_export(text):
     """Species list of a Showdown team export (nicknames allowed). Raises InputError if it is not one."""
+    if text is not None and not isinstance(text, str):
+        raise InputError("That does not look like a Showdown team export (Export button in the teambuilder).")
     t = (text or "").strip()
     if not t:
         return []
@@ -254,9 +326,13 @@ def prepare(rep, side, team_text=None, game=None):
     if side not in ("p1", "p2"):
         raise InputError("Pick the side you played.")
     lines = sanitized_lines(rep, game["names"])
+    export = parse_export(team_text)
     team_text = (team_text or "").strip() or None
-    if team_text:
-        parse_export(team_text)
+    if team_text:   # otherwise the engine stops on the first Pokemon it cannot find in the export
+        roster = {PR.base_species(m.species_preview) for m in game["parser"].sides[side].roster}
+        if len({PR.base_species(s) for s in export} & roster) < 4:
+            raise InputError("That team export does not match this side's team preview. "
+                             "Check the side you picked and the team you pasted.")
     opp = "p2" if side == "p1" else "p1"
     ctx = {"mode": "export" if team_text else "draft", "side": side, "end_reason": game["end_reason"],
            "turns": game["turns"], "winner": game["winner"], "names": name_table(lines),
@@ -318,7 +394,7 @@ def _base_names():
     global _BASE_NAMES
     if _BASE_NAMES is None:
         t = {}
-        data = HARDREAD / "foul-play" / "fp" / "data"
+        data = FP_DIR / "fp" / "data"
         try:
             for k, v in json.loads((data / "pokedex.json").read_text()).items():
                 nm = v.get("name") or k
@@ -351,7 +427,7 @@ def is_damaging(action):
         return False
     if _MOVES is None:
         try:
-            _MOVES = json.loads((HARDREAD / "foul-play" / "fp" / "data" / "moves.json").read_text())
+            _MOVES = json.loads((FP_DIR / "fp" / "data" / "moves.json").read_text())
         except (OSError, ValueError):
             _MOVES = {}
     mid = _norm(str(action)[:-5] if str(action).endswith("-tera") else action)
@@ -555,7 +631,7 @@ _SETS = None
 def _set_counts():
     global _SETS
     if _SETS is None:
-        p = HARDREAD / "foul-play" / "fp" / "data" / "pkmn_sets_cache" / "gen9ou" / "pokemon_full_sets.json"
+        p = FP_DIR / "fp" / "data" / "pkmn_sets_cache" / "gen9ou" / "pokemon_full_sets.json"
         try:
             _SETS = json.loads(p.read_text())
         except (OSError, ValueError):
