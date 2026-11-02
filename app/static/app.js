@@ -548,6 +548,7 @@
       h("p", { class: "card-sub" }, "At the start of each turn. ▲ / ▼ mark turns where luck moved it by 3 points or more; ◆ marks a clear disagreement with the engine."),
       wpChart(v));
 
+    var oneDecision = oneDecisionCard(v);
     var disCard = h("section", { class: "card", "aria-labelledby": "dis-title" },
       h("h2", { id: "dis-title" }, "Biggest disagreements with the engine"),
       h("p", { class: "card-sub" }, "Up to three decisions made while the game was still open (win chance 20–80%) where the engine preferred another option by 5 points or more. Never added up: one search can be off by about 3 points."),
@@ -566,8 +567,20 @@
       exCard.scrollIntoView({ behavior: "smooth", block: "start" });
     } }, "Jump to Muse Glimmer's explanation ↓"));
     var nodes = [head, h("div", { class: "grid-2 review-grid" },
-      h("div", { class: "stack" }, bridgeCard, wpCard, disCard), h("div", { class: "stack" }, exCard, luckCard, aboutCard(v))), receipts];
+      h("div", { class: "stack" }, bridgeCard, oneDecision, wpCard, disCard), h("div", { class: "stack" }, exCard, luckCard, aboutCard(v))), receipts];
     show(nodes, title, focus);
+  }
+
+  // ---- what to do with a review: one place to start, chosen by the largest gap on the list below
+  function oneDecisionCard(v) {
+    var top = (v.disagreements || []).slice().sort(function (x, y) { return y.gap_pts - x.gap_pts; })[0];
+    if (!top) return null;
+    return h("section", { class: "card one-decision", "aria-labelledby": "one-title" },
+      h("h2", { id: "one-title" }, "The one decision to look at again"),
+      h("p", null, h("b", null, "Turn " + top.turn + ". "), "You chose ", h("b", null, top.chosen), ". The engine preferred ", h("b", null, top.best),
+        " by " + top.gap_pts + " points of win chance (search noise about ±3)."),
+      h("p", { class: "hint" }, (top.ev_caveat ? "This may depend on your exact EVs, so add your team export to check. " : "") +
+        "It's the largest gap on the list below, and a place to start thinking, not a verdict: the engine can be wrong, especially about what you knew at the time."));
   }
 
   // ---- the bridge: four bars on one points axis, each anchored at zero (never a running total)
