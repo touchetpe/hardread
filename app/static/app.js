@@ -6,6 +6,15 @@
   "use strict";
 
   var STATIC = window.HARDREAD_STATIC || null;
+  // On the static site, live.json names the live app. Its address can change, so the site asks rather than assumes.
+  function liveStatus(done) {
+    var timer = function (ms) { var c = new AbortController(); setTimeout(function () { c.abort(); }, ms); return c.signal; };
+    fetch("live.json", { cache: "no-store", signal: timer(4000) }).then(function (r) { return r.json(); }).then(function (l) {
+      if (!l.url) return done(null);
+      return fetch(l.url + "/api/health", { cache: "no-store", signal: timer(5000) }).then(function (r) { return r.json(); })
+        .then(function (hh) { done(hh && hh.ok ? l.url : null); });
+    }).catch(function () { done(null); });
+  }
   var PUBLIC_COPY = !!document.querySelector('meta[name="hardread-public"]');
   var SVGNS = "http://www.w3.org/2000/svg";
   var MINUS = "−";
@@ -192,7 +201,17 @@
     });
     if (STATIC) {
       input.disabled = true; exportBox.disabled = true; go.disabled = true;
-      showError("This is a static copy of HardRead: open the app to review your own games. The showcases below work.");
+      showError("This page keeps saved showcase reviews. Checking whether live review is online…");
+      liveStatus(function (url) {
+        var note = form.parentNode.querySelector(".error, .form-error, [role=alert]");
+        if (url) {
+          showError("");
+          form.parentNode.insertBefore(h("p", { class: "live-link" }, h("a", { class: "btn", href: url }, "Review your own game on the live app →"),
+            h("span", { class: "hint" }, " It runs on the builder's own computer, one review at a time, so you may have to wait.")), form);
+        } else if (note) {
+          showError("Live review is temporarily offline. The saved showcases below still work.");
+        }
+      });
     }
 
     form.addEventListener("submit", function (e) {
@@ -434,7 +453,7 @@
     ["evaluate", "Searching each of your decisions"], ["luck", "Measuring every chance event"]];
   function renderJob(id) {
     lastRender = null;
-    if (STATIC) { show([h("p", null, "Reviews need the HardRead app.")], "Review"); return; }
+    if (STATIC) { show([h("p", null, "This page only keeps the saved showcases. Reviews of your own games run on the live app, linked from the home page.")], "Review"); return; }
     var fill = h("div", { class: "progress-fill" });
     var bar = h("div", { class: "progress-track", role: "progressbar", "aria-valuemin": 0, "aria-valuemax": 100, "aria-valuenow": 0, "aria-label": "Review progress" }, fill);
     var msg = h("p", { class: "muted", "aria-live": "polite", style: "margin:0" }, "Starting…");
