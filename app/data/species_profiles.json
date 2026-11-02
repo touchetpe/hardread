@@ -1,0 +1,2561 @@
+{
+ "Great Tusk": {
+  "seen_n": 1264,
+  "items": {
+   "Booster Energy": 0.442,
+   "Rocky Helmet": 0.281,
+   "Leftovers": 0.197,
+   "Heavy-Duty Boots": 0.039,
+   "Life Orb": 0.015
+  },
+  "item_revealed_rate": 0.53,
+  "abilities": {
+   "Protosynthesis": 0.983,
+   "Poison Puppeteer": 0.011,
+   "Pickpocket": 0.004
+  },
+  "ability_revealed_rate": 0.373,
+  "tera": {
+   "Ground": 0.196,
+   "Steel": 0.167,
+   "Fighting": 0.137,
+   "Ghost": 0.118
+  },
+  "tera_used_rate": 0.081,
+  "moves": {
+   "Headlong Rush": 0.497,
+   "Rapid Spin": 0.452,
+   "Ice Spinner": 0.337,
+   "Stealth Rock": 0.28,
+   "Close Combat": 0.146,
+   "Knock Off": 0.078,
+   "Bulk Up": 0.069,
+   "Earthquake": 0.039,
+   "Head Smash": 0.026,
+   "Taunt": 0.013
+  }
+ },
+ "Gholdengo": {
+  "seen_n": 1129,
+  "items": {
+   "Air Balloon": 0.593,
+   "Leftovers": 0.088,
+   "Grassy Seed": 0.08,
+   "Choice Scarf": 0.07,
+   "Life Orb": 0.048
+  },
+  "item_revealed_rate": 0.607,
+  "abilities": {
+   "Good as Gold": 1.0
+  },
+  "ability_revealed_rate": 0.063,
+  "tera": {
+   "Fairy": 0.484,
+   "Steel": 0.157,
+   "Ghost": 0.113,
+   "Fighting": 0.113
+  },
+  "tera_used_rate": 0.141,
+  "moves": {
+   "Shadow Ball": 0.524,
+   "Make It Rain": 0.43,
+   "Nasty Plot": 0.262,
+   "Recover": 0.188,
+   "Trick": 0.182,
+   "Thunder Wave": 0.07,
+   "Focus Blast": 0.067,
+   "Hex": 0.05,
+   "Thunderbolt": 0.033,
+   "Dazzling Gleam": 0.03
+  }
+ },
+ "Kingambit": {
+  "seen_n": 1031,
+  "items": {
+   "Leftovers": 0.813,
+   "Air Balloon": 0.148,
+   "Black Glasses": 0.015,
+   "Lum Berry": 0.007,
+   "Life Orb": 0.006
+  },
+  "item_revealed_rate": 0.663,
+  "abilities": {
+   "Supreme Overlord": 0.998,
+   "Defiant": 0.002
+  },
+  "ability_revealed_rate": 0.884,
+  "tera": {
+   "Ghost": 0.527,
+   "Dark": 0.162,
+   "Flying": 0.091,
+   "Bug": 0.087
+  },
+  "tera_used_rate": 0.234,
+  "moves": {
+   "Sucker Punch": 0.518,
+   "Iron Head": 0.443,
+   "Swords Dance": 0.415,
+   "Kowtow Cleave": 0.349,
+   "Low Kick": 0.191,
+   "Stone Edge": 0.002,
+   "Brick Break": 0.001,
+   "Substitute": 0.001
+  }
+ },
+ "Zamazenta": {
+  "seen_n": 928,
+  "items": {
+   "Leftovers": 0.745,
+   "Life Orb": 0.185,
+   "Light Clay": 0.03,
+   "Heavy-Duty Boots": 0.013,
+   "Chesto Berry": 0.013
+  },
+  "item_revealed_rate": 0.651,
+  "abilities": {
+   "Dauntless Shield": 1.0
+  },
+  "ability_revealed_rate": 1.0,
+  "tera": {
+   "Steel": 0.291,
+   "Fire": 0.236,
+   "Poison": 0.2,
+   "Dark": 0.191
+  },
+  "tera_used_rate": 0.119,
+  "moves": {
+   "Body Press": 0.44,
+   "Crunch": 0.434,
+   "Iron Defense": 0.323,
+   "Close Combat": 0.242,
+   "Roar": 0.141,
+   "Heavy Slam": 0.102,
+   "Reflect": 0.101,
+   "Light Screen": 0.1,
+   "Ice Fang": 0.081,
+   "Stone Edge": 0.069
+  }
+ },
+ "Ogerpon-Wellspring": {
+  "seen_n": 850,
+  "items": {},
+  "item_revealed_rate": 0.0,
+  "abilities": {
+   "Embody Aspect (Wellspring)": 0.693,
+   "Water Absorb": 0.298,
+   "Poison Puppeteer": 0.01
+  },
+  "ability_revealed_rate": 0.241,
+  "tera": {
+   "Water": 1.0
+  },
+  "tera_used_rate": 0.179,
+  "moves": {
+   "Ivy Cudgel": 0.706,
+   "Swords Dance": 0.252,
+   "Knock Off": 0.195,
+   "U-turn": 0.184,
+   "Horn Leech": 0.144,
+   "Play Rough": 0.126,
+   "Encore": 0.119,
+   "Power Whip": 0.114,
+   "Trailblaze": 0.101,
+   "Synthesis": 0.1
+  }
+ },
+ "Raging Bolt": {
+  "seen_n": 795,
+  "items": {
+   "Booster Energy": 0.595,
+   "Leftovers": 0.313,
+   "Life Orb": 0.04,
+   "Shuca Berry": 0.013,
+   "Sitrus Berry": 0.01
+  },
+  "item_revealed_rate": 0.758,
+  "abilities": {
+   "Protosynthesis": 0.985,
+   "Poison Puppeteer": 0.015
+  },
+  "ability_revealed_rate": 0.579,
+  "tera": {
+   "Bug": 0.44,
+   "Fairy": 0.331,
+   "Ghost": 0.108,
+   "Fire": 0.042
+  },
+  "tera_used_rate": 0.209,
+  "moves": {
+   "Thunderbolt": 0.462,
+   "Dragon Pulse": 0.462,
+   "Thunderclap": 0.379,
+   "Calm Mind": 0.278,
+   "Draco Meteor": 0.133,
+   "Volt Switch": 0.118,
+   "Weather Ball": 0.062,
+   "Thunder": 0.045,
+   "Solar Beam": 0.004,
+   "Discharge": 0.004
+  }
+ },
+ "Dragonite": {
+  "seen_n": 645,
+  "items": {
+   "Heavy-Duty Boots": 0.324,
+   "Life Orb": 0.317,
+   "Leftovers": 0.239,
+   "Loaded Dice": 0.028,
+   "Lum Berry": 0.028
+  },
+  "item_revealed_rate": 0.22,
+  "abilities": {
+   "Poison Puppeteer": 1.0
+  },
+  "ability_revealed_rate": 0.016,
+  "tera": {
+   "Normal": 0.63,
+   "Ground": 0.188,
+   "Fire": 0.122,
+   "Poison": 0.022
+  },
+  "tera_used_rate": 0.281,
+  "moves": {
+   "Dragon Dance": 0.476,
+   "Earthquake": 0.462,
+   "Extreme Speed": 0.454,
+   "Roost": 0.229,
+   "Ice Spinner": 0.135,
+   "Dragon Tail": 0.104,
+   "Outrage": 0.104,
+   "Fire Punch": 0.062,
+   "Scale Shot": 0.051,
+   "Encore": 0.045
+  }
+ },
+ "Iron Valiant": {
+  "seen_n": 638,
+  "items": {
+   "Booster Energy": 0.954,
+   "Life Orb": 0.026,
+   "Choice Specs": 0.004,
+   "Heavy-Duty Boots": 0.004,
+   "Leftovers": 0.004
+  },
+  "item_revealed_rate": 0.718,
+  "abilities": {
+   "Quark Drive": 0.998,
+   "Pickpocket": 0.002
+  },
+  "ability_revealed_rate": 0.691,
+  "tera": {
+   "Ghost": 0.494,
+   "Steel": 0.2,
+   "Fairy": 0.118,
+   "Dark": 0.082
+  },
+  "tera_used_rate": 0.133,
+  "moves": {
+   "Moonblast": 0.591,
+   "Knock Off": 0.303,
+   "Close Combat": 0.219,
+   "Calm Mind": 0.168,
+   "Thunderbolt": 0.133,
+   "Shadow Ball": 0.132,
+   "Encore": 0.121,
+   "Swords Dance": 0.08,
+   "Vacuum Wave": 0.05,
+   "Spirit Break": 0.038
+  }
+ },
+ "Kyurem": {
+  "seen_n": 608,
+  "items": {
+   "Leftovers": 0.588,
+   "Assault Vest": 0.211,
+   "Loaded Dice": 0.088,
+   "Choice Specs": 0.035,
+   "Heavy-Duty Boots": 0.026
+  },
+  "item_revealed_rate": 0.188,
+  "abilities": {
+   "Pressure": 1.0
+  },
+  "ability_revealed_rate": 1.0,
+  "tera": {
+   "Ice": 0.302,
+   "Ground": 0.294,
+   "Poison": 0.206,
+   "Ghost": 0.071
+  },
+  "tera_used_rate": 0.207,
+  "moves": {
+   "Freeze-Dry": 0.452,
+   "Earth Power": 0.408,
+   "Ice Beam": 0.383,
+   "Icicle Spear": 0.102,
+   "Blizzard": 0.086,
+   "Draco Meteor": 0.081,
+   "Substitute": 0.081,
+   "Dragon Dance": 0.077,
+   "Protect": 0.066,
+   "Body Press": 0.039
+  }
+ },
+ "Gliscor": {
+  "seen_n": 598,
+  "items": {
+   "Toxic Orb": 1.0
+  },
+  "item_revealed_rate": 0.968,
+  "abilities": {
+   "Poison Heal": 0.996,
+   "Poison Puppeteer": 0.002,
+   "Pickpocket": 0.002
+  },
+  "ability_revealed_rate": 0.841,
+  "tera": {
+   "Dark": 0.433,
+   "Normal": 0.307,
+   "Water": 0.227,
+   "Fairy": 0.02
+  },
+  "tera_used_rate": 0.251,
+  "moves": {
+   "Protect": 0.789,
+   "Knock Off": 0.545,
+   "Toxic": 0.488,
+   "Earthquake": 0.334,
+   "Substitute": 0.273,
+   "Swords Dance": 0.182,
+   "Facade": 0.161,
+   "Spikes": 0.055,
+   "Stealth Rock": 0.043,
+   "Agility": 0.037
+  }
+ },
+ "Iron Treads": {
+  "seen_n": 566,
+  "items": {
+   "Booster Energy": 0.536,
+   "Leftovers": 0.395,
+   "Air Balloon": 0.039,
+   "Heavy-Duty Boots": 0.008,
+   "Earth Plate": 0.006
+  },
+  "item_revealed_rate": 0.867,
+  "abilities": {
+   "Quark Drive": 1.0
+  },
+  "ability_revealed_rate": 0.468,
+  "tera": {
+   "Ghost": 0.714,
+   "Ground": 0.095,
+   "Water": 0.095,
+   "Ice": 0.048
+  },
+  "tera_used_rate": 0.037,
+  "moves": {
+   "Stealth Rock": 0.5,
+   "Earthquake": 0.468,
+   "Rapid Spin": 0.415,
+   "Knock Off": 0.27,
+   "Ice Spinner": 0.15,
+   "Iron Head": 0.09,
+   "Steel Beam": 0.049,
+   "Earth Power": 0.032,
+   "Volt Switch": 0.016,
+   "Endeavor": 0.014
+  }
+ },
+ "Samurott-Hisui": {
+  "seen_n": 532,
+  "items": {
+   "Focus Sash": 0.456,
+   "Assault Vest": 0.281,
+   "Heavy-Duty Boots": 0.105,
+   "Choice Scarf": 0.088,
+   "Black Sludge": 0.018
+  },
+  "item_revealed_rate": 0.107,
+  "abilities": {
+   "Poison Puppeteer": 0.5,
+   "Pickpocket": 0.25,
+   "Cute Charm": 0.25
+  },
+  "ability_revealed_rate": 0.008,
+  "tera": {
+   "Dark": 0.379,
+   "Poison": 0.276,
+   "Ghost": 0.207,
+   "Water": 0.069
+  },
+  "tera_used_rate": 0.055,
+  "moves": {
+   "Ceaseless Edge": 0.773,
+   "Sucker Punch": 0.267,
+   "Razor Shell": 0.229,
+   "Knock Off": 0.188,
+   "Flip Turn": 0.141,
+   "Aqua Cutter": 0.092,
+   "Swords Dance": 0.056,
+   "Encore": 0.049,
+   "Taunt": 0.026,
+   "Aqua Jet": 0.015
+  }
+ },
+ "Slowking-Galar": {
+  "seen_n": 513,
+  "items": {
+   "Rocky Helmet": 0.392,
+   "Assault Vest": 0.203,
+   "Heavy-Duty Boots": 0.142,
+   "Black Sludge": 0.113,
+   "Colbur Berry": 0.075
+  },
+  "item_revealed_rate": 0.413,
+  "abilities": {
+   "Regenerator": 1.0
+  },
+  "ability_revealed_rate": 0.002,
+  "tera": {
+   "Water": 0.471,
+   "Fairy": 0.216,
+   "Grass": 0.157,
+   "Dark": 0.059
+  },
+  "tera_used_rate": 0.099,
+  "moves": {
+   "Sludge Bomb": 0.433,
+   "Chilly Reception": 0.421,
+   "Future Sight": 0.242,
+   "Psychic Noise": 0.166,
+   "Flamethrower": 0.136,
+   "Ice Beam": 0.127,
+   "Thunder Wave": 0.084,
+   "Psyshock": 0.047,
+   "Trick": 0.043,
+   "Focus Blast": 0.039
+  }
+ },
+ "Landorus-Therian": {
+  "seen_n": 510,
+  "items": {
+   "Rocky Helmet": 0.927,
+   "Choice Scarf": 0.035,
+   "Leftovers": 0.023,
+   "Focus Sash": 0.012,
+   "Assault Vest": 0.004
+  },
+  "item_revealed_rate": 0.51,
+  "abilities": {
+   "Intimidate": 1.0
+  },
+  "ability_revealed_rate": 0.998,
+  "tera": {
+   "Ground": 0.346,
+   "Water": 0.269,
+   "Ghost": 0.192,
+   "Steel": 0.115
+  },
+  "tera_used_rate": 0.051,
+  "moves": {
+   "U-turn": 0.598,
+   "Stealth Rock": 0.478,
+   "Earth Power": 0.296,
+   "Earthquake": 0.286,
+   "Taunt": 0.171,
+   "Stone Edge": 0.086,
+   "Grass Knot": 0.035,
+   "Rock Tomb": 0.012,
+   "Smack Down": 0.006,
+   "Weather Ball": 0.006
+  }
+ },
+ "Cinderace": {
+  "seen_n": 473,
+  "items": {
+   "Heavy-Duty Boots": 0.889,
+   "Life Orb": 0.044,
+   "Choice Scarf": 0.022,
+   "Choice Band": 0.022,
+   "Flame Plate": 0.022
+  },
+  "item_revealed_rate": 0.095,
+  "abilities": {
+   "Libero": 0.993,
+   "Poison Puppeteer": 0.007
+  },
+  "ability_revealed_rate": 0.292,
+  "tera": {
+   "Fire": 0.621,
+   "Ghost": 0.241,
+   "Bug": 0.069,
+   "Grass": 0.034
+  },
+  "tera_used_rate": 0.061,
+  "moves": {
+   "Pyro Ball": 0.564,
+   "U-turn": 0.505,
+   "Court Change": 0.412,
+   "Will-O-Wisp": 0.256,
+   "Sucker Punch": 0.063,
+   "High Jump Kick": 0.032,
+   "Gunk Shot": 0.03,
+   "Swords Dance": 0.015,
+   "Low Kick": 0.013,
+   "Flare Blitz": 0.004
+  }
+ },
+ "Clefable": {
+  "seen_n": 457,
+  "items": {
+   "Leftovers": 0.66,
+   "Rocky Helmet": 0.142,
+   "Sticky Barb": 0.13,
+   "Heavy-Duty Boots": 0.049,
+   "Covert Cloak": 0.012
+  },
+  "item_revealed_rate": 0.354,
+  "abilities": {
+   "Poison Puppeteer": 0.8,
+   "Cursed Body": 0.2
+  },
+  "ability_revealed_rate": 0.011,
+  "tera": {
+   "Steel": 0.551,
+   "Water": 0.286,
+   "Poison": 0.122,
+   "Dark": 0.02
+  },
+  "tera_used_rate": 0.107,
+  "moves": {
+   "Moonblast": 0.639,
+   "Moonlight": 0.431,
+   "Stealth Rock": 0.389,
+   "Knock Off": 0.368,
+   "Cosmic Power": 0.138,
+   "Calm Mind": 0.112,
+   "Thunder Wave": 0.055,
+   "Charge Beam": 0.053,
+   "Flamethrower": 0.02,
+   "Protect": 0.015
+  }
+ },
+ "Corviknight": {
+  "seen_n": 435,
+  "items": {
+   "Leftovers": 0.672,
+   "Rocky Helmet": 0.323,
+   "Eject Button": 0.003,
+   "Covert Cloak": 0.003
+  },
+  "item_revealed_rate": 0.876,
+  "abilities": {
+   "Pressure": 0.991,
+   "Mirror Armor": 0.007,
+   "Unnerve": 0.002
+  },
+  "ability_revealed_rate": 0.979,
+  "tera": {
+   "Dragon": 0.6,
+   "Ghost": 0.133,
+   "Ice": 0.133,
+   "Fire": 0.067
+  },
+  "tera_used_rate": 0.034,
+  "moves": {
+   "Roost": 0.526,
+   "Brave Bird": 0.517,
+   "Defog": 0.434,
+   "Protect": 0.393,
+   "U-turn": 0.269,
+   "Body Press": 0.099,
+   "Iron Defense": 0.064,
+   "Bulk Up": 0.032,
+   "Power Trip": 0.007,
+   "Drill Peck": 0.005
+  }
+ },
+ "Ting-Lu": {
+  "seen_n": 423,
+  "items": {
+   "Leftovers": 0.748,
+   "Rocky Helmet": 0.149,
+   "Red Card": 0.046,
+   "Weakness Policy": 0.043,
+   "Custap Berry": 0.011
+  },
+  "item_revealed_rate": 0.872,
+  "abilities": {
+   "Vessel of Ruin": 1.0
+  },
+  "ability_revealed_rate": 0.998,
+  "tera": {
+   "Water": 0.524,
+   "Poison": 0.214,
+   "Ghost": 0.167,
+   "Fire": 0.048
+  },
+  "tera_used_rate": 0.099,
+  "moves": {
+   "Stealth Rock": 0.546,
+   "Earthquake": 0.527,
+   "Ruination": 0.499,
+   "Whirlwind": 0.248,
+   "Spikes": 0.165,
+   "Payback": 0.076,
+   "Rest": 0.066,
+   "Heavy Slam": 0.031,
+   "Sleep Talk": 0.024,
+   "Stone Edge": 0.014
+  }
+ },
+ "Glimmora": {
+  "seen_n": 397,
+  "items": {
+   "Red Card": 0.492,
+   "Power Herb": 0.25,
+   "Focus Sash": 0.181,
+   "Leftovers": 0.035,
+   "Passho Berry": 0.027
+  },
+  "item_revealed_rate": 0.655,
+  "abilities": {
+   "Toxic Debris": 1.0
+  },
+  "ability_revealed_rate": 0.688,
+  "tera": {
+   "Ghost": 0.833,
+   "Grass": 0.083,
+   "Ground": 0.042,
+   "Fairy": 0.042
+  },
+  "tera_used_rate": 0.06,
+  "moves": {
+   "Stealth Rock": 0.486,
+   "Earth Power": 0.338,
+   "Mortal Spin": 0.315,
+   "Meteor Beam": 0.159,
+   "Power Gem": 0.141,
+   "Spikes": 0.078,
+   "Sludge Wave": 0.033,
+   "Energy Ball": 0.015,
+   "Sludge Bomb": 0.008,
+   "Spiky Shield": 0.003
+  }
+ },
+ "Iron Moth": {
+  "seen_n": 376,
+  "items": {
+   "Booster Energy": 0.948,
+   "Heavy-Duty Boots": 0.026,
+   "Power Herb": 0.013,
+   "Choice Specs": 0.009,
+   "Air Balloon": 0.004
+  },
+  "item_revealed_rate": 0.609,
+  "abilities": {
+   "Quark Drive": 1.0
+  },
+  "ability_revealed_rate": 0.582,
+  "tera": {
+   "Grass": 0.646,
+   "Fairy": 0.208,
+   "Fire": 0.104,
+   "Ghost": 0.021
+  },
+  "tera_used_rate": 0.128,
+  "moves": {
+   "Fiery Dance": 0.745,
+   "Sludge Wave": 0.306,
+   "Substitute": 0.146,
+   "Energy Ball": 0.133,
+   "Overheat": 0.082,
+   "Morning Sun": 0.077,
+   "Toxic": 0.074,
+   "Dazzling Gleam": 0.059,
+   "Toxic Spikes": 0.045,
+   "Psychic": 0.045
+  }
+ },
+ "Dragapult": {
+  "seen_n": 372,
+  "items": {
+   "Life Orb": 0.595,
+   "Heavy-Duty Boots": 0.157,
+   "Leftovers": 0.124,
+   "Focus Sash": 0.058,
+   "Choice Specs": 0.041
+  },
+  "item_revealed_rate": 0.325,
+  "abilities": {
+   "Clear Body": 0.8,
+   "Cursed Body": 0.2
+  },
+  "ability_revealed_rate": 0.013,
+  "tera": {
+   "Ghost": 0.656,
+   "Dragon": 0.25,
+   "Fairy": 0.062,
+   "Steel": 0.031
+  },
+  "tera_used_rate": 0.086,
+  "moves": {
+   "Dragon Darts": 0.339,
+   "Hex": 0.32,
+   "Will-O-Wisp": 0.301,
+   "Shadow Ball": 0.239,
+   "Draco Meteor": 0.239,
+   "U-turn": 0.231,
+   "Substitute": 0.108,
+   "Thunder Wave": 0.059,
+   "Fire Blast": 0.054,
+   "Flamethrower": 0.019
+  }
+ },
+ "Hatterene": {
+  "seen_n": 370,
+  "items": {
+   "Leftovers": 0.405,
+   "Rocky Helmet": 0.231,
+   "Eject Button": 0.149,
+   "Focus Sash": 0.066,
+   "Custap Berry": 0.066
+  },
+  "item_revealed_rate": 0.654,
+  "abilities": {
+   "Magic Bounce": 0.964,
+   "Poison Puppeteer": 0.018,
+   "Pressure": 0.018
+  },
+  "ability_revealed_rate": 0.149,
+  "tera": {
+   "Water": 0.462,
+   "Flying": 0.192,
+   "Steel": 0.115,
+   "Psychic": 0.038
+  },
+  "tera_used_rate": 0.07,
+  "moves": {
+   "Draining Kiss": 0.365,
+   "Psychic Noise": 0.346,
+   "Nuzzle": 0.265,
+   "Trick Room": 0.189,
+   "Healing Wish": 0.162,
+   "Mystical Fire": 0.159,
+   "Calm Mind": 0.122,
+   "Pain Split": 0.081,
+   "Dazzling Gleam": 0.07,
+   "Psyshock": 0.046
+  }
+ },
+ "Cresselia": {
+  "seen_n": 339,
+  "items": {
+   "Leftovers": 0.569,
+   "Rocky Helmet": 0.262,
+   "Eject Button": 0.104,
+   "Mental Herb": 0.031,
+   "Covert Cloak": 0.019
+  },
+  "item_revealed_rate": 0.767,
+  "abilities": {
+   "Levitate": 0.902,
+   "Poison Puppeteer": 0.098
+  },
+  "ability_revealed_rate": 0.121,
+  "tera": {
+   "Electric": 0.407,
+   "Poison": 0.288,
+   "Fairy": 0.271,
+   "Steel": 0.017
+  },
+  "tera_used_rate": 0.174,
+  "moves": {
+   "Calm Mind": 0.431,
+   "Moonlight": 0.348,
+   "Ice Beam": 0.298,
+   "Thunder Wave": 0.236,
+   "Moonblast": 0.221,
+   "Lunar Dance": 0.174,
+   "Thunderbolt": 0.147,
+   "Stored Power": 0.121,
+   "Trick Room": 0.106,
+   "Lunar Blessing": 0.074
+  }
+ },
+ "Ceruledge": {
+  "seen_n": 337,
+  "items": {
+   "Life Orb": 0.395,
+   "Focus Sash": 0.295,
+   "Air Balloon": 0.29,
+   "Leftovers": 0.015,
+   "Weakness Policy": 0.005
+  },
+  "item_revealed_rate": 0.593,
+  "abilities": {
+   "Weak Armor": 0.977,
+   "Flash Fire": 0.016,
+   "Poison Puppeteer": 0.008
+  },
+  "ability_revealed_rate": 0.383,
+  "tera": {
+   "Fairy": 0.434,
+   "Ghost": 0.302,
+   "Fighting": 0.17,
+   "Bug": 0.057
+  },
+  "tera_used_rate": 0.157,
+  "moves": {
+   "Swords Dance": 0.57,
+   "Poltergeist": 0.451,
+   "Bitter Blade": 0.415,
+   "Shadow Sneak": 0.323,
+   "Close Combat": 0.172,
+   "Destiny Bond": 0.018,
+   "Bulk Up": 0.015,
+   "Substitute": 0.009,
+   "Will-O-Wisp": 0.009,
+   "Psycho Cut": 0.003
+  }
+ },
+ "Rillaboom": {
+  "seen_n": 316,
+  "items": {
+   "Life Orb": 0.747,
+   "Terrain Extender": 0.088,
+   "Choice Band": 0.077,
+   "Lum Berry": 0.044,
+   "Heavy-Duty Boots": 0.011
+  },
+  "item_revealed_rate": 0.288,
+  "abilities": {
+   "Grassy Surge": 1.0
+  },
+  "ability_revealed_rate": 0.997,
+  "tera": {
+   "Grass": 0.676,
+   "Dark": 0.176,
+   "Steel": 0.118,
+   "Fire": 0.029
+  },
+  "tera_used_rate": 0.108,
+  "moves": {
+   "Grassy Glide": 0.487,
+   "Knock Off": 0.383,
+   "U-turn": 0.316,
+   "Wood Hammer": 0.234,
+   "Swords Dance": 0.161,
+   "High Horsepower": 0.066,
+   "Low Kick": 0.028,
+   "Drain Punch": 0.025,
+   "Solar Blade": 0.003,
+   "Giga Drain": 0.003
+  }
+ },
+ "Pecharunt": {
+  "seen_n": 294,
+  "items": {
+   "Heavy-Duty Boots": 0.488,
+   "Rocky Helmet": 0.301,
+   "Leftovers": 0.106,
+   "Air Balloon": 0.081,
+   "Shuca Berry": 0.016
+  },
+  "item_revealed_rate": 0.418,
+  "abilities": {},
+  "ability_revealed_rate": 0.0,
+  "tera": {
+   "Ghost": 0.489,
+   "Dark": 0.4,
+   "Water": 0.089,
+   "Fairy": 0.022
+  },
+  "tera_used_rate": 0.153,
+  "moves": {
+   "Malignant Chain": 0.5,
+   "Parting Shot": 0.486,
+   "Recover": 0.452,
+   "Shadow Ball": 0.367,
+   "Toxic": 0.122,
+   "Foul Play": 0.112,
+   "Nasty Plot": 0.092,
+   "Hex": 0.007,
+   "Destiny Bond": 0.003,
+   "Curse": 0.003
+  }
+ },
+ "Garganacl": {
+  "seen_n": 287,
+  "items": {
+   "Leftovers": 0.996,
+   "Black Sludge": 0.004
+  },
+  "item_revealed_rate": 0.92,
+  "abilities": {
+   "Purifying Salt": 1.0
+  },
+  "ability_revealed_rate": 0.056,
+  "tera": {
+   "Water": 0.905,
+   "Fairy": 0.071,
+   "Ghost": 0.016,
+   "Dragon": 0.008
+  },
+  "tera_used_rate": 0.439,
+  "moves": {
+   "Salt Cure": 0.882,
+   "Recover": 0.557,
+   "Protect": 0.544,
+   "Stealth Rock": 0.31,
+   "Curse": 0.293,
+   "Earthquake": 0.038,
+   "Iron Defense": 0.035,
+   "Body Press": 0.024,
+   "Ice Punch": 0.021,
+   "Block": 0.014
+  }
+ },
+ "Zapdos": {
+  "seen_n": 275,
+  "items": {
+   "Rocky Helmet": 0.615,
+   "Heavy-Duty Boots": 0.33,
+   "Leftovers": 0.033,
+   "Choice Specs": 0.022
+  },
+  "item_revealed_rate": 0.331,
+  "abilities": {
+   "Static": 0.929,
+   "Pressure": 0.054,
+   "Poison Puppeteer": 0.018
+  },
+  "ability_revealed_rate": 0.204,
+  "tera": {
+   "Flying": 0.182,
+   "Fire": 0.182,
+   "Water": 0.182,
+   "Steel": 0.182
+  },
+  "tera_used_rate": 0.04,
+  "moves": {
+   "Hurricane": 0.516,
+   "Volt Switch": 0.495,
+   "Roost": 0.4,
+   "Thunder Wave": 0.258,
+   "Heat Wave": 0.124,
+   "U-turn": 0.113,
+   "Discharge": 0.095,
+   "Thunderbolt": 0.051,
+   "Weather Ball": 0.011,
+   "Substitute": 0.007
+  }
+ },
+ "Walking Wake": {
+  "seen_n": 275,
+  "items": {
+   "Booster Energy": 0.567,
+   "Life Orb": 0.269,
+   "Choice Specs": 0.06,
+   "Heavy-Duty Boots": 0.045,
+   "Mystic Water": 0.03
+  },
+  "item_revealed_rate": 0.244,
+  "abilities": {
+   "Protosynthesis": 0.995,
+   "Poison Puppeteer": 0.005
+  },
+  "ability_revealed_rate": 0.753,
+  "tera": {
+   "Water": 0.529,
+   "Fairy": 0.353,
+   "Poison": 0.039,
+   "Dragon": 0.039
+  },
+  "tera_used_rate": 0.185,
+  "moves": {
+   "Hydro Steam": 0.498,
+   "Draco Meteor": 0.324,
+   "Dragon Pulse": 0.185,
+   "Surf": 0.142,
+   "Flip Turn": 0.127,
+   "Knock Off": 0.065,
+   "Weather Ball": 0.055,
+   "Agility": 0.051,
+   "Substitute": 0.047,
+   "Flamethrower": 0.047
+  }
+ },
+ "Moltres": {
+  "seen_n": 265,
+  "items": {
+   "Heavy-Duty Boots": 1.0
+  },
+  "item_revealed_rate": 0.245,
+  "abilities": {
+   "Flame Body": 0.958,
+   "Poison Puppeteer": 0.028,
+   "Cursed Body": 0.014
+  },
+  "ability_revealed_rate": 0.268,
+  "tera": {
+   "Fairy": 0.526,
+   "Ground": 0.316,
+   "Water": 0.053,
+   "Grass": 0.053
+  },
+  "tera_used_rate": 0.072,
+  "moves": {
+   "Flamethrower": 0.536,
+   "Roost": 0.404,
+   "U-turn": 0.389,
+   "Roar": 0.208,
+   "Will-O-Wisp": 0.155,
+   "Scorching Sands": 0.147,
+   "Hurricane": 0.125,
+   "Overheat": 0.026,
+   "Burning Jealousy": 0.011,
+   "Brave Bird": 0.008
+  }
+ },
+ "Darkrai": {
+  "seen_n": 263,
+  "items": {
+   "Life Orb": 0.519,
+   "Leftovers": 0.26,
+   "Heavy-Duty Boots": 0.065,
+   "Choice Scarf": 0.039,
+   "Air Balloon": 0.026
+  },
+  "item_revealed_rate": 0.293,
+  "abilities": {
+   "Bad Dreams": 0.8,
+   "Poison Puppeteer": 0.2
+  },
+  "ability_revealed_rate": 0.019,
+  "tera": {
+   "Poison": 0.739,
+   "Dark": 0.174,
+   "Ghost": 0.087
+  },
+  "tera_used_rate": 0.087,
+  "moves": {
+   "Dark Pulse": 0.567,
+   "Ice Beam": 0.43,
+   "Nasty Plot": 0.156,
+   "Will-O-Wisp": 0.152,
+   "Focus Blast": 0.144,
+   "Sludge Bomb": 0.144,
+   "Knock Off": 0.122,
+   "Trick": 0.068,
+   "Psyshock": 0.023,
+   "Sucker Punch": 0.023
+  }
+ },
+ "Toxapex": {
+  "seen_n": 256,
+  "items": {
+   "Leftovers": 0.885,
+   "Black Sludge": 0.032,
+   "Heavy-Duty Boots": 0.032,
+   "Eject Button": 0.023,
+   "Assault Vest": 0.018
+  },
+  "item_revealed_rate": 0.848,
+  "abilities": {
+   "Pickpocket": 1.0
+  },
+  "ability_revealed_rate": 0.004,
+  "tera": {
+   "Steel": 0.7,
+   "Flying": 0.1,
+   "Grass": 0.1,
+   "Ghost": 0.1
+  },
+  "tera_used_rate": 0.039,
+  "moves": {
+   "Baneful Bunker": 0.691,
+   "Infestation": 0.66,
+   "Recover": 0.461,
+   "Poison Jab": 0.383,
+   "Toxic": 0.109,
+   "Toxic Spikes": 0.07,
+   "Haze": 0.066,
+   "Surf": 0.059,
+   "Sludge Bomb": 0.043,
+   "Ice Beam": 0.008
+  }
+ },
+ "Clodsire": {
+  "seen_n": 253,
+  "items": {
+   "Heavy-Duty Boots": 0.634,
+   "Leftovers": 0.317,
+   "Black Sludge": 0.024,
+   "Choice Scarf": 0.024
+  },
+  "item_revealed_rate": 0.162,
+  "abilities": {
+   "Water Absorb": 1.0
+  },
+  "ability_revealed_rate": 0.02,
+  "tera": {
+   "Steel": 0.953,
+   "Dark": 0.023,
+   "Fairy": 0.023
+  },
+  "tera_used_rate": 0.17,
+  "moves": {
+   "Earthquake": 0.597,
+   "Recover": 0.585,
+   "Spikes": 0.435,
+   "Poison Jab": 0.32,
+   "Toxic": 0.126,
+   "Stealth Rock": 0.032,
+   "Haze": 0.024,
+   "Amnesia": 0.016,
+   "Stockpile": 0.012,
+   "Toxic Spikes": 0.008
+  }
+ },
+ "Dondozo": {
+  "seen_n": 237,
+  "items": {
+   "Leftovers": 0.966,
+   "Toxic Orb": 0.01,
+   "Chesto Berry": 0.01,
+   "Choice Band": 0.01,
+   "Heavy-Duty Boots": 0.005
+  },
+  "item_revealed_rate": 0.865,
+  "abilities": {},
+  "ability_revealed_rate": 0.0,
+  "tera": {
+   "Dark": 0.75,
+   "Dragon": 0.159,
+   "Fighting": 0.091
+  },
+  "tera_used_rate": 0.186,
+  "moves": {
+   "Curse": 0.641,
+   "Rest": 0.54,
+   "Crunch": 0.464,
+   "Sleep Talk": 0.435,
+   "Waterfall": 0.131,
+   "Body Press": 0.093,
+   "Wave Crash": 0.051,
+   "Avalanche": 0.038,
+   "Outrage": 0.008,
+   "Earthquake": 0.008
+  }
+ },
+ "Primarina": {
+  "seen_n": 237,
+  "items": {
+   "Leftovers": 0.614,
+   "Assault Vest": 0.25,
+   "Custap Berry": 0.068,
+   "Choice Specs": 0.045,
+   "Heavy-Duty Boots": 0.023
+  },
+  "item_revealed_rate": 0.186,
+  "abilities": {
+   "Poison Puppeteer": 1.0
+  },
+  "ability_revealed_rate": 0.008,
+  "tera": {
+   "Ghost": 0.286,
+   "Fairy": 0.214,
+   "Steel": 0.143,
+   "Ground": 0.143
+  },
+  "tera_used_rate": 0.059,
+  "moves": {
+   "Moonblast": 0.705,
+   "Surf": 0.401,
+   "Psychic Noise": 0.333,
+   "Flip Turn": 0.186,
+   "Whirlpool": 0.055,
+   "Substitute": 0.042,
+   "Draining Kiss": 0.038,
+   "Sparkling Aria": 0.025,
+   "Calm Mind": 0.017,
+   "Ice Beam": 0.008
+  }
+ },
+ "Alomomola": {
+  "seen_n": 227,
+  "items": {
+   "Assault Vest": 0.308,
+   "Rocky Helmet": 0.295,
+   "Heavy-Duty Boots": 0.244,
+   "Leftovers": 0.077,
+   "Red Card": 0.051
+  },
+  "item_revealed_rate": 0.344,
+  "abilities": {
+   "Poison Puppeteer": 1.0
+  },
+  "ability_revealed_rate": 0.009,
+  "tera": {
+   "Ghost": 0.375,
+   "Fairy": 0.375,
+   "Normal": 0.125,
+   "Flying": 0.062
+  },
+  "tera_used_rate": 0.07,
+  "moves": {
+   "Flip Turn": 0.811,
+   "Wish": 0.313,
+   "Mirror Coat": 0.189,
+   "Scald": 0.176,
+   "Protect": 0.167,
+   "Aqua Jet": 0.079,
+   "Tickle": 0.07,
+   "Play Rough": 0.066,
+   "Body Slam": 0.062,
+   "Healing Wish": 0.009
+  }
+ },
+ "Ogerpon": {
+  "seen_n": 212,
+  "items": {
+   "Heavy-Duty Boots": 0.526,
+   "Choice Band": 0.316,
+   "Focus Sash": 0.053,
+   "White Herb": 0.053,
+   "Life Orb": 0.053
+  },
+  "item_revealed_rate": 0.09,
+  "abilities": {
+   "Embody Aspect (Teal)": 0.817,
+   "Defiant": 0.183
+  },
+  "ability_revealed_rate": 0.387,
+  "tera": {
+   "Grass": 1.0
+  },
+  "tera_used_rate": 0.34,
+  "moves": {
+   "Ivy Cudgel": 0.675,
+   "U-turn": 0.538,
+   "Knock Off": 0.491,
+   "Encore": 0.222,
+   "Swords Dance": 0.038,
+   "Rock Tomb": 0.028,
+   "Synthesis": 0.028,
+   "Superpower": 0.024,
+   "Spikes": 0.009,
+   "Low Kick": 0.005
+  }
+ },
+ "Garchomp": {
+  "seen_n": 209,
+  "items": {
+   "Life Orb": 0.562,
+   "Rocky Helmet": 0.415,
+   "Leftovers": 0.015,
+   "Loaded Dice": 0.008
+  },
+  "item_revealed_rate": 0.622,
+  "abilities": {
+   "Rough Skin": 0.984,
+   "Poison Puppeteer": 0.016
+  },
+  "ability_revealed_rate": 0.584,
+  "tera": {
+   "Fire": 0.571,
+   "Poison": 0.214,
+   "Ghost": 0.143,
+   "Steel": 0.071
+  },
+  "tera_used_rate": 0.067,
+  "moves": {
+   "Earthquake": 0.593,
+   "Stealth Rock": 0.512,
+   "Draco Meteor": 0.187,
+   "Spikes": 0.182,
+   "Dragon Tail": 0.158,
+   "Swords Dance": 0.115,
+   "Scale Shot": 0.105,
+   "Flamethrower": 0.091,
+   "Poison Jab": 0.014,
+   "Fire Fang": 0.01
+  }
+ },
+ "Tyranitar": {
+  "seen_n": 201,
+  "items": {
+   "Leftovers": 0.545,
+   "Choice Band": 0.121,
+   "Rocky Helmet": 0.091,
+   "Heavy-Duty Boots": 0.091,
+   "Assault Vest": 0.03
+  },
+  "item_revealed_rate": 0.164,
+  "abilities": {
+   "Sand Stream": 1.0
+  },
+  "ability_revealed_rate": 1.0,
+  "tera": {
+   "Flying": 0.364,
+   "Dark": 0.273,
+   "Rock": 0.273,
+   "Ghost": 0.091
+  },
+  "tera_used_rate": 0.055,
+  "moves": {
+   "Knock Off": 0.547,
+   "Stealth Rock": 0.239,
+   "Ice Beam": 0.194,
+   "Stone Edge": 0.134,
+   "Thunder Wave": 0.114,
+   "Ice Punch": 0.109,
+   "Low Kick": 0.085,
+   "Roar": 0.06,
+   "Earth Power": 0.01,
+   "Thunderbolt": 0.01
+  }
+ },
+ "Excadrill": {
+  "seen_n": 197,
+  "items": {
+   "Air Balloon": 0.61,
+   "Leftovers": 0.333,
+   "Life Orb": 0.041,
+   "Choice Band": 0.016
+  },
+  "item_revealed_rate": 0.624,
+  "abilities": {
+   "Mold Breaker": 1.0
+  },
+  "ability_revealed_rate": 0.081,
+  "tera": {
+   "Ground": 0.679,
+   "Ghost": 0.179,
+   "Fairy": 0.071,
+   "Steel": 0.036
+  },
+  "tera_used_rate": 0.142,
+  "moves": {
+   "Earthquake": 0.594,
+   "Rapid Spin": 0.376,
+   "Iron Head": 0.335,
+   "Rock Slide": 0.203,
+   "Swords Dance": 0.168,
+   "Substitute": 0.086,
+   "Stealth Rock": 0.01,
+   "Throat Chop": 0.005,
+   "Rock Blast": 0.005
+  }
+ },
+ "Skarmory": {
+  "seen_n": 193,
+  "items": {
+   "Rocky Helmet": 0.924,
+   "Leftovers": 0.034,
+   "Heavy-Duty Boots": 0.034,
+   "Black Sludge": 0.007
+  },
+  "item_revealed_rate": 0.751,
+  "abilities": {
+   "Sturdy": 1.0
+  },
+  "ability_revealed_rate": 0.057,
+  "tera": {
+   "Grass": 0.6,
+   "Dragon": 0.2,
+   "Fighting": 0.2
+  },
+  "tera_used_rate": 0.026,
+  "moves": {
+   "Spikes": 0.658,
+   "Roost": 0.539,
+   "Whirlwind": 0.29,
+   "Body Press": 0.285,
+   "Brave Bird": 0.249,
+   "Iron Defense": 0.155,
+   "Stealth Rock": 0.078,
+   "Taunt": 0.01,
+   "Drill Run": 0.005,
+   "Swords Dance": 0.005
+  }
+ },
+ "Ogerpon-Cornerstone": {
+  "seen_n": 189,
+  "items": {},
+  "item_revealed_rate": 0.0,
+  "abilities": {
+   "Sturdy": 0.512,
+   "Embody Aspect (Cornerstone)": 0.395,
+   "Poison Puppeteer": 0.093
+  },
+  "ability_revealed_rate": 0.228,
+  "tera": {
+   "Rock": 1.0
+  },
+  "tera_used_rate": 0.09,
+  "moves": {
+   "Ivy Cudgel": 0.698,
+   "Power Whip": 0.349,
+   "Knock Off": 0.28,
+   "Swords Dance": 0.18,
+   "U-turn": 0.106,
+   "Solar Blade": 0.09,
+   "Superpower": 0.058,
+   "Horn Leech": 0.048,
+   "Encore": 0.042,
+   "Low Kick": 0.032
+  }
+ },
+ "Weezing-Galar": {
+  "seen_n": 178,
+  "items": {
+   "Heavy-Duty Boots": 0.461,
+   "Leftovers": 0.303,
+   "Eject Button": 0.118,
+   "Rocky Helmet": 0.053,
+   "Air Balloon": 0.039
+  },
+  "item_revealed_rate": 0.427,
+  "abilities": {
+   "Neutralizing Gas": 1.0
+  },
+  "ability_revealed_rate": 0.961,
+  "tera": {
+   "Water": 0.556,
+   "Grass": 0.333,
+   "Dragon": 0.111
+  },
+  "tera_used_rate": 0.051,
+  "moves": {
+   "Will-O-Wisp": 0.567,
+   "Defog": 0.427,
+   "Sludge Bomb": 0.393,
+   "Pain Split": 0.27,
+   "Strange Steam": 0.084,
+   "Toxic": 0.039,
+   "Protect": 0.039,
+   "Toxic Spikes": 0.034,
+   "Clear Smog": 0.011,
+   "Flamethrower": 0.006
+  }
+ },
+ "Pelipper": {
+  "seen_n": 164,
+  "items": {
+   "Damp Rock": 0.8,
+   "Choice Specs": 0.133,
+   "Choice Scarf": 0.033,
+   "Black Sludge": 0.033
+  },
+  "item_revealed_rate": 0.183,
+  "abilities": {
+   "Drizzle": 1.0
+  },
+  "ability_revealed_rate": 1.0,
+  "tera": {
+   "Water": 0.333,
+   "Ground": 0.25,
+   "Steel": 0.167,
+   "Flying": 0.083
+  },
+  "tera_used_rate": 0.073,
+  "moves": {
+   "U-turn": 0.488,
+   "Weather Ball": 0.445,
+   "Hurricane": 0.317,
+   "Knock Off": 0.067,
+   "Roost": 0.055,
+   "Surf": 0.024,
+   "Ice Beam": 0.006
+  }
+ },
+ "Blissey": {
+  "seen_n": 158,
+  "items": {
+   "Heavy-Duty Boots": 0.632,
+   "Leftovers": 0.368
+  },
+  "item_revealed_rate": 0.241,
+  "abilities": {
+   "Poison Puppeteer": 1.0
+  },
+  "ability_revealed_rate": 0.013,
+  "tera": {
+   "Dark": 0.333,
+   "Steel": 0.333,
+   "Poison": 0.333
+  },
+  "tera_used_rate": 0.019,
+  "moves": {
+   "Stealth Rock": 0.658,
+   "Seismic Toss": 0.601,
+   "Soft-Boiled": 0.538,
+   "Thunder Wave": 0.418,
+   "Calm Mind": 0.127,
+   "Shadow Ball": 0.082,
+   "Protect": 0.057,
+   "Ice Beam": 0.025,
+   "Flamethrower": 0.006,
+   "Thunderbolt": 0.006
+  }
+ },
+ "Wo-Chien": {
+  "seen_n": 154,
+  "items": {
+   "Leftovers": 0.664,
+   "Eject Pack": 0.189,
+   "Rocky Helmet": 0.148
+  },
+  "item_revealed_rate": 0.792,
+  "abilities": {
+   "Tablets of Ruin": 1.0
+  },
+  "ability_revealed_rate": 1.0,
+  "tera": {
+   "Poison": 0.929,
+   "Water": 0.071
+  },
+  "tera_used_rate": 0.091,
+  "moves": {
+   "Foul Play": 0.552,
+   "Leech Seed": 0.416,
+   "Ruination": 0.247,
+   "Protect": 0.214,
+   "Stun Spore": 0.156,
+   "Leaf Storm": 0.13,
+   "Dark Pulse": 0.104,
+   "Mud Shot": 0.052,
+   "Taunt": 0.032,
+   "Knock Off": 0.019
+  }
+ },
+ "Enamorus": {
+  "seen_n": 152,
+  "items": {
+   "Life Orb": 0.6,
+   "Leftovers": 0.267,
+   "Choice Scarf": 0.133
+  },
+  "item_revealed_rate": 0.197,
+  "abilities": {},
+  "ability_revealed_rate": 0.0,
+  "tera": {
+   "Ground": 0.583,
+   "Fairy": 0.292,
+   "Steel": 0.042,
+   "Ghost": 0.042
+  },
+  "tera_used_rate": 0.158,
+  "moves": {
+   "Moonblast": 0.664,
+   "Earth Power": 0.303,
+   "Healing Wish": 0.138,
+   "Mystical Fire": 0.099,
+   "Substitute": 0.086,
+   "Superpower": 0.046,
+   "Agility": 0.039,
+   "Calm Mind": 0.02,
+   "Weather Ball": 0.02,
+   "Draining Kiss": 0.013
+  }
+ },
+ "Ribombee": {
+  "seen_n": 148,
+  "items": {
+   "Focus Sash": 0.981,
+   "Choice Scarf": 0.019
+  },
+  "item_revealed_rate": 0.351,
+  "abilities": {
+   "Flash Fire": 0.667,
+   "Weak Armor": 0.333
+  },
+  "ability_revealed_rate": 0.02,
+  "tera": {
+   "Steel": 0.667,
+   "Ghost": 0.333
+  },
+  "tera_used_rate": 0.02,
+  "moves": {
+   "Sticky Web": 0.804,
+   "Moonblast": 0.534,
+   "Stun Spore": 0.486,
+   "Skill Swap": 0.115,
+   "Psychic Noise": 0.074,
+   "Trick": 0.02,
+   "Quiver Dance": 0.007,
+   "Draining Kiss": 0.007
+  }
+ },
+ "Torkoal": {
+  "seen_n": 141,
+  "items": {
+   "Heat Rock": 0.75,
+   "Heavy-Duty Boots": 0.167,
+   "Eject Pack": 0.083
+  },
+  "item_revealed_rate": 0.085,
+  "abilities": {
+   "Drought": 1.0
+  },
+  "ability_revealed_rate": 0.986,
+  "tera": {
+   "Grass": 0.6,
+   "Fire": 0.133,
+   "Ghost": 0.133,
+   "Fairy": 0.067
+  },
+  "tera_used_rate": 0.106,
+  "moves": {
+   "Stealth Rock": 0.44,
+   "Lava Plume": 0.333,
+   "Rapid Spin": 0.227,
+   "Will-O-Wisp": 0.177,
+   "Body Press": 0.035,
+   "Overheat": 0.021,
+   "Earthquake": 0.014,
+   "Eruption": 0.014,
+   "Clear Smog": 0.007,
+   "Flamethrower": 0.007
+  }
+ },
+ "Deoxys-Speed": {
+  "seen_n": 139,
+  "items": {
+   "Life Orb": 0.444,
+   "Eject Pack": 0.175,
+   "Focus Sash": 0.159,
+   "Rocky Helmet": 0.079,
+   "Red Card": 0.048
+  },
+  "item_revealed_rate": 0.453,
+  "abilities": {
+   "Pressure": 1.0
+  },
+  "ability_revealed_rate": 1.0,
+  "tera": {
+   "Fighting": 0.667,
+   "Grass": 0.167,
+   "Steel": 0.167
+  },
+  "tera_used_rate": 0.043,
+  "moves": {
+   "Psycho Boost": 0.338,
+   "Stealth Rock": 0.273,
+   "Spikes": 0.201,
+   "Taunt": 0.194,
+   "Reflect": 0.187,
+   "Light Screen": 0.165,
+   "Nasty Plot": 0.122,
+   "Focus Blast": 0.094,
+   "Ice Beam": 0.094,
+   "Knock Off": 0.079
+  }
+ },
+ "Tornadus-Therian": {
+  "seen_n": 138,
+  "items": {
+   "Life Orb": 0.617,
+   "Assault Vest": 0.213,
+   "Choice Scarf": 0.064,
+   "Light Ball": 0.043,
+   "Heavy-Duty Boots": 0.043
+  },
+  "item_revealed_rate": 0.341,
+  "abilities": {
+   "Pickpocket": 1.0
+  },
+  "ability_revealed_rate": 0.007,
+  "tera": {
+   "Steel": 0.286,
+   "Fairy": 0.214,
+   "Water": 0.143,
+   "Dark": 0.143
+  },
+  "tera_used_rate": 0.101,
+  "moves": {
+   "Bleakwind Storm": 0.594,
+   "U-turn": 0.514,
+   "Knock Off": 0.377,
+   "Heat Wave": 0.304,
+   "Nasty Plot": 0.13,
+   "Taunt": 0.123,
+   "Focus Blast": 0.051,
+   "Grass Knot": 0.036,
+   "Icy Wind": 0.014,
+   "Hurricane": 0.014
+  }
+ },
+ "Araquanid": {
+  "seen_n": 135,
+  "items": {
+   "Custap Berry": 0.667,
+   "Red Card": 0.238,
+   "Mental Herb": 0.079,
+   "Focus Sash": 0.016
+  },
+  "item_revealed_rate": 0.467,
+  "abilities": {
+   "Poison Puppeteer": 1.0
+  },
+  "ability_revealed_rate": 0.022,
+  "tera": {
+   "Ghost": 1.0
+  },
+  "tera_used_rate": 0.03,
+  "moves": {
+   "Sticky Web": 0.719,
+   "Surf": 0.378,
+   "Endeavor": 0.311,
+   "Liquidation": 0.207,
+   "Lunge": 0.178,
+   "Endure": 0.089,
+   "Leech Life": 0.044,
+   "Mirror Coat": 0.015
+  }
+ },
+ "Tinkaton": {
+  "seen_n": 133,
+  "items": {
+   "Air Balloon": 0.962,
+   "Leftovers": 0.023,
+   "Life Orb": 0.008,
+   "Sitrus Berry": 0.008
+  },
+  "item_revealed_rate": 0.992,
+  "abilities": {
+   "Mold Breaker": 0.798,
+   "Pickpocket": 0.202
+  },
+  "ability_revealed_rate": 0.707,
+  "tera": {
+   "Water": 1.0
+  },
+  "tera_used_rate": 0.008,
+  "moves": {
+   "Stealth Rock": 0.812,
+   "Gigaton Hammer": 0.564,
+   "Encore": 0.383,
+   "Knock Off": 0.233,
+   "Thunder Wave": 0.173,
+   "Ice Hammer": 0.09,
+   "Swords Dance": 0.075,
+   "Play Rough": 0.023,
+   "Foul Play": 0.023,
+   "Hex": 0.008
+  }
+ },
+ "Heatran": {
+  "seen_n": 128,
+  "items": {
+   "Leftovers": 0.593,
+   "Air Balloon": 0.349,
+   "Assault Vest": 0.023,
+   "Shuca Berry": 0.012,
+   "Heavy-Duty Boots": 0.012
+  },
+  "item_revealed_rate": 0.672,
+  "abilities": {
+   "Flash Fire": 0.588,
+   "Flame Body": 0.353,
+   "Cursed Body": 0.059
+  },
+  "ability_revealed_rate": 0.133,
+  "tera": {
+   "Ghost": 0.4,
+   "Grass": 0.2,
+   "Normal": 0.2,
+   "Fairy": 0.1
+  },
+  "tera_used_rate": 0.078,
+  "moves": {
+   "Magma Storm": 0.602,
+   "Earth Power": 0.43,
+   "Stealth Rock": 0.297,
+   "Lava Plume": 0.188,
+   "Will-O-Wisp": 0.172,
+   "Taunt": 0.117,
+   "Protect": 0.055,
+   "Substitute": 0.031,
+   "Flash Cannon": 0.023,
+   "Body Press": 0.023
+  }
+ },
+ "Hydrapple": {
+  "seen_n": 127,
+  "items": {
+   "Rocky Helmet": 0.364,
+   "Heavy-Duty Boots": 0.273,
+   "Life Orb": 0.164,
+   "Leftovers": 0.073,
+   "Choice Scarf": 0.036
+  },
+  "item_revealed_rate": 0.433,
+  "abilities": {
+   "Poison Puppeteer": 1.0
+  },
+  "ability_revealed_rate": 0.008,
+  "tera": {
+   "Poison": 0.469,
+   "Fairy": 0.344,
+   "Dragon": 0.094,
+   "Steel": 0.062
+  },
+  "tera_used_rate": 0.252,
+  "moves": {
+   "Giga Drain": 0.591,
+   "Earth Power": 0.496,
+   "Nasty Plot": 0.417,
+   "Fickle Beam": 0.402,
+   "Draco Meteor": 0.134,
+   "Leaf Storm": 0.047,
+   "Hydro Pump": 0.008,
+   "Dragon Tail": 0.008
+  }
+ },
+ "Ninetales": {
+  "seen_n": 121,
+  "items": {
+   "Heat Rock": 1.0
+  },
+  "item_revealed_rate": 0.025,
+  "abilities": {
+   "Drought": 1.0
+  },
+  "ability_revealed_rate": 0.983,
+  "tera": {
+   "Fire": 0.5,
+   "Ghost": 0.5
+  },
+  "tera_used_rate": 0.017,
+  "moves": {
+   "Encore": 0.281,
+   "Overheat": 0.264,
+   "Will-O-Wisp": 0.231,
+   "Healing Wish": 0.215,
+   "Weather Ball": 0.116,
+   "Scorching Sands": 0.05,
+   "Substitute": 0.008,
+   "Nasty Plot": 0.008,
+   "Flamethrower": 0.008,
+   "Roar": 0.008
+  }
+ },
+ "Iron Crown": {
+  "seen_n": 120,
+  "items": {
+   "Booster Energy": 0.783,
+   "Weakness Policy": 0.133,
+   "Assault Vest": 0.067,
+   "Choice Specs": 0.017
+  },
+  "item_revealed_rate": 0.5,
+  "abilities": {
+   "Quark Drive": 1.0
+  },
+  "ability_revealed_rate": 0.392,
+  "tera": {
+   "Steel": 0.375,
+   "Fighting": 0.312,
+   "Water": 0.125,
+   "Dark": 0.062
+  },
+  "tera_used_rate": 0.133,
+  "moves": {
+   "Tachyon Cutter": 0.608,
+   "Calm Mind": 0.283,
+   "Volt Switch": 0.242,
+   "Psyshock": 0.175,
+   "Psychic Noise": 0.175,
+   "Focus Blast": 0.175,
+   "Future Sight": 0.092,
+   "Agility": 0.058,
+   "Stored Power": 0.05,
+   "Expanding Force": 0.017
+  }
+ },
+ "Hawlucha": {
+  "seen_n": 100,
+  "items": {
+   "Grassy Seed": 0.916,
+   "Psychic Seed": 0.036,
+   "Red Card": 0.024,
+   "Sitrus Berry": 0.012,
+   "Big Nugget": 0.012
+  },
+  "item_revealed_rate": 0.83,
+  "abilities": {
+   "Mold Breaker": 1.0
+  },
+  "ability_revealed_rate": 0.05,
+  "tera": {
+   "Steel": 0.8,
+   "Electric": 0.15,
+   "Fire": 0.05
+  },
+  "tera_used_rate": 0.2,
+  "moves": {
+   "Swords Dance": 0.69,
+   "Acrobatics": 0.69,
+   "Close Combat": 0.34,
+   "Encore": 0.15,
+   "Brave Bird": 0.05,
+   "Drain Punch": 0.03,
+   "Taunt": 0.03,
+   "Fire Punch": 0.02,
+   "Defog": 0.02,
+   "Roost": 0.02
+  }
+ },
+ "Ursaluna": {
+  "seen_n": 92,
+  "items": {
+   "Flame Orb": 0.989,
+   "Leftovers": 0.011
+  },
+  "item_revealed_rate": 0.967,
+  "abilities": {
+   "Cursed Body": 0.5,
+   "Pickpocket": 0.5
+  },
+  "ability_revealed_rate": 0.022,
+  "tera": {
+   "Normal": 0.75,
+   "Grass": 0.05,
+   "Ghost": 0.05,
+   "Poison": 0.05
+  },
+  "tera_used_rate": 0.217,
+  "moves": {
+   "Facade": 0.63,
+   "Headlong Rush": 0.576,
+   "Protect": 0.272,
+   "Fire Punch": 0.217,
+   "Swords Dance": 0.109,
+   "Trailblaze": 0.022,
+   "Ice Punch": 0.022,
+   "Earthquake": 0.022
+  }
+ },
+ "Weavile": {
+  "seen_n": 89,
+  "items": {
+   "Life Orb": 0.556,
+   "Heavy-Duty Boots": 0.222,
+   "Choice Band": 0.111,
+   "Leftovers": 0.111
+  },
+  "item_revealed_rate": 0.101,
+  "abilities": {
+   "Pressure": 0.986,
+   "Poison Puppeteer": 0.014
+  },
+  "ability_revealed_rate": 0.798,
+  "tera": {
+   "Ice": 0.733,
+   "Ghost": 0.2,
+   "Fire": 0.067
+  },
+  "tera_used_rate": 0.169,
+  "moves": {
+   "Knock Off": 0.607,
+   "Triple Axel": 0.494,
+   "Ice Shard": 0.281,
+   "Swords Dance": 0.157,
+   "Low Kick": 0.112,
+   "Icicle Crash": 0.067,
+   "Beat Up": 0.011,
+   "Protect": 0.011
+  }
+ },
+ "Blaziken": {
+  "seen_n": 81,
+  "items": {
+   "Life Orb": 0.656,
+   "Air Balloon": 0.172,
+   "Leftovers": 0.156,
+   "Grassy Seed": 0.016
+  },
+  "item_revealed_rate": 0.79,
+  "abilities": {
+   "Speed Boost": 0.985,
+   "Poison Puppeteer": 0.015
+  },
+  "ability_revealed_rate": 0.802,
+  "tera": {
+   "Fire": 0.5,
+   "Fighting": 0.333,
+   "Ghost": 0.167
+  },
+  "tera_used_rate": 0.074,
+  "moves": {
+   "Close Combat": 0.481,
+   "Flare Blitz": 0.395,
+   "Protect": 0.346,
+   "Knock Off": 0.309,
+   "Swords Dance": 0.173,
+   "Overheat": 0.123,
+   "Stone Edge": 0.049,
+   "Rock Tomb": 0.025,
+   "Detect": 0.012,
+   "Focus Energy": 0.012
+  }
+ },
+ "Scizor": {
+  "seen_n": 79,
+  "items": {
+   "Life Orb": 0.438,
+   "Choice Band": 0.312,
+   "Sitrus Berry": 0.25
+  },
+  "item_revealed_rate": 0.203,
+  "abilities": {},
+  "ability_revealed_rate": 0.0,
+  "tera": {
+   "Steel": 1.0
+  },
+  "tera_used_rate": 0.127,
+  "moves": {
+   "Bullet Punch": 0.532,
+   "Knock Off": 0.392,
+   "U-turn": 0.392,
+   "Close Combat": 0.152,
+   "Swords Dance": 0.114,
+   "Defog": 0.038,
+   "Trailblaze": 0.025,
+   "Dual Wingbeat": 0.013,
+   "Quick Attack": 0.013
+  }
+ },
+ "Volcanion": {
+  "seen_n": 75,
+  "items": {
+   "Leftovers": 0.389,
+   "Heavy-Duty Boots": 0.278,
+   "Shuca Berry": 0.111,
+   "Choice Specs": 0.056,
+   "Sitrus Berry": 0.056
+  },
+  "item_revealed_rate": 0.24,
+  "abilities": {
+   "Water Absorb": 1.0
+  },
+  "ability_revealed_rate": 0.08,
+  "tera": {
+   "Poison": 0.4,
+   "Fairy": 0.3,
+   "Ground": 0.1,
+   "Bug": 0.1
+  },
+  "tera_used_rate": 0.133,
+  "moves": {
+   "Steam Eruption": 0.653,
+   "Sludge Bomb": 0.32,
+   "Flamethrower": 0.213,
+   "Fire Spin": 0.107,
+   "Taunt": 0.107,
+   "Will-O-Wisp": 0.093,
+   "Earth Power": 0.053,
+   "Sludge Wave": 0.04,
+   "Fire Blast": 0.027,
+   "Explosion": 0.013
+  }
+ },
+ "Lokix": {
+  "seen_n": 75,
+  "items": {
+   "Heavy-Duty Boots": 0.8,
+   "Choice Band": 0.2
+  },
+  "item_revealed_rate": 0.067,
+  "abilities": {
+   "Pickpocket": 1.0
+  },
+  "ability_revealed_rate": 0.013,
+  "tera": {
+   "Bug": 1.0
+  },
+  "tera_used_rate": 0.267,
+  "moves": {
+   "U-turn": 0.68,
+   "First Impression": 0.613,
+   "Knock Off": 0.453,
+   "Leech Life": 0.173,
+   "Sucker Punch": 0.08
+  }
+ },
+ "Hydreigon": {
+  "seen_n": 74,
+  "items": {
+   "Leftovers": 0.762,
+   "Life Orb": 0.19,
+   "Choice Specs": 0.024,
+   "Eject Pack": 0.024
+  },
+  "item_revealed_rate": 0.568,
+  "abilities": {
+   "Poison Puppeteer": 0.4,
+   "Levitate": 0.4,
+   "Cursed Body": 0.2
+  },
+  "ability_revealed_rate": 0.068,
+  "tera": {
+   "Steel": 0.929,
+   "Ghost": 0.071
+  },
+  "tera_used_rate": 0.189,
+  "moves": {
+   "Dark Pulse": 0.622,
+   "Earth Power": 0.297,
+   "Draco Meteor": 0.23,
+   "Nasty Plot": 0.203,
+   "Flash Cannon": 0.149,
+   "Taunt": 0.068,
+   "Flamethrower": 0.014,
+   "Substitute": 0.014
+  }
+ },
+ "Hoopa-Unbound": {
+  "seen_n": 73,
+  "items": {
+   "Eject Pack": 0.379,
+   "Psychic Seed": 0.207,
+   "Choice Band": 0.138,
+   "Life Orb": 0.069,
+   "Assault Vest": 0.069
+  },
+  "item_revealed_rate": 0.397,
+  "abilities": {
+   "Magician": 1.0
+  },
+  "ability_revealed_rate": 0.205,
+  "tera": {
+   "Dark": 0.538,
+   "Psychic": 0.308,
+   "Steel": 0.077,
+   "Fairy": 0.077
+  },
+  "tera_used_rate": 0.178,
+  "moves": {
+   "Hyperspace Fury": 0.466,
+   "Trick Room": 0.178,
+   "Focus Blast": 0.164,
+   "Knock Off": 0.137,
+   "Psychic Noise": 0.123,
+   "Dark Pulse": 0.096,
+   "Expanding Force": 0.082,
+   "Gunk Shot": 0.082,
+   "Drain Punch": 0.082,
+   "Psychic": 0.055
+  }
+ },
+ "Slither Wing": {
+  "seen_n": 64,
+  "items": {
+   "Booster Energy": 0.294,
+   "Rocky Helmet": 0.294,
+   "Assault Vest": 0.176,
+   "Choice Band": 0.118,
+   "Heavy-Duty Boots": 0.118
+  },
+  "item_revealed_rate": 0.266,
+  "abilities": {
+   "Protosynthesis": 1.0
+  },
+  "ability_revealed_rate": 0.672,
+  "tera": {
+   "Fire": 0.667,
+   "Ground": 0.333
+  },
+  "tera_used_rate": 0.141,
+  "moves": {
+   "U-turn": 0.734,
+   "First Impression": 0.359,
+   "Flare Blitz": 0.203,
+   "Close Combat": 0.141,
+   "Morning Sun": 0.125,
+   "Will-O-Wisp": 0.125,
+   "Earthquake": 0.109,
+   "Bulk Up": 0.047,
+   "Acrobatics": 0.047,
+   "Flame Charge": 0.016
+  }
+ },
+ "Iron Hands": {
+  "seen_n": 63,
+  "items": {
+   "Booster Energy": 0.347,
+   "Life Orb": 0.286,
+   "Grassy Seed": 0.163,
+   "Quick Claw": 0.102,
+   "Leftovers": 0.041
+  },
+  "item_revealed_rate": 0.778,
+  "abilities": {
+   "Quark Drive": 1.0
+  },
+  "ability_revealed_rate": 0.333,
+  "tera": {
+   "Bug": 0.375,
+   "Flying": 0.25,
+   "Ground": 0.25,
+   "Fire": 0.125
+  },
+  "tera_used_rate": 0.127,
+  "moves": {
+   "Ice Punch": 0.508,
+   "Drain Punch": 0.365,
+   "Swords Dance": 0.333,
+   "Supercell Slam": 0.317,
+   "Thunder Punch": 0.206,
+   "Close Combat": 0.19,
+   "Earthquake": 0.127,
+   "Heavy Slam": 0.032,
+   "Wild Charge": 0.016
+  }
+ },
+ "Sinistcha": {
+  "seen_n": 60,
+  "items": {
+   "Heavy-Duty Boots": 0.773,
+   "Rocky Helmet": 0.091,
+   "Leftovers": 0.091,
+   "Weakness Policy": 0.045
+  },
+  "item_revealed_rate": 0.367,
+  "abilities": {},
+  "ability_revealed_rate": 0.0,
+  "tera": {
+   "Poison": 0.812,
+   "Dragon": 0.062,
+   "Water": 0.062,
+   "Normal": 0.062
+  },
+  "tera_used_rate": 0.267,
+  "moves": {
+   "Matcha Gotcha": 0.767,
+   "Shadow Ball": 0.733,
+   "Strength Sap": 0.7,
+   "Calm Mind": 0.4,
+   "Nasty Plot": 0.05,
+   "Trick Room": 0.017,
+   "Giga Drain": 0.017,
+   "Leaf Storm": 0.017
+  }
+ },
+ "Sinistcha-Masterpiece": {
+  "seen_n": 57,
+  "items": {
+   "Heavy-Duty Boots": 0.917,
+   "Rocky Helmet": 0.083
+  },
+  "item_revealed_rate": 0.211,
+  "abilities": {},
+  "ability_revealed_rate": 0.0,
+  "tera": {
+   "Poison": 0.889,
+   "Steel": 0.111
+  },
+  "tera_used_rate": 0.158,
+  "moves": {
+   "Shadow Ball": 0.684,
+   "Matcha Gotcha": 0.596,
+   "Strength Sap": 0.561,
+   "Calm Mind": 0.351,
+   "Nasty Plot": 0.105,
+   "Trick Room": 0.018
+  }
+ },
+ "Latias": {
+  "seen_n": 54,
+  "items": {
+   "Grassy Seed": 0.381,
+   "Kee Berry": 0.238,
+   "Weakness Policy": 0.19,
+   "Leftovers": 0.095,
+   "Choice Scarf": 0.048
+  },
+  "item_revealed_rate": 0.389,
+  "abilities": {
+   "Levitate": 1.0
+  },
+  "ability_revealed_rate": 0.093,
+  "tera": {
+   "Steel": 0.409,
+   "Fairy": 0.364,
+   "Poison": 0.227
+  },
+  "tera_used_rate": 0.407,
+  "moves": {
+   "Calm Mind": 0.426,
+   "Recover": 0.352,
+   "Draco Meteor": 0.278,
+   "Stored Power": 0.278,
+   "Psychic": 0.204,
+   "Healing Wish": 0.148,
+   "Draining Kiss": 0.148,
+   "Trick": 0.111,
+   "Agility": 0.074,
+   "Aura Sphere": 0.074
+  }
+ },
+ "Manaphy": {
+  "seen_n": 54,
+  "items": {
+   "Leftovers": 0.949,
+   "Mental Herb": 0.051
+  },
+  "item_revealed_rate": 0.722,
+  "abilities": {
+   "Hydration": 0.909,
+   "Poison Puppeteer": 0.091
+  },
+  "ability_revealed_rate": 0.204,
+  "tera": {
+   "Fairy": 0.417,
+   "Grass": 0.417,
+   "Psychic": 0.167
+  },
+  "tera_used_rate": 0.222,
+  "moves": {
+   "Tail Glow": 0.778,
+   "Scald": 0.407,
+   "Surf": 0.37,
+   "Alluring Voice": 0.241,
+   "Substitute": 0.222,
+   "Psychic": 0.204,
+   "Rest": 0.167,
+   "Ice Beam": 0.037,
+   "Energy Ball": 0.019,
+   "Take Heart": 0.019
+  }
+ },
+ "Ninetales-Alola": {
+  "seen_n": 52,
+  "items": {
+   "Light Clay": 0.667,
+   "Icy Rock": 0.222,
+   "Life Orb": 0.111
+  },
+  "item_revealed_rate": 0.173,
+  "abilities": {
+   "Snow Warning": 1.0
+  },
+  "ability_revealed_rate": 1.0,
+  "tera": {},
+  "tera_used_rate": 0.0,
+  "moves": {
+   "Aurora Veil": 0.808,
+   "Encore": 0.519,
+   "Freeze-Dry": 0.462,
+   "Pain Split": 0.096,
+   "Moonblast": 0.077,
+   "Blizzard": 0.058,
+   "Snowscape": 0.038,
+   "Nasty Plot": 0.019,
+   "Roar": 0.019
+  }
+ },
+ "Venusaur": {
+  "seen_n": 49,
+  "items": {
+   "Life Orb": 1.0
+  },
+  "item_revealed_rate": 0.878,
+  "abilities": {},
+  "ability_revealed_rate": 0.0,
+  "tera": {
+   "Fire": 1.0
+  },
+  "tera_used_rate": 0.082,
+  "moves": {
+   "Weather Ball": 0.531,
+   "Growth": 0.469,
+   "Giga Drain": 0.367,
+   "Sludge Bomb": 0.367,
+   "Solar Beam": 0.122,
+   "Earthquake": 0.041,
+   "Knock Off": 0.02
+  }
+ },
+ "Okidogi": {
+  "seen_n": 47,
+  "items": {
+   "Leftovers": 0.533,
+   "Life Orb": 0.2,
+   "Assault Vest": 0.2,
+   "Salac Berry": 0.067
+  },
+  "item_revealed_rate": 0.319,
+  "abilities": {
+   "Toxic Chain": 0.923,
+   "Guard Dog": 0.077
+  },
+  "ability_revealed_rate": 0.277,
+  "tera": {
+   "Water": 0.6,
+   "Ice": 0.2,
+   "Fire": 0.2
+  },
+  "tera_used_rate": 0.106,
+  "moves": {
+   "Knock Off": 0.681,
+   "Drain Punch": 0.553,
+   "Gunk Shot": 0.319,
+   "Ice Punch": 0.298,
+   "Bulk Up": 0.17,
+   "Close Combat": 0.043,
+   "Poison Jab": 0.021,
+   "Substitute": 0.021
+  }
+ },
+ "Meowscarada": {
+  "seen_n": 43,
+  "items": {
+   "Choice Scarf": 0.5,
+   "Choice Band": 0.5
+  },
+  "item_revealed_rate": 0.047,
+  "abilities": {
+   "Protean": 1.0
+  },
+  "ability_revealed_rate": 0.953,
+  "tera": {
+   "Grass": 0.667,
+   "Ghost": 0.167,
+   "Dark": 0.167
+  },
+  "tera_used_rate": 0.14,
+  "moves": {
+   "U-turn": 0.488,
+   "Knock Off": 0.465,
+   "Flower Trick": 0.419,
+   "Triple Axel": 0.279,
+   "Spikes": 0.07,
+   "Sucker Punch": 0.023,
+   "Play Rough": 0.023,
+   "Trick": 0.023,
+   "Mud-Slap": 0.023
+  }
+ },
+ "Keldeo-Resolute": {
+  "seen_n": 43,
+  "items": {
+   "Life Orb": 0.625,
+   "Covert Cloak": 0.125,
+   "Choice Specs": 0.125,
+   "Rocky Helmet": 0.125
+  },
+  "item_revealed_rate": 0.186,
+  "abilities": {
+   "Justified": 1.0
+  },
+  "ability_revealed_rate": 0.233,
+  "tera": {
+   "Water": 0.5,
+   "Poison": 0.5
+  },
+  "tera_used_rate": 0.093,
+  "moves": {
+   "Surf": 0.674,
+   "Secret Sword": 0.465,
+   "Vacuum Wave": 0.233,
+   "Calm Mind": 0.14,
+   "Icy Wind": 0.07,
+   "Flip Turn": 0.023,
+   "Hydro Pump": 0.023,
+   "Taunt": 0.023
+  }
+ },
+ "Latios": {
+  "seen_n": 41,
+  "items": {
+   "Choice Scarf": 0.385,
+   "Leftovers": 0.308,
+   "Covert Cloak": 0.154,
+   "Soul Dew": 0.077,
+   "Heavy-Duty Boots": 0.077
+  },
+  "item_revealed_rate": 0.317,
+  "abilities": {
+   "Levitate": 1.0
+  },
+  "ability_revealed_rate": 0.146,
+  "tera": {
+   "Steel": 1.0
+  },
+  "tera_used_rate": 0.244,
+  "moves": {
+   "Draco Meteor": 0.463,
+   "Psychic Noise": 0.366,
+   "Trick": 0.22,
+   "Luster Purge": 0.195,
+   "Flip Turn": 0.171,
+   "Calm Mind": 0.146,
+   "Ice Beam": 0.098,
+   "Recover": 0.073,
+   "Aura Sphere": 0.049,
+   "Surf": 0.049
+  }
+ },
+ "Kommo-o": {
+  "seen_n": 40,
+  "items": {
+   "Leftovers": 0.647,
+   "Rocky Helmet": 0.206,
+   "Throat Spray": 0.118,
+   "Sitrus Berry": 0.029
+  },
+  "item_revealed_rate": 0.85,
+  "abilities": {},
+  "ability_revealed_rate": 0.0,
+  "tera": {
+   "Ghost": 0.333,
+   "Poison": 0.333,
+   "Steel": 0.167,
+   "Fire": 0.167
+  },
+  "tera_used_rate": 0.15,
+  "moves": {
+   "Clanging Scales": 0.55,
+   "Stealth Rock": 0.4,
+   "Flamethrower": 0.225,
+   "Clangorous Soul": 0.2,
+   "Taunt": 0.125,
+   "Aura Sphere": 0.125,
+   "Substitute": 0.125,
+   "Close Combat": 0.1,
+   "Boomburst": 0.05,
+   "Belly Drum": 0.025
+  }
+ },
+ "Mandibuzz": {
+  "seen_n": 40,
+  "items": {
+   "Rocky Helmet": 0.857,
+   "Heavy-Duty Boots": 0.143
+  },
+  "item_revealed_rate": 0.35,
+  "abilities": {
+   "Poison Puppeteer": 1.0
+  },
+  "ability_revealed_rate": 0.025,
+  "tera": {
+   "Water": 0.5,
+   "Fairy": 0.5
+  },
+  "tera_used_rate": 0.05,
+  "moves": {
+   "Foul Play": 0.4,
+   "Roost": 0.4,
+   "U-turn": 0.25,
+   "Defog": 0.2,
+   "Toxic": 0.15,
+   "Iron Defense": 0.075,
+   "Knock Off": 0.05
+  }
+ }
+}

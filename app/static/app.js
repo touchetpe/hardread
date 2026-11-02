@@ -526,14 +526,14 @@
       v.end_reason ? h("span", { class: "chip" }, endText(v.end_reason)) : null,
       h("span", { class: "chip chip-side" }, (sharedPage || v.showcase ? "Reviewed side: " : "You: ") + (v.side === "p1" ? "Player 1" : "Player 2")),
       v.mode === "export" ? h("span", { class: "chip", title: "Sets from your team export" }, "your team export") : v.sets_note ? null :
-        h("span", { class: "chip", title: "Smogon's most common set consistent with what the replay showed" }, "sets assumed"),
+        h("span", { class: "chip", title: "the most common set consistent with the replay where we have one, otherwise a plain default" }, "sets assumed"),
       v.private ? h("span", { class: "chip" }, "private · kept 24 h") : null);
     var shareBox = h("div", { class: "share-box", hidden: true });
     var shareBtn = (!STATIC && v.features && v.features.share) ? h("button", { type: "button", class: "btn btn-ghost btn-sm",
       "aria-expanded": "false", onclick: function () { toggleShare(id, v, shareBtn, shareBox); } }, "Share") : null;
     var setsNote = v.sets_note ? h("p", { class: "sets-note" }, h("span", { "aria-hidden": "true" }, "ⓘ "),
-      (sharedPage || v.showcase ? "“You” means the reviewed player. Their sets (moves, items) are assumed: Smogon's most common set consistent with what the replay showed."
-        : "Your sets are assumed (Smogon's most common set consistent with what the replay showed). Add your team export for exact numbers and to check decisions.")) : null;
+      (sharedPage || v.showcase ? "“You” means the reviewed player. Their sets (moves, items) are assumed: the most common set consistent with the replay where we have one, otherwise a plain default."
+        : "Your sets are assumed (the most common set consistent with the replay where we have one, otherwise a plain default). Add your team export for exact numbers and to check decisions.")) : null;
     var head = h("div", null,
       h("div", { class: "head-top" }, h("a", { class: "back", href: location.pathname.indexOf("/r/") === 0 ? "/" : "#/" }, "← Review " + (location.pathname.indexOf("/r/") === 0 ? "your own game" : "another game")), shareBtn),
       h("div", { class: "review-head" }, h("h1", null, title), chips), setsNote, shareBox);
@@ -819,7 +819,7 @@
     var box = h("div", { class: "dis-list" });
     if (v.sets_note) box.appendChild(h("p", { class: "sets-note" }, h("span", { "aria-hidden": "true" }, "ⓘ "),
       (v.showcase || location.pathname.indexOf("/r/") === 0 ? "The reviewed player's sets" : "Your sets") +
-      " are assumed (Smogon's most common set consistent with what the replay showed), so damage ranges, and with them some of these preferences, may differ with the real sets."));
+      " are assumed (the most common set consistent with the replay where we have one, otherwise a plain default), so damage ranges, and with them some of these preferences, may differ with the real sets."));
     list.forEach(function (d) {
       var gap = d.gap_pts;
       var bw = function (p) { return Math.max(2, Math.round(100 * p)) + "%"; };

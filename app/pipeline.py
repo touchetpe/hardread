@@ -435,7 +435,7 @@ def is_damaging(action):
     return m.get("category") in ("physical", "special") and (m.get("basePower") or 0) > 0 and mid not in FIXED_DAMAGE
 
 
-DRAFT_SETS_TEXT = "your sets are assumed (Smogon's most common set consistent with what the replay showed)"
+DRAFT_SETS_TEXT = "your sets are assumed: the most common set consistent with the replay where we have one, otherwise a plain default"
 EV_CAVEAT = "May depend on your exact EVs: add your team export to check."
 
 

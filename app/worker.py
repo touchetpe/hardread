@@ -34,7 +34,7 @@ def draft(rows, gmap):
     sys.path.insert(0, str(HARDREAD / "tools" / "human"))
     import fpenv  # noqa: F401  (puts the fork on sys.path for the fallback draft)
     import human_eval
-    prof_p = HARDREAD / "scratch_ds" / "human" / "species_profiles.json"
+    prof_p = HARDREAD / "app" / "data" / "species_profiles.json"
     profiles = json.loads(prof_p.read_text()) if prof_p.exists() else {}
     return human_eval.draft_team_smogon(rows, profiles, gmap)
 
