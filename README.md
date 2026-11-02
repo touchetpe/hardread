@@ -53,7 +53,7 @@ For comparison, the same model with only the battle log and no engine put number
 
 | Question | Result |
 |---|---|
-| Does the luck meter behave? | In bot self-play over 500 games, the two players' luck mirrors at r = −0.81, and subtracting measured luck cut outcome variance by 23%. |
+| Does the luck meter behave? | In bot self-play over 500 games, the two players' luck mirrors at r = −0.81, and subtracting measured luck cut outcome variance by 23%. But when one bot had a real information edge, about a fifth of that edge showed up as luck (one test level). |
 | How often does the read test wrongly flag a strong move? | In bot self-play, on 184 moves chosen by a deeper search, it called 18 clear misplays (9.8%; 95% CI 6.3–14.9%), all wrong by the test's design. Our first two settings failed, at 75% and 21%. This wasn't measured on human games. |
 | How much does hidden information matter to the engine? | Between bots, giving the engine the opponent's full sets instead of 25% of them was worth 14.67 ± 4.96 win-rate points over 300 paired games. This measures forced revelation, not the value of a human's reads. |
 | Did our engine changes beat Foul Play? | **No.** A pre-registered sealed test of 10,000 games gave 50.05% (95% CI 49.16–50.94%, p = .91). |
@@ -63,6 +63,7 @@ For comparison, the same model with only the battle log and no engine put number
 - "Choices" is what remains after estimated luck. It includes both players, later information and model error, so it isn't a skill score.
 - Without your team export, your own sets are assumed, and that can change a verdict.
 - Roaring Moon joined OU on 30 October, so the usage statistics don't cover it yet. Reviews of games with it still work, but the engine knows less about what it may be holding.
+- Luck is an estimate. In a test where one bot had a real information edge, about a fifth of that edge showed up as luck, so a large luck number doesn't rule out skill. One test level so far, cause unknown; see [RESULTS.md](RESULTS.md#luck-information-edge-20261102).
 - We haven't yet run a study with human players.
 
 Full lab notes: [RESULTS.md](RESULTS.md) (detailed, in working shorthand). Pre-registration: [PREREGISTRATION.md](PREREGISTRATION.md).

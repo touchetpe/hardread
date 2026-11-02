@@ -2032,3 +2032,9 @@ I read all 14: 0 misleading, 0 awkward, but plain, and the wording is largely di
 - The current q4 is slower than the scripted version, and most of its answers still use similar sentence openings.
 
 The saved answers and summaries are in `tools/agent/eval_q1_q4_20261102.json`; `tools/agent/eval_q1_q4.py` re-runs the check.
+
+<a id="luck-information-edge-20261102"></a>
+
+## 2026-11-02 — Luck meter in a test with a known edge (new, exploratory, one level)
+
+Rule written before running. An oracle bot that knows the opponent's sets played vanilla Foul Play over 300 side-swapped pairings (598 games plus 2 timeouts), with the meter settings and calibrator frozen. Plain win rate 68.67 ± 3.43; luck-adjusted win rate 65.14 ± 2.95. That is a bias of −3.52 points, 95% CI [−5.31, −1.73], which fails the rule that the interval must contain 0 and stay within 1.5. So the meter treated about 19% of a real edge as luck. Only one edge level has finished, and the cause isn't established: exploratory follow-ups with unconditioned worlds (−3.48) and a less steep calibrator (−2.60 ± 1.41) didn't remove it. This was a test between bots, not of how the meter reads a single human game.
