@@ -43,6 +43,8 @@ Results on a fixed set of 60 questions about 20 games (base model, no fine-tunin
 
 Passing means each number comes from an engine result and has the right type. It doesn't mean the explanation is true: a real number can still be the wrong one for its sentence, and plain-word claims aren't checked. That's why we also ran the blind review, which was done by an AI reviewer. The human label check is still pending, so we don't claim the prose is accurate.
 
+**Test of the checker (not a model result):** In a scripted test on 83 real drafts, the checker rejected every invented or uncited number (745/745) and every citation of the wrong kind of value (285/285). It rejected only 8% of real numbers cited from the wrong record, and it does not check claims in plain words. The 745/745 holds by design, since no digit may appear outside a slot. [Method and full table](docs/checker-test.md).
+
 For comparison, the same model with only the battle log and no engine put numbers in 27 of 30 answers, with nothing linking them to a source. Asked for the biggest piece of luck, it named the same turn as the engine in 3 of 10 games. That is a small sample, and the engine's estimate is not ground truth.
 
 **We also fine-tuned Glimmer to play.** Trained on a search engine's decisions, it won **178/200 games (89%; 95% CI 84–93%)** against the Abyssal heuristic bot, with 0 illegal moves in 5,202 decisions. Those teams were partly seen in development, so this doesn't measure general strength. The fine-tuned model is a separate experiment and doesn't write the explanations.
