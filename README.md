@@ -86,4 +86,4 @@ Full lab notes: [RESULTS.md](RESULTS.md) (detailed, in working shorthand). Pre-r
 python3 app/server.py   # http://127.0.0.1:18051
 ```
 
-Showcases work with just `fastapi` and `uvicorn`. To review new games, clone [the engine fork](FORK_URL_PENDING) into `foul-play/` and install its `requirements.txt` in a Python 3.13 environment (it needs Rust 1.89), then set `HARDREAD_FP_PYTHON` to that Python. Live explanations need a `llama-server` running Muse Glimmer. More in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
+Showcases work with just `fastapi` and `uvicorn`. To review new games, clone [the engine fork](https://github.com/touchetpe/foul-play-hardread) into `foul-play/` and install its `requirements.txt` in a Python 3.13 environment (it needs Rust 1.89), then set `HARDREAD_FP_PYTHON` to that Python. Live explanations need a `llama-server` running Muse Glimmer. More in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
