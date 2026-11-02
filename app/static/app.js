@@ -11,7 +11,7 @@
     var timer = function (ms) { var c = new AbortController(); setTimeout(function () { c.abort(); }, ms); return c.signal; };
     fetch("live.json", { cache: "no-store", signal: timer(4000) }).then(function (r) { return r.json(); }).then(function (l) {
       if (!l.url) return done(null);
-      return fetch(l.url + "/api/health", { cache: "no-store", signal: timer(5000) }).then(function (r) { return r.json(); })
+      return fetch(l.url + "/api/health", { cache: "no-store", signal: timer(45000) }).then(function (r) { return r.json(); })
         .then(function (hh) { done(hh && hh.ok ? l.url : null); });
     }).catch(function () { done(null); });
   }
@@ -180,7 +180,7 @@
       h("p", { class: "section-sub", style: "margin-bottom:12px" }, "Gen 9 OU singles. Saved replays only: HardRead never looks at a live battle."),
       h("label", { class: "field-label", for: "paste" }, "Replay link or battle log"),
       input,
-      h("p", { id: "paste-hint", class: "hint" }, PUBLIC_COPY ? "Paste a public replay.pokemonshowdown.com link. This copy runs on the builder's own computer, one review at a time, so you may have to wait." : "Public or private (password) replay links both work. Private replays are kept 24 hours and never get a share page."),
+      h("p", { id: "paste-hint", class: "hint" }, PUBLIC_COPY ? "Paste a public replay.pokemonshowdown.com link. This copy handles one review at a time, so you may have to wait." : "Public or private (password) replay links both work. Private replays are kept 24 hours and never get a share page."),
       h("details", { class: "export-box" },
         h("summary", null, "Add your team export (optional, for exact sets)"),
         h("label", { class: "field-label sr-only", for: "export" }, "Your team export"),
@@ -201,13 +201,13 @@
     });
     if (STATIC) {
       input.disabled = true; exportBox.disabled = true; go.disabled = true;
-      showError("This page keeps saved showcase reviews. Checking whether live review is online…");
+      showError("This page keeps saved showcase reviews. Checking whether live review is online, which can take up to a minute while it wakes up…");
       liveStatus(function (url) {
         var note = form.parentNode.querySelector(".error, .form-error, [role=alert]");
         if (url) {
           showError("");
           form.parentNode.insertBefore(h("p", { class: "live-link" }, h("a", { class: "btn", href: url }, "Review your own game on the live app →"),
-            h("span", { class: "hint" }, " It runs on the builder's own computer, one review at a time, so you may have to wait.")), form);
+            h("span", { class: "hint" }, " It handles one review at a time and may take a minute to wake up.")), form);
         } else if (note) {
           showError("Live review is temporarily offline. The saved showcases below still work.");
         }
@@ -1340,7 +1340,7 @@
         h("li", null, "Without your team export, your own sets are assumed, and that can change a verdict. We haven't yet run a study with human players.")),
       h("h2", { id: "privacy" }, "Privacy"),
       h("ul", null,
-        h("li", null, "HardRead runs on its own server: your machine if you started it yourself, the builder's own computer for the public copy. The open Muse Glimmer weights run in the same setup, so nothing goes to an outside AI service. The only other outside request is fetching the replay link you paste, from replay.pokemonshowdown.com."),
+        h("li", null, "HardRead runs on its own server: your machine if you started it yourself, rented cloud servers (Modal) for the public copy. The open Muse Glimmer weights run in the same setup, so nothing goes to an outside AI service. The only other outside request is fetching the replay link you paste, from replay.pokemonshowdown.com."),
         h("li", null, "Player names and chat are removed before the review runs; the review says “You” and “Opponent”. Names are shown once, on the side picker, and never stored."),
         h("li", null, PUBLIC_COPY ? "This public copy only takes public replay links. Reviews are kept 14 days at most, so a reload is instant, and may be cleared sooner." : "Reviews of public replays are kept 14 days so a reload is instant; private (password) replays 24 hours, with no share page and no card."),
         h("li", null, "The pasted log is deleted when the review finishes, unless you added your team export: then the name-free log and the export stay with the review, for the same time, so you can check decisions. A note you write about a decision is read by the same server and not stored; the details you confirm are kept with that check."),

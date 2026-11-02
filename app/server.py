@@ -61,7 +61,9 @@ PUBLIC = os.environ.get("HARDREAD_PUBLIC") == "1"
 PUBLIC_ORIGIN = os.environ.get("HARDREAD_PUBLIC_ORIGIN", "")   # the static site, allowed to read /api/health
 PUBLIC_REVIEWS_PER_HOUR = int(os.environ.get("HARDREAD_PUBLIC_REVIEWS_PER_HOUR", "60"))
 PUBLIC_BLOCKED = re.compile(r"^/(api/own-ladder|api/provenance|api/share/|api/card/|r/|api/review/[^/]+/receipts)")
+PUBLIC_EXPLAINS_PER_HOUR = int(os.environ.get("HARDREAD_PUBLIC_EXPLAINS_PER_HOUR", "30"))
 _public_reviews = deque()
+_public_explains = deque()
 VERDICTS_ON = os.environ.get("HARDREAD_DISABLE_VERDICT", "") != "1"
 
 RATES = {"review": int(os.environ.get("HARDREAD_RATE_REVIEWS", "5")),
@@ -541,14 +543,17 @@ def create_app(concurrency=1, processes=4):
             return request.headers.get("cf-connecting-ip") or "unknown"
         return request.client.host if request.client else "unknown"
 
-    def public_review_allowed():
+    def within_hourly_cap(events, cap):
         now = time.time()
-        while _public_reviews and now - _public_reviews[0] > 3600:
-            _public_reviews.popleft()
-        if len(_public_reviews) >= PUBLIC_REVIEWS_PER_HOUR:
+        while events and now - events[0] > 3600:
+            events.popleft()
+        if len(events) >= cap:
             return False
-        _public_reviews.append(now)
+        events.append(now)
         return True
+
+    def public_review_allowed():
+        return within_hourly_cap(_public_reviews, PUBLIC_REVIEWS_PER_HOUR)
 
     def err(status, msg, **kw):
         return JSONResponse({"ok": False, "error": msg, **kw}, status_code=status)
@@ -952,6 +957,8 @@ def create_app(concurrency=1, processes=4):
         jid = jobs.existing(key)
         if jid:
             return {"ok": True, "job_id": jid, "template": template}
+        if PUBLIC and not within_hourly_cap(_public_explains, PUBLIC_EXPLAINS_PER_HOUR):
+            return err(429, "Live explanations are paused for this hour. The saved showcases still work.")
 
         def cmd(jd, mode=mode):
             return [sys.executable, str(APP / "explain_worker.py"), str(jd), "--mode", mode, "--url", GLIMMER_URL,
