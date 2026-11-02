@@ -226,6 +226,8 @@ def normalize_log(log, side, maxhp_by_nick=None):
     """
     if isinstance(log, str):
         log = log.split("\n")
+    # older replays call the weather "Snow"; Foul Play only knows today's name and stops on the old one
+    log = [re.sub(r"^\|-weather\|Snow(?=\||$)", "|-weather|Snowscape", l) for l in log]
     lines = []
     i = 0
     while i < len(log):

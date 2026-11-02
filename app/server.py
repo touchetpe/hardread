@@ -260,7 +260,10 @@ class Jobs:
                     _stop_job(j)
                     self._finish(j, False, "This took too long and was stopped.")
                 continue
-            self._finish(j, j["proc"].returncode == 0)
+            ok = j["proc"].returncode == 0
+            st = {} if ok else (_jsonfile(j["dir"] / "status.json", {}) or {})
+            # the worker's own sentence ("The engine could not review this game.") beats a generic failure
+            self._finish(j, ok, st.get("message") if st.get("state") == "error" else None)
 
     def _finish(self, j, ok, message=None):
         result = None
@@ -605,6 +608,9 @@ def create_app(concurrency=1, processes=4):
             return JSONResponse({"ok": False, "error": "Not available from this address."}, status_code=403)
         if PUBLIC and PUBLIC_BLOCKED.match(request.url.path):
             return JSONResponse({"ok": False, "error": "Not available on this public copy."}, status_code=404)
+        if request.method == "POST" and _too_large(request.headers.get("content-length")):
+            return JSONResponse({"ok": False, "error": "That is too large. Paste one replay link."
+                                 if PUBLIC else "That is larger than 1 MB. Paste one finished game."}, status_code=413)
         resp = await call_next(request)
         if PUBLIC_ORIGIN and request.url.path == "/api/health":
             resp.headers["Access-Control-Allow-Origin"] = PUBLIC_ORIGIN
@@ -697,9 +703,12 @@ def create_app(concurrency=1, processes=4):
             rep = await run_in_threadpool(resolve_input, body.get("input", ""))
             game = P.inspect_game(rep)
             export = P.parse_export(_text_field(body.get("team")))
+            suggested = P.detect_side(game, export)
         except P.InputError as e:
             return err(422, str(e))
-        suggested = P.detect_side(game, export)
+        except Exception as e:  # noqa: BLE001  (a clear answer, never a raw 500, whatever was pasted)
+            print("preflight error:", type(e).__name__, file=sys.stderr)
+            return err(422, P.UNREADABLE_LOG)
         # names go back to the person who pasted the replay (to pick a side); they are not stored or logged
         return {"ok": True, "players": game["names"], "turns": game["turns"], "end_reason": game["end_reason"],
                 "winner": game["winner"], "private": bool(rep.get("private")), "suggested_side": suggested,
@@ -720,6 +729,9 @@ def create_app(concurrency=1, processes=4):
             lines, ctx, job_input = P.prepare(rep, side, _text_field(body.get("team")) or None, game)
         except P.InputError as e:
             return err(422, str(e))
+        except Exception as e:  # noqa: BLE001
+            print("review input error:", type(e).__name__, file=sys.stderr)
+            return err(422, P.UNREADABLE_LOG)
         key = P.cache_key(lines, side, job_input.get("team"))
         rid = review_id_for(key)
         if load_parts(rid) is not None:
@@ -1148,14 +1160,20 @@ def _text_field(value):
     return value if isinstance(value, str) else ""
 
 
+MAX_BODY = PUBLIC_MAX_BODY if PUBLIC else P.MAX_BYTES + P.MAX_EXPORT_BYTES + 4096
+
+
+def _too_large(content_length):
+    try:
+        return int(content_length or 0) > MAX_BODY
+    except ValueError:
+        return False
+
+
 async def _body(request):
     try:
-        limit = PUBLIC_MAX_BODY if PUBLIC else P.MAX_BYTES + P.MAX_EXPORT_BYTES + 4096
-        declared = request.headers.get("content-length", "")
-        if declared.isdigit() and int(declared) > limit:   # refuse before reading it
-            return None
         raw = await request.body()
-        if len(raw) > limit:
+        if len(raw) > MAX_BODY:
             return None
         d = json.loads(raw.decode("utf-8"))
         return d if isinstance(d, dict) else None

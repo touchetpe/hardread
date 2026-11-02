@@ -5,6 +5,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
@@ -633,6 +634,203 @@ process.stdout.write(JSON.stringify(output));
                        {"expects_action": {"kind": "tera"}},
                        {"sets": {"Pikachu": {"moves_not": ["thunderbolt"]}}}):
             self.assertTrue(any(P._stated_hypotheses(belief)))
+
+
+def sanitize_fixture(p1, p2, winner):
+    return "\n".join([
+        f"|player|p1|{p1}|lucas|1500", f"|player|p2|{p2}|dawn|1500", "|c|+someone|hello there", "|gametype|singles",
+        "|tier|[Gen 9] OU", "|poke|p1|Landorus-Therian, M|", "|poke|p2|Great Tusk|", "|teampreview", "|",
+        "|switch|p1a: Rockruff|Rockruff, M|100/100", "|switch|p2a: Great Tusk|Great Tusk|100/100", "|turn|1", "|",
+        "|move|p1a: Rockruff|Stealth Rock|p2a: Great Tusk", f"|-sidestart|p2: {p2}|move: Stealth Rock",
+        "|move|p2a: Great Tusk|U-turn|p1a: Rockruff", "|-damage|p1a: Rockruff|50/100 tox|[from] psn",
+        "|turn|2", "|", f"|-message|{p1} forfeited.", "|", f"|win|{winner}"])
+
+
+class ReplayInputTests(unittest.TestCase):
+    """Failures found by pushing public replays through the app (one regression test per fix)."""
+
+    def endpoint(self, path):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            with patch.object(S, "CACHE", root / "cache"), patch.object(S, "JOBS", root / "jobs"), \
+                 patch.object(S, "STATE", root / "state"), patch.object(S, "Jobs", FakeJobs):
+                app = S.create_app()
+        return next(r.endpoint for r in app.routes if getattr(r, "path", None) == path)
+
+    def test_username_that_is_game_vocabulary_does_not_corrupt_the_log(self):
+        for p1, p2, broken in (("Rock", "Beta Two", "Stealth Player1"), ("turn", "Beta Two", "U-Player1"),
+                               ("a", "b", "|plPlayer1yer|")):
+            rep = {"log": sanitize_fixture(p1, p2, p1)}
+            text = "\n".join(P.sanitized_lines(rep, {"p1": p1, "p2": p2}))
+            self.assertNotIn(broken, text)
+            self.assertIn("|Stealth Rock|", text)
+            self.assertIn("|turn|1", text)
+            self.assertIn("|U-turn|", text)
+            self.assertIn("|player|p1|Player1||1500", text)
+            self.assertIn("|-sidestart|p2: Player2|move: Stealth Rock", text)
+            self.assertIn("|-message|Player1 forfeited.", text)
+            self.assertIn("|win|Player1", text)
+            self.assertNotIn("hello there", text)
+
+    def test_username_inside_another_username_keeps_the_right_winner(self):
+        rep = {"log": sanitize_fixture("Bob7by", "Bob7", "Bob7")}
+        lines = P.sanitized_lines(rep, {"p1": "Bob7by", "p2": "Bob7"})
+        self.assertIn("|win|Player2", lines)
+        self.assertIn("|-message|Player1 forfeited.", lines)
+
+    def test_username_in_a_nickname_is_still_removed_and_ordinary_names_are_unchanged(self):
+        log = sanitize_fixture("Rockfan", "Beta Two", "Rockfan").replace("Rockruff", "ROCKFAN jr")
+        lines = P.sanitized_lines({"log": log}, {"p1": "Rockfan", "p2": "Beta Two"})
+        self.assertIn("p1a: Player1 jr", "\n".join(lines))
+        self.assertNotIn("ROCKFAN jr|", "\n".join(lines))
+        names = {"p1": "Alpha One", "p2": "Beta Two"}
+        log = sanitize_fixture(names["p1"], names["p2"], names["p1"])
+        self.assertEqual(P.sanitized_lines({"log": log}, names), P.PR.sanitize_log(log, names, P.PSEUDO))
+
+    def test_unreadable_or_non_text_input_gets_a_clear_rejection(self):
+        for path, extra in (("/api/preflight", {}), ("/api/review", {"side": "p1"})):
+            post = self.endpoint(path)
+            for body in ({"input": "|turn|abc\n|win|x"}, {"input": "|||||\n|turn|\n|win|"}, {"input": 123},
+                         {"input": ["x"]}, {"input": {"a": 1}},
+                         {"input": sanitize_fixture("Alpha One", "Beta Two", "Alpha One"), "team": 123}):
+                response = asyncio.run(post(RequestBody(dict(body, **extra))))
+                self.assertEqual(response.status_code, 422, body)
+                self.assertTrue(json.loads(response.body)["error"])
+
+    def test_unexpected_failure_while_reading_input_is_not_a_raw_500(self):
+        for path, extra in (("/api/preflight", {}), ("/api/review", {"side": "p1"})):
+            post = self.endpoint(path)
+            with patch.object(P, "inspect_game", side_effect=RuntimeError("secret detail")):
+                response = asyncio.run(post(RequestBody(dict({"input": "|turn|1\n|win|x"}, **extra))))
+            self.assertEqual(response.status_code, 422)
+            self.assertNotIn("secret detail", response.body.decode())
+
+    def test_oversized_paste_says_so(self):
+        self.assertTrue(S._too_large(str(S.MAX_BODY + 1)))
+        self.assertFalse(S._too_large(str(S.MAX_BODY)))
+        self.assertFalse(S._too_large(None))
+        self.assertFalse(S._too_large("not a number"))
+        with patch.object(S, "Jobs", FakeJobs), tempfile.TemporaryDirectory() as td:
+            with patch.object(S, "CACHE", Path(td) / "cache"), patch.object(S, "JOBS", Path(td) / "jobs"):
+                app = S.create_app()
+        from fastapi.testclient import TestClient
+        response = TestClient(app).post("/api/preflight", json={"input": "x" * (S.MAX_BODY + 1)})
+        self.assertEqual(response.status_code, 413)
+        self.assertIn("1 MB", response.json()["error"])
+
+    def test_tie_is_reported_as_a_tie(self):
+        review = json.loads(json.dumps(REVIEW))
+        del review["bridge"]
+        review["summary"]["result"] = None
+        review["meta"]["end_reason"] = "tie"
+        view = P.build_view(review, dict(CTX, winner="tie", end_reason="tie"))
+        self.assertEqual(view["result"], "tie")
+        self.assertTrue(view["bridge"]["tie"])
+        self.assertFalse(view["bridge"]["available"])
+        self.assertIn("tie", view["summary_text"])
+        del review["meta"]["end_reason"]
+        self.assertFalse(P.bridge_numbers(review)["tie"])
+
+    def test_team_export_of_the_wrong_side_is_rejected_before_the_engine_runs(self):
+        team = "\n\n".join(f"{name} @ Leftovers\n- Protect" for name in ("Pikachu", "Eevee", "Mew", "Ditto", "Snorlax"))
+        roster = SimpleNamespace(roster=[SimpleNamespace(species_preview=x) for x in
+                                         ("Pikachu", "Eevee", "Mew", "Ditto", "Snorlax", "Abra")])
+        other = SimpleNamespace(roster=[SimpleNamespace(species_preview=x) for x in
+                                        ("Zapdos", "Kyurem", "Lugia", "Ho-Oh", "Entei", "Suicune")])
+        parser = SimpleNamespace(sides={"p1": roster, "p2": other}, rows=[])
+        game = {"parser": parser, "names": {"p1": "Alpha One", "p2": "Beta Two"}, "end_reason": "ko", "turns": 3,
+                "winner": "p1"}
+        rep = {"log": sanitize_fixture("Alpha One", "Beta Two", "Alpha One")}
+        with patch.object(P, "side_rows", return_value=[]):
+            self.assertEqual(P.prepare(rep, "p1", team, game)[1]["mode"], "export")
+            with self.assertRaisesRegex(P.InputError, "does not match"):
+                P.prepare(rep, "p2", team, game)
+
+    def test_showdown_home_page_is_not_called_a_live_battle(self):
+        with self.assertRaisesRegex(P.InputError, "Only replay.pokemonshowdown.com"):
+            P.classify_input("https://pokemonshowdown.com/")
+        with self.assertRaisesRegex(P.InputError, "live battle"):
+            P.classify_input("https://play.pokemonshowdown.com/battle-gen9ou-123456")
+
+    def run_failing_job(self, script):
+        with tempfile.TemporaryDirectory() as td:
+            with patch.object(S, "JOBS", Path(td)):
+                jobs = S.Jobs(1)
+                try:
+                    jid = jobs.submit("review", "k", {}, lambda d: [sys.executable, "-c", script, str(d)], lambda j: None)
+                    for _ in range(100):
+                        st = jobs.status(jid)
+                        if st["state"] in ("done", "error"):
+                            return st
+                        time.sleep(0.1)
+                    self.fail("job did not finish")
+                finally:
+                    jobs.shutdown()
+
+    def test_failed_job_shows_the_workers_message(self):
+        st = self.run_failing_job("import json,sys,pathlib; pathlib.Path(sys.argv[1],'status.json').write_text("
+                                  "json.dumps({'state':'error','message':'The engine could not review this game.'}));"
+                                  "sys.exit(1)")
+        self.assertEqual(st["state"], "error")
+        self.assertEqual(st["message"], "The engine could not review this game.")
+
+    def test_killed_job_does_not_show_a_stale_progress_line_as_its_error(self):
+        st = self.run_failing_job("import json,sys,pathlib; pathlib.Path(sys.argv[1],'status.json').write_text("
+                                  "json.dumps({'state':'running','message':'Searching decision 3 of 9'}));sys.exit(9)")
+        self.assertEqual(st["state"], "error")
+        self.assertNotIn("Searching", st["message"])
+
+
+ENGINE_PROBE = r"""
+import json, sys
+sys.path[:0] = [sys.argv[1] + "/tools/review"]
+import reconstruct as R
+from copy import deepcopy
+from fp.battle.state import Battle, LastUsedMove, Pokemon
+from fp.search.poke_engine_helpers import battle_to_poke_engine_state
+from fp.modes import battle_mode
+from fp.format_spec import FormatSpec
+out = {}
+lines, _ = R.normalize_log(["|-weather|Snow", "|-weather|Snow|[upkeep]", "|-weather|Snowscape", "|-weather|none",
+                            "|move|p1a: X|Snow"], "p1", {})
+out["weather"] = lines
+battle = Battle("battle-test")
+battle.mode = battle_mode(FormatSpec.from_format_string("gen9ou").battle_type)
+out["no_stats"] = battle.mode.smogon_sets.move_usage_rates(Pokemon("Roaring Moon", 100))
+for side in (battle.user, battle.opponent):
+    side.active = Pokemon("Umbreon", 100)
+    for move in ("toxic", "wish", "protect", "substitute", "hypervoice"):
+        side.active.add_move(move)
+    side.last_used_move = LastUsedMove("umbreon", "hypervoice", 1)
+state = battle_to_poke_engine_state(deepcopy(battle))
+out["state"] = len(state.to_string()) > 0
+print("RESULT " + json.dumps(out))
+"""
+
+
+class EngineGuardTests(unittest.TestCase):
+    """Run in the Foul Play environment: real replays crashed the engine on each of these."""
+
+    @classmethod
+    def setUpClass(cls):
+        if not S.FP_PY.exists() or not P.FP_DIR.exists():
+            raise unittest.SkipTest("the Foul Play environment is not available")
+        result = subprocess.run([str(S.FP_PY), "-c", ENGINE_PROBE, str(S.HARDREAD)], capture_output=True, text=True,
+                                cwd=str(S.HARDREAD), timeout=120)
+        line = next((x for x in result.stdout.splitlines() if x.startswith("RESULT ")), None)
+        if line is None:
+            raise AssertionError("engine probe failed: " + result.stderr[-800:])
+        cls.out = json.loads(line[7:])
+
+    def test_old_snow_weather_name_is_translated(self):
+        self.assertEqual(self.out["weather"][:2], ["|-weather|Snowscape", "|-weather|Snowscape|[upkeep]"])
+        self.assertEqual(self.out["weather"][2:], ["|-weather|Snowscape", "|-weather|none", "|move|p1a: X|Snow"])
+
+    def test_species_without_usage_statistics_has_no_moves_to_sample(self):
+        self.assertEqual(self.out["no_stats"], [])
+
+    def test_fifth_known_move_does_not_panic_the_engine(self):
+        self.assertTrue(self.out["state"])
 
 
 if __name__ == "__main__":
