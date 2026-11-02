@@ -102,14 +102,11 @@
   function initGate() {
     var d = document.getElementById("gate");
     if (gateAccepted() || !d || typeof d.showModal !== "function") return;
-    var box = document.getElementById("gate-age"), ok = document.getElementById("gate-ok");
-    box.addEventListener("change", function () { ok.disabled = !box.checked; });
     d.addEventListener("cancel", function (e) { e.preventDefault(); });   // Esc does not skip the gate
     document.getElementById("gate-privacy").addEventListener("click", function () {
       d.close();   // read the privacy notice first; the gate comes back on leaving it (route) or on submit
     });
-    document.getElementById("gate-form").addEventListener("submit", function () {
-      if (!box.checked) return;
+    document.getElementById("gate-form").addEventListener("submit", function () {   // one tap: the button is the 18+ confirmation
       gateOk = true;
       try { localStorage.setItem("hardread.gate.v1", "yes"); } catch (e) { /* this page view only */ }
     });
@@ -247,25 +244,42 @@
     }
 
     var how = h("section", { "aria-labelledby": "how-title", style: "margin-top:34px" },
-      h("h2", { id: "how-title", class: "section-title" }, "How it works"),
-      h("p", { class: "section-sub" }, "Every turn is replayed through Foul Play, the search engine that won the PokéAgent 2025 Gen 9 OU track, with sampled guesses at what the opponent's team could hold."),
+      h("h2", { id: "how-title", class: "section-title" }, "How a game becomes one sum"),
+      h("p", { class: "section-sub" }, "Every turn is replayed through the search engine, with sampled guesses at what the opponent's team could hold."),
       h("div", { class: "how" },
         h("div", { class: "step" }, h("span", { class: "n", "aria-hidden": "true" }, "1"), h("b", null, "Start"),
           h("p", null, "Your win chance at team preview, before anyone moved.")),
         h("div", { class: "step" }, h("span", { class: "n", "aria-hidden": "true" }, "2"), h("b", null, "Luck"),
-          h("p", null, "Each crit, miss, roll and speed tie, priced against every outcome that could have happened instead.")),
+          h("p", null, "Each crit, miss, roll and speed tie, measured against every outcome that could have happened instead.")),
         h("div", { class: "step" }, h("span", { class: "n", "aria-hidden": "true" }, "3"), h("b", null, "Choices, both players"),
           h("p", null, "Everything that was not dice. Plus the few turns where the engine clearly disagreed with you."))));
 
-    var showcaseSec = h("section", { "aria-labelledby": "sc-title", style: "margin-top:34px" },
-      h("h2", { id: "sc-title", class: "section-title" }, "Try a showcase"),
-      h("p", { class: "section-sub" }, "Ladder games from public replays across rating bands, each reviewed from one player's side. Names removed; the reviewed player's sets are assumed (Smogon's most common set consistent with the replay)."));
+    var showcaseSec = h("section", { "aria-labelledby": "sc-title", id: "showcases", style: "margin-top:34px" },
+      h("h2", { id: "sc-title", class: "section-title" }, "See a finished review"),
+      h("p", { class: "section-sub" }, "One click, nothing to paste. Real ladder games from public replays, each reviewed from one player's side. Names removed; that player's sets (moves, items) are assumed."));
     var scGrid = h("div", { class: "showcases" }, h("p", { class: "muted" }, "Loading showcases…"));
     showcaseSec.appendChild(scGrid);
+    // The sample sum in the hero is the first showcase's real result, and it links to that review.
+    var sampleBox = h("a", { class: "hero-sample", hidden: true, href: "#/review/showcase-1" });
+    var seeBtn = h("a", { class: "btn btn-primary", href: "#/review/showcase-1" }, "See a real review →");
     getShowcases().then(function (d) {
       clear(scGrid);
       var list = (d && d.showcases) || [];
-      if (!list.length) { scGrid.appendChild(h("p", { class: "muted" }, "No showcases in this build.")); return; }
+      if (!list.length) {
+        scGrid.appendChild(h("p", { class: "muted" }, "No showcases in this build."));
+        seeBtn.hidden = true;
+        return;
+      }
+      seeBtn.setAttribute("href", "#/review/" + list[0].id);
+      var first = list[0].bridge || {};
+      if (first.s !== undefined && first.s !== null) {
+        sampleBox.setAttribute("href", "#/review/" + list[0].id);
+        append(sampleBox, [
+          h("span", { class: "hs-label" }, "One real game, as one sum"),
+          sumLine(first, list[0].result),
+          h("span", { class: "hs-note" }, "Luck is crits, misses, rolls and speed ties. Choices is everything else, for both players together.")]);
+        sampleBox.hidden = false;
+      }
       list.forEach(function (sc) {
         var b = sc.bridge || {};
         scGrid.appendChild(h("a", { class: "showcase", href: "#/review/" + sc.id },
@@ -274,19 +288,49 @@
             h("span", { class: "chip" }, sc.turns + " turns")),
           h("h3", null, sc.title || "Ladder game"),
           h("div", { class: "meta" }, "Ladder game " + (sc.band || "") + " · " + endText(sc.end_reason)),
+          b.s !== undefined && b.s !== null ? h("div", { class: "sc-sum" }, sumLine(b, sc.result)) : null,
           miniBridge(b),
           h("div", { class: "go" }, "Open the review →")));
       });
     });
 
-    show([h("section", { class: "hero" },
-      h("p", { class: "eyebrow" }, "Hidden information · search engine · receipts"),
-      h("h1", null, "Was it luck, or was it you?"),
-      h("p", { class: "lede" }, "Paste a competitive Pokémon battle. HardRead separates the dice from the decisions, turn by turn, and shows where a champion search engine would have played differently.")),
-      form, how, h("section", { class: "card", style: "margin-top:34px" },
+    var ownBox = h("div", null);
+    if (!STATIC) api("/api/own-ladder").then(function (o) {   // only offered when this server has the bot's records
+      var has = o && (o.games || []).some(function (g) { return (g.decisions || []).length; });
+      if (has) ownBox.appendChild(h("section", { class: "card", style: "margin-top:34px" },
         h("h2", null, "Why the bot played this"),
-        h("p", null, "Explore selected pre-action search evidence from the bot’s own ladder games."),
-        h("a", { href: "#/own-ladder" }, "Open the bot’s games →")), showcaseSec], null, false);
+        h("p", null, "The search evidence our bot recorded before acting, in selected games from its own ladder runs."),
+        h("a", { href: "#/own-ladder" }, "Open the bot’s games →")));
+    });
+
+    var differ = h("section", { "aria-labelledby": "diff-title", class: "differ" },
+      h("h2", { id: "diff-title", class: "section-title" }, "The engine analyzes. The model explains. Every number traces back."),
+      h("div", { class: "how" },
+        h("div", { class: "step" }, h("b", null, "A search engine does the analysis"),
+          h("p", null, "Foul Play, the open-source engine that won the 2025 PokéAgent Gen 9 OU track, samples the hidden sets and searches the continuations.")),
+        h("div", { class: "step" }, h("b", null, "Muse Glimmer explains it"),
+          h("p", null, "Meta's open model chooses which engine results to look up, then explains them in plain words.")),
+        h("div", { class: "step" }, h("b", null, "The model can't write a number"),
+          h("p", null, "It writes sentences with slots pointing at engine results. Code fills in the values, and a checker rejects bad drafts."))),
+      h("p", { class: "hint" }, "On a fixed set of 60 questions about 20 games, 59 explanations passed the checker after at most one repair. ", h("a", { href: "#/about" }, "How this was measured")));
+
+    show([h("section", { class: "hero" },
+      h("h1", null, "Was it luck, or was it you?", h("span", { class: "h1-sub" }, "An engine review for competitive Pokémon")),
+      h("p", { class: "lede" }, "Chess players get an engine review after every game. Competitive Pokémon players don't, because the opponent's sets (moves, items) are hidden and dice decide many turns. HardRead reviews a finished game anyway, and tells you how much was luck."),
+      h("div", { class: "form-row hero-cta" }, seeBtn,
+        h("button", { type: "button", class: "btn btn-ghost", onclick: function () {
+          form.scrollIntoView({ behavior: "smooth", block: "center" });
+          input.focus({ preventScroll: true });
+        } }, "Review your own game")),
+      sampleBox),
+      differ, showcaseSec, h("div", { style: "margin-top:34px" }, form), how, ownBox], null, false);
+  }
+
+  // "53% start + 73 luck − 26 choices = 100% (win)"; b holds the rounded values. Used wherever a sum appears in a line.
+  function sumLine(b, result) {
+    return h("span", { class: "sum-line num" },
+      h("b", null, b.s + "%"), " start ", b.l < 0 ? MINUS + " " : "+ ", h("b", null, Math.abs(b.l)), " luck ",
+      b.c < 0 ? MINUS + " " : "+ ", h("b", null, Math.abs(b.c)), " choices = ", h("b", null, b.r + "%"), " (" + (result === "win" ? "win" : "loss") + ")");
   }
 
   function ownCitation(field) {
@@ -308,7 +352,7 @@
         return h("section", { class: "card own-game" }, h("h2", null, game.alias),
           h("p", { class: "card-sub" }, "HardReadBot vs Opponent"),
           recordedFacts ? h("p", null, h("span", { class: "badge-model" }, game.selection_mode === "glimmer-selected" ? "Supporting facts selected by Glimmer · Template wording" : "Template only")) : null,
-          decisions.length < 2 ? h("p", { class: "empty" }, decisions.length ? "Partial evidence: only one decision is available." : "Decision evidence is unavailable. This game remains pending.") : null,
+          decisions.length < 2 ? h("p", { class: "empty" }, decisions.length ? "Partial evidence: only one decision is available." : "Decision records for this game aren't available in this copy of the app.") : null,
           game.conflicts_unavailable ? h("p", { class: "notice" }, "Conflicting source records are unavailable.") : null,
           decisions.map(function (d) {
             if (recordedFacts) return h("article", { class: "dis" },
@@ -325,7 +369,7 @@
       });
       show([h("a", { class: "back", href: "#/" }, "← Home"), h("h1", null, "Why the bot played this"),
         recordedFacts ? h("p", null, h("span", { class: "badge-model" }, "Recorded decision facts")) : null,
-        h("p", { class: "lede" }, recordedFacts ? "The bot’s recorded choices and search work, captured before it acted." : "Examples selected from pre-action decision evidence. Template-only explanations."),
+        h("p", { class: "lede" }, recordedFacts ? "The bot’s recorded choices and search work, captured before it acted." : "Examples chosen from what the bot recorded before acting. The wording comes from fixed templates."),
         recordedFacts ? h("p", { class: "footnote" }, "Detailed candidate comparisons are unavailable in these logs.") : null, cards], "Why the bot played this");
     });
   }
@@ -333,17 +377,16 @@
   function postgamePane(game) {
     var p = game.postgame;
     var section = h("section", { class: "dis", "aria-label": game.alias + " postgame engine review" }, h("h3", null, "Postgame engine review"));
-    if (!p) { section.appendChild(h("p", { class: "empty" }, "Postgame engine review pending.")); return section; }
+    if (!p) { section.appendChild(h("p", { class: "empty" }, "Engine review not available yet.")); return section; }
     if (p.status !== "ok") {
-      section.appendChild(h("p", { class: "empty" }, p.reason === "cache_missing" ? "Native review unavailable: required local cache is missing." : "Native review unavailable.")); return section;
+      section.appendChild(h("p", { class: "empty" }, p.reason === "cache_missing" ? "Engine review unavailable in this copy of the app." : "Engine review unavailable.")); return section;
     }
     section.appendChild(h("p", { class: "footnote" }, "Postgame estimates from the existing review search and calibration; they are not the bot’s logged beliefs. Luck is measured after observed outcomes. Choices includes both players."));
     if (p.human_fit) section.appendChild(h("p", { class: "footnote" }, "Calibration was fitted on human games."));
     if (p.percent_hp_approx) section.appendChild(h("p", { class: "footnote" }, "Own HP was approximated from recorded percentages."));
     var b=p.bridge;
     section.appendChild(bridgeWidget({ bridge:b, summary_text:"", result:p.result }, { subject:"HardReadBot" }));
-    if (b.available) section.appendChild(h("p", { class:"footnote" }, "Bridge values: [bridge.s], [bridge.l], [bridge.c], [bridge.r]."));
-    var points=p.wp || [], W=640, H=160, vals=points.filter(function(x){return x.wp !== null;});
+        var points=p.wp || [], W=640, H=160, vals=points.filter(function(x){return x.wp !== null;});
     if (vals.length) {
       var sv=s("svg",{viewBox:"0 0 640 160",role:"img","aria-label":"HardReadBot win probability by turn; detailed values follow"});
       var lo=points[0].turn, hi=points[points.length-1].turn, span=Math.max(1,hi-lo), path="", open=false;
@@ -360,7 +403,7 @@
         h("p",null,"Gap ",String(d.gap_pts)," points [disagreements["+i+"].gap_pts]; win chance before ",String(d.wp_before_pct),"% [disagreements["+i+"].wp_before_pct]."),
         h("p",null,"Chosen option ",pct(d.chosen_wp)," [disagreements["+i+"].chosen_wp]; engine option ",pct(d.best_wp)," [disagreements["+i+"].best_wp].")));
     });
-    section.appendChild(h("details",{class:"ex-sources"},h("summary",null,"Native-view citations"),h("p",null,"Run receipt ",h("code",null,p.run_receipt_sha256)),h("ul",null,p.citations.map(function(c){return h("li",null,h("code",null,c.pointer)," = ",String(c.value)," · view ",h("code",null,c.view_sha256));}))));
+    section.appendChild(h("details",{class:"ex-sources"},h("summary",null,"Where these numbers came from"),h("p",null,"Run record ",h("code",null,p.run_receipt_sha256)),h("ul",null,p.citations.map(function(c){return h("li",null,h("code",null,c.pointer)," = ",String(c.value)," · view ",h("code",null,c.view_sha256));}))));
     return section;
   }
 
@@ -387,7 +430,7 @@
 
   // ------------------------------------------------------------------ job progress
   var STAGES = [["team", "Preparing your team"], ["reconstruct", "Replaying the log through the engine"],
-    ["evaluate", "Searching each of your decisions"], ["luck", "Pricing every chance event"]];
+    ["evaluate", "Searching each of your decisions"], ["luck", "Measuring every chance event"]];
   function renderJob(id) {
     lastRender = null;
     if (STATIC) { show([h("p", null, "Reviews need the HardRead app.")], "Review"); return; }
@@ -459,22 +502,23 @@
     var chips = h("div", { class: "chips" },
       h("span", { class: "chip " + (res === "win" ? "result-win" : res === "loss" ? "result-loss" : "") }, res === "win" ? "✓ Win" : res === "loss" ? "✗ Loss" : "Tie"),
       v.end_reason ? h("span", { class: "chip" }, endText(v.end_reason)) : null,
-      h("span", { class: "chip" }, (sharedPage || v.showcase ? "Reviewed side: " : "You: ") + (v.side === "p1" ? "Player 1" : "Player 2")),
-      h("span", { class: "chip", title: v.mode === "export" ? "Sets from your team export" : "Your sets are assumed: Smogon's most common set consistent with what the replay showed" },
-        v.mode === "export" ? "your team export" : "your sets are assumed"),
+      h("span", { class: "chip chip-side" }, (sharedPage || v.showcase ? "Reviewed side: " : "You: ") + (v.side === "p1" ? "Player 1" : "Player 2")),
+      v.mode === "export" ? h("span", { class: "chip", title: "Sets from your team export" }, "your team export") : v.sets_note ? null :
+        h("span", { class: "chip", title: "Smogon's most common set consistent with what the replay showed" }, "sets assumed"),
       v.private ? h("span", { class: "chip" }, "private · kept 24 h") : null);
     var shareBox = h("div", { class: "share-box", hidden: true });
     var shareBtn = (!STATIC && v.features && v.features.share) ? h("button", { type: "button", class: "btn btn-ghost btn-sm",
       "aria-expanded": "false", onclick: function () { toggleShare(id, v, shareBtn, shareBox); } }, "Share") : null;
     var setsNote = v.sets_note ? h("p", { class: "sets-note" }, h("span", { "aria-hidden": "true" }, "ⓘ "),
-      (sharedPage || v.showcase ? "The reviewed player's sets are assumed (Smogon's most common set consistent with what the replay showed)."
+      (sharedPage || v.showcase ? "“You” means the reviewed player. Their sets (moves, items) are assumed: Smogon's most common set consistent with what the replay showed."
         : "Your sets are assumed (Smogon's most common set consistent with what the replay showed). Add your team export for exact numbers and to check decisions.")) : null;
-    var head = h("div", null, h("a", { class: "back", href: location.pathname.indexOf("/r/") === 0 ? "/" : "#/" }, "← Review " + (location.pathname.indexOf("/r/") === 0 ? "your own game" : "another game")),
-      h("div", { class: "review-head" }, h("h1", null, title), chips, shareBtn ? h("div", { class: "head-actions" }, shareBtn) : null), setsNote, shareBox);
+    var head = h("div", null,
+      h("div", { class: "head-top" }, h("a", { class: "back", href: location.pathname.indexOf("/r/") === 0 ? "/" : "#/" }, "← Review " + (location.pathname.indexOf("/r/") === 0 ? "your own game" : "another game")), shareBtn),
+      h("div", { class: "review-head" }, h("h1", null, title), chips), setsNote, shareBox);
 
     var bridgeCard = h("section", { class: "card", "aria-labelledby": "bridge-title" },
-      h("h2", { id: "bridge-title" }, "Start → Luck → Choices → Result"),
-      h("p", { class: "card-sub" }, "Where your win chance came from. Each bar starts at zero; luck and choices are signed, in win-chance points."),
+      h("h2", { id: "bridge-title" }, "The whole game as one sum"),
+      h("p", { class: "card-sub" }, "Start → luck → choices → result, in points of win chance. Each bar starts at zero."),
       bridgeWidget(v));
 
     var wpCard = h("section", { class: "card", "aria-labelledby": "wp-title" },
@@ -489,12 +533,18 @@
 
     var luckCard = h("section", { class: "card", "aria-labelledby": "luck-title" },
       h("h2", { id: "luck-title" }, "Biggest luck moments"),
-      h("p", { class: "card-sub" }, "Chance outcomes priced against everything that could have happened on that turn."),
+      h("p", { class: "card-sub" }, "Chance outcomes measured against everything that could have happened on that turn."),
       luckMoments(v));
 
     var receipts = receiptsDrawer(id, v);
-    var nodes = [head, bridgeCard, h("div", { class: "grid-2", style: "margin-top:18px" },
-      h("div", { class: "stack" }, wpCard, disCard), h("div", { class: "stack" }, explainCard(id, v), luckCard, aboutCard(v))), receipts];
+    // Desktop: the sum and Muse Glimmer's answer sit side by side above the fold. Phone: the CSS orders the cards
+    // so the explanation comes straight after the sum.
+    var exCard = explainCard(id, v);
+    if (exCard) head.appendChild(h("button", { type: "button", class: "btn btn-ghost btn-sm jump-ex", onclick: function () {
+      exCard.scrollIntoView({ behavior: "smooth", block: "start" });
+    } }, "Jump to Muse Glimmer's explanation ↓"));
+    var nodes = [head, h("div", { class: "grid-2 review-grid" },
+      h("div", { class: "stack" }, bridgeCard, wpCard, disCard), h("div", { class: "stack" }, exCard, luckCard, aboutCard(v))), receipts];
     show(nodes, title, focus);
   }
 
@@ -503,7 +553,7 @@
     var b = v.bridge;
     var subject = options && options.subject;
     if (!b || !b.available) {
-      return h("div", { class: "empty" }, b && b.tie ? "This game ended in a tie, so there is no luck/choices bridge." : "No bridge for this game.");
+      return h("div", { class: "empty" }, b && b.tie ? "This game ended in a tie, so there is no luck and choices sum." : "No sum is available for this game.");
     }
     var rows = [
       { key: "start", label: "Start", sub: "win chance at team preview", val: b.s, unit: "%", kind: "level" },
@@ -511,7 +561,7 @@
       { key: "choices", label: subject ? "Choices, HardReadBot and its opponent" : "Choices, yours and your opponent's", sub: "everything that wasn't dice", val: b.c, unit: " pts", kind: "signed" },
       { key: "result", label: "Result", sub: subject ? (b.result === "win" ? subject + " won" : subject + " lost") : (b.result === "win" ? "you won" : "you lost"), val: b.r, unit: "%", kind: "level" }];
     var maxAbs = 100;
-    var grid = h("div", { class: "bridge", role: "list", "aria-label": "Bridge from start to result" });
+    var grid = h("div", { class: "bridge", role: "list", "aria-label": "From start to result" });
     rows.forEach(function (r, i) {
       var lbl = h("div", { class: "b-label" }, r.label, h("small", null, r.sub));
       var barBox = h("div", { class: "b-bar", "aria-hidden": "true" });
@@ -523,15 +573,15 @@
         h("span", { class: "sr-only" }, r.kind === "signed" ? " points, " + (subject ? (r.val > 0 ? "in HardReadBot’s favour" : r.val < 0 ? "against HardReadBot" : "neutral") : favour(r.val)) : ""));
       grid.appendChild(h("div", { class: "b-row", role: "listitem" }, lbl, barBox, val));
     });
-    var ax = s("svg", { viewBox: "0 0 400 14", preserveAspectRatio: "none", "aria-hidden": "true" });
+    var ax = h("div", { class: "b-axis" });   // real text: an SVG axis here would squash its labels with the bars
     [[-100, MINUS + "100"], [-50, MINUS + "50"], [0, "0"], [50, "+50"], [100, "+100"]].forEach(function (t) {
-      ax.appendChild(s("text", { x: 200 + t[0] / 100 * 198, y: 11, "text-anchor": t[0] === -100 ? "start" : t[0] === 100 ? "end" : "middle", text: t[1] }));
+      ax.appendChild(h("span", { class: t[0] === -100 ? "first" : t[0] === 100 ? "last" : null, style: "left:" + (50 + t[0] / 2) + "%" }, t[1]));
     });
     grid.appendChild(h("div", { class: "b-row b-axis-row", "aria-hidden": "true" }, h("div", { class: "b-label" }), h("div", { class: "b-axis-box" }, ax),
       h("div", { class: "muted b-val", style: "font-size:11px;font-weight:500;text-align:right" }, "points")));
-    var eq = h("p", { class: "bridge-eq" },
-      h("b", null, b.s), " start ", b.l < 0 ? MINUS + " " : "+ ", h("b", null, Math.abs(b.l)), " luck ",
-      b.c < 0 ? MINUS + " " : "+ ", h("b", null, Math.abs(b.c)), " choices = ", h("b", null, b.r), " (" + (b.result === "win" ? "win" : "loss") + ")");
+    var eq = h("p", { class: "bridge-eq sum-line num" },
+      h("b", null, b.s + "%"), " start ", b.l < 0 ? MINUS + " " : "+ ", h("b", null, Math.abs(b.l)), " luck ",
+      b.c < 0 ? MINUS + " " : "+ ", h("b", null, Math.abs(b.c)), " choices = ", h("b", null, b.r + "%"), " (" + (b.result === "win" ? "win" : "loss") + ")");
     var legend = h("div", { class: "bridge-legend" },
       legendKey("pos", subject ? "▲ solid: in HardReadBot’s favour" : "▲ solid: in your favour"), legendKey("neg", subject ? "▼ striped: against HardReadBot" : "▼ striped: against you"),
       legendKey("level", "grey: a win chance, not a change"));
@@ -541,7 +591,7 @@
     if (b.swingy) extra.push(h("div", { class: "notice" }, "Unusually swingy game: " +
       (Math.abs(b.L) > 0.5 ? (subject ? "luck alone moved HardReadBot’s win chance by more than 50 points" : "luck alone moved your win chance by more than 50 points") : "choices moved more than a whole game's worth of win chance") +
       ". The numbers still add up exactly; read the split with care."));
-    return h("div", null, grid, eq, legend,
+    return h("div", null, eq, grid, legend,
       h("p", { class: "footnote" }, subject ? "Choices = everything that wasn't dice: both players' moves and switches, what each side revealed, and resigning. It is not a score of HardReadBot’s play alone." : "Choices = everything that wasn't dice: both players' moves and switches, what each side revealed, and resigning. It is not a score of your play alone."),
       extra, h("p", { class: "summary-text" }, v.summary_text));
   }
@@ -591,7 +641,9 @@
     (v.disagreements || []).forEach(function (d) { dis[d.turn] = d; });
     var wrap = h("div", { class: "chart-wrap", tabindex: "0", role: "img" });
     var tip = h("div", { class: "tooltip", hidden: true });
-    var W = 640, H = 300, m = { l: 40, r: 16, t: 22, b: 34 };
+    // The viewBox follows the space the chart gets (phone, one column, two columns), so labels stay near their real size.
+    var vw = window.innerWidth;
+    var W = vw < 560 ? 340 : vw > 860 ? 520 : 640, H = vw < 560 ? 240 : 280, m = { l: 40, r: 16, t: 22, b: 34 };
     var iw = W - m.l - m.r, ih = H - m.t - m.b;
     var t0 = pts[0].turn, t1 = pts[pts.length - 1].turn;
     var hasEnd = v.result === "win" || v.result === "loss";
@@ -685,7 +737,8 @@
       return best;
     }
     wrap.addEventListener("pointermove", function (e) { place(nearest(e.clientX)); });
-    wrap.addEventListener("pointerleave", function () { if (document.activeElement !== wrap) place(-1); });
+    wrap.addEventListener("pointerdown", function (e) { place(nearest(e.clientX)); });
+    wrap.addEventListener("pointerleave", function (e) { if (e.pointerType !== "touch" && document.activeElement !== wrap) place(-1); });
     wrap.addEventListener("focus", function () { place(cur < 0 ? 0 : cur); });
     wrap.addEventListener("blur", function () { place(-1); });
     wrap.addEventListener("keydown", function (e) {
@@ -716,7 +769,7 @@
         h("tbody", null, rows))));
     var txt = "Your win chance went from " + pct(first.wp) + " on turn " + first.turn + " to " + pct(last.wp) + " on turn " + last.turn +
       " (highest " + pct(hi.wp) + " on turn " + hi.turn + ", lowest " + pct(lo.wp) + " on turn " + lo.turn + ").";
-    return h("div", null, wrap, live, legend, h("p", { class: "chart-help" }, "Hover, or focus the chart and use ← →, to read each turn."),
+    return h("div", null, wrap, live, legend, h("p", { class: "chart-help" }, "Tap or hover on the chart, or focus it and use ← →, to read each turn."),
       h("p", { class: "summary-text", style: "margin-top:12px" }, txt), table);
   }
 
@@ -724,7 +777,7 @@
     var list = v.disagreements || [];
     if (!list.length) {
       var emptyText = v.mode === "draft"
-        ? "No disagreements are shown for this Draft review. The display leaves out choices that depend on assumed sets and only shows eligible decisions while the game was open."
+        ? "No disagreements are shown for this review. Because its sets are assumed, the display leaves out choices that depend on them, and it only shows decisions made while the game was open."
         : "No disagreements met the display filter for this review.";
       return h("div", { class: "empty" }, emptyText);
     }
@@ -788,24 +841,29 @@
     var body = h("div", { class: "rc-body" },
       h("dl", null,
         h("dt", null, "Search"), h("dd", null, e.search || "–"),
-        h("dt", null, "Luck"), h("dd", null, e.luck || "–"),
+        h("dt", null, "Luck"), h("dd", null, String(e.luck || "–").replace(/^luck v\d+ \([^)]*\):\s*/i, "")),
         h("dt", null, "Win-chance mapping"), h("dd", null, e.calibrator || "–"),
-        h("dt", null, "Bridge numbers"), h("dd", null, (v.bridge && v.bridge.source) || "–"),
+        h("dt", null, "Sum computed by"), h("dd", null, (v.bridge && v.bridge.source) || "–"),
         h("dt", null, "Disagreement filter"), h("dd", null, "win chance " + Math.round(100 * v.filter.wp_lo) + "–" + Math.round(100 * v.filter.wp_hi) + "%, gap ≥ " + Math.round(100 * v.filter.min_gap) + " points, at most 3, never summed"),
         h("dt", null, "Decisions searched"), h("dd", null, (v.counts && v.counts.decisions) + " (" + ((v.counts && v.counts.hidden) || 0) + " with a move the log does not show)"),
         h("dt", null, "Time"), h("dd", { class: "num" }, "rebuild " + sec.reconstruct + " s · search " + sec.evaluate + " s · luck " + sec.luck + " s"),
         h("dt", null, "Exact numbers"), h("dd", null, "start " + fmt(v.bridge.S) + " · luck " + fmt(v.bridge.L) + " · choices " + fmt(v.bridge.C))),
-      h("div", null, h("b", null, "Caveats"), h("ul", null, (v.caveats || []).map(function (c) { return h("li", null, c); }))),
+      h("div", null, h("b", null, "Limits"), h("ul", null,
+        h("li", null, "“Choices” is what remains after estimated luck. It includes both players, later information and model error, so it isn't a skill score."),
+        h("li", null, v.mode === "export" ? "Your sets come from your team export; the opponent's hidden sets are sampled." : "Without a team export, the reviewed player's sets are assumed, and that can change a verdict."),
+        h("li", null, "Luck counts damage rolls only where a roll decides a KO. Small gaps between moves are within search noise."),
+        h("li", null, "When the replay hides a move (fainted first, paralysis, sleep, flinch), the choice is unknown and its gap is given as a range."),
+        h("li", null, "We haven't yet run a study with human players."))),
       STATIC ? null : h("p", null, h("a", { href: "/api/review/" + encodeURIComponent(id) + "/receipts", target: "_blank", rel: "noopener" }, "Open the full engine output (JSON)")));
-    return h("details", { class: "card receipts" }, h("summary", null, "Receipts: engine settings, timings and exact numbers"), body);
+    return h("details", { class: "card receipts" }, h("summary", null, "Engine settings, timings and exact numbers"), body);
   }
   function fmt(x) { return x === null || x === undefined ? "–" : Number(x).toFixed(3); }
 
   // ------------------------------------------------------------------ explanation (Muse Glimmer, async)
   var MODE_TEXT = {
-    glimmer_raw: "Written by Muse Glimmer-30B (base); it passed every check on the first draft.",
-    glimmer_repaired: "Written by Muse Glimmer-30B (base); it passed the checks after one repair.",
-    template: "Fixed template: the words come from application code."
+    glimmer_raw: "Written by Muse Glimmer-30B (base model, no fine-tuning). It passed the checker on the first draft.",
+    glimmer_repaired: "Written by Muse Glimmer-30B (base model, no fine-tuning). It passed the checker after one repair.",
+    template: "Fixed template: the words come from application code, not the model."
   };
   // The same model on the same game with no engine: what a one-prompt analyzer gives you.
   var PLAIN_NUM = /(\b\d+(?:\.\d+)?\s*(?:%|percent|points?|pts)\b|\b\d+(?:\.\d+)?%|\b\d+\s*(?:in|out of)\s*\d+\b)/gi;
@@ -817,29 +875,57 @@
       if (i % 2) { n++; p.appendChild(h("mark", { class: "no-source", title: "No citation" }, t)); }
       else p.appendChild(document.createTextNode(t));
     });
-    return h("details", { class: "ex-sources plain-compare" },
+    return h("details", { class: "ex-sources proof plain-compare", open: window.innerWidth >= 860 },
       h("summary", null, "Compare: the same model with a plain prompt and no engine"),
       h("p", { class: "muted" }, "Muse Glimmer given only the battle log and the question “" + pc.question + "”. " +
-        (n ? "Nothing links the " + n + " marked number" + (n > 1 ? "s" : "") + " to a source: some may come from the log, others may be guesses, and you can't tell which." : "Nothing in it links back to a calculation.")), p);
+        (n ? "Nothing links the " + n + " marked number" + (n > 1 ? "s" : "") + " to a source: some may come from the log, others may be guesses, and you can't tell which." : "Nothing in it links back to a calculation.")), p,
+      h("p", { class: "footnote" }, "Across our test, this setup put numbers in 27 of 30 answers, with nothing linking them to a source. Asked for the biggest piece of luck, it named the same turn as the engine in 3 of 10 games. That is a small sample, and the engine's estimate is not ground truth."));
   }
+  // Short tab labels; the full question stays on the button (aria-label, title) and above the answer.
+  var Q_SHORT = { q4: "Turning point", q1: "Luck or choices?", q2: "Biggest luck", q3: "Biggest disagreement" };
+  var Q_ORDER = ["q4", "q1", "q2", "q3"];
   function explainCard(id, v) {
     var qs = v.questions || {};
     var body = h("div", { class: "explain-body", "aria-live": "polite" });
     var tabs = h("div", { class: "q-tabs", role: "group", "aria-label": "Questions" });
-    var current = "q1";
+    var qIds = Q_ORDER.filter(function (q) { return qs[q]; }).concat(Object.keys(qs).filter(function (q) { return Q_ORDER.indexOf(q) < 0; }));
+    // The turning point opens first. A static copy can't generate an answer, so there it opens on the first one it has.
+    var current = (STATIC && qIds.filter(function (q) { return (v.explanations || {})[q]; })[0]) || qIds[0] || "q1";
+    var workOpen = true;   // stays as the reader left it when they switch question
+    var badge = h("span", { class: "badge-model" }, "Muse Glimmer");
     var card = h("section", { class: "card explain-card", "aria-labelledby": "ex-title" },
-      h("div", { class: "ex-head" }, h("h2", { id: "ex-title" }, "In plain words"),
-        h("span", { class: "badge-model" }, "Explanation")),
-      h("p", { class: "card-sub" }, "Every number below is copied from a cited engine result."),
+      h("div", { class: "ex-head" }, h("h2", { id: "ex-title" }, "In plain words"), badge),
+      h("p", { class: "card-sub" }, "The engine did the analysis. Muse Glimmer, Meta's open model, explains it, but it can't write a number: it writes sentences with slots pointing at engine results, code fills in the values, and a checker rejects bad drafts."),
       tabs, body);
-    Object.keys(qs).forEach(function (q) {
-      tabs.appendChild(h("button", { type: "button", class: "q-tab", "data-q": q, "aria-pressed": q === current ? "true" : "false",
-        onclick: function () { current = q; tabs.querySelectorAll(".q-tab").forEach(function (b) { b.setAttribute("aria-pressed", b.getAttribute("data-q") === q ? "true" : "false"); }); load(q); } }, qs[q]));
+    var pcBtn = null;
+    function select(q) {
+      current = q;
+      tabs.querySelectorAll(".q-tab").forEach(function (b) { b.setAttribute("aria-pressed", b.getAttribute("data-q") === q ? "true" : "false"); });
+      if (pcBtn) pcBtn.hidden = pcBtn.getAttribute("data-q") === q;
+      load(q);
+    }
+    qIds.forEach(function (q) {
+      tabs.appendChild(h("button", { type: "button", class: "q-tab", "data-q": q, "aria-pressed": q === current ? "true" : "false", "aria-label": qs[q], title: qs[q],
+        onclick: function () { select(q); } }, Q_SHORT[q] || qs[q]));
     });
     function draw(ex, pending) {
       clear(body);
+      var written = !pending && /^glimmer/.test(ex.final || "") && !ex.policy_rejected;
+      badge.textContent = written ? "Written by Muse Glimmer" : "Fixed template";
+      if (qs[current]) body.appendChild(h("p", { class: "ex-q" }, qs[current]));
       var r = ex.rendered || {};
       var p = h("p", { class: "ex-text" });
+      var sourceBox = null, citeN = 0;
+      function citeBtn(c) {
+        var i = citeN++;
+        return h("button", { type: "button", class: "cite", title: "from " + c.tool + " · " + c.field, "aria-label": c.shown + ": show its source",
+          onclick: function () {
+            if (!sourceBox) return;
+            sourceBox.open = true;
+            sourceBox.querySelectorAll("li").forEach(function (li, k) { li.classList.toggle("hit", k === i); });
+            sourceBox.scrollIntoView({ block: "nearest", behavior: "smooth" });
+          } }, c.shown);
+      }
       (r.sentences || []).forEach(function (snt, i) {
         if (i) p.appendChild(document.createTextNode(" "));
         var text = snt.text, pos = 0;
@@ -847,25 +933,35 @@
           var at = text.indexOf(c.shown, pos);
           if (at < 0) return;
           p.appendChild(document.createTextNode(text.slice(pos, at)));
-          p.appendChild(h("mark", { class: "cite", title: "from " + c.tool + " · " + c.field }, c.shown));
+          p.appendChild(citeBtn(c));
           pos = at + c.shown.length;
         });
         p.appendChild(document.createTextNode(text.slice(pos)));
       });
       var cites = [];
-      (r.sentences || []).forEach(function (snt) { (snt.citations || []).forEach(function (c) { cites.push(c); }); });
+      (r.sentences || []).forEach(function (snt) {   // same order as the buttons above: only citations found in the text
+        var text = snt.text, pos = 0;
+        (snt.citations || []).forEach(function (c) {
+          var at = text.indexOf(c.shown, pos);
+          if (at < 0) return;
+          cites.push(c);
+          pos = at + c.shown.length;
+        });
+      });
       body.appendChild(p);
-      if (ex.precomputed) body.appendChild(h("p", { class: "ex-mode" }, "Saved answer for this showcase, so you don't have to wait."));
-      body.appendChild(h("p", { class: "ex-mode" }, pending ? "Fixed template, shown while Muse Glimmer writes." :
-        ex.policy_rejected ? "Fixed template: Muse Glimmer's draft used wording HardRead does not allow (for example “cost” for choices)." : (MODE_TEXT[ex.final] || "")));
+      if (cites.length) body.appendChild(h("p", { class: "ex-mode" }, "Highlighted values were filled in by code from engine results. Tap one to see its source."));
+      body.appendChild(h("p", { class: "ex-mode" }, (pending ? "Fixed template, shown while Muse Glimmer writes." :
+        ex.policy_rejected ? "Fixed template: Muse Glimmer's draft used wording HardRead does not allow (for example “cost” for choices)." : (MODE_TEXT[ex.final] || "")) +
+        (ex.precomputed ? " Saved answer for this showcase, so you don't have to wait." : "")));
       if (pending) body.appendChild(h("p", { class: "muted ex-wait ex-pending" }, h("span", { class: "spinner", "aria-hidden": "true" }), h("span", null, "Muse Glimmer is writing its own version…")));
       var work = pending ? null : workLog(ex);
       if (work) body.appendChild(work);
       if (cites.length) {
-        body.appendChild(h("details", { class: "ex-sources" }, h("summary", null, "Sources for each number (" + cites.length + ")"),
+        sourceBox = h("details", { class: "ex-sources proof" }, h("summary", null, "Sources for each number (" + cites.length + ")"),
           h("ul", null, cites.map(function (c) {
             return h("li", null, h("b", null, c.shown), " ← ", h("code", null, c.tool + "." + c.field), " = " + JSON.stringify(c.value));
-          }))));
+          })));
+        body.appendChild(sourceBox);
       }
     }
     function workLog(ex) {
@@ -881,7 +977,8 @@
           c.draft ? h("div", { class: "muted" }, c.draft) : null,
           (c.failures || []).map(function (f) { return h("div", { class: "check-why" }, f); })));
       });
-      return h("details", { class: "ex-sources ex-work" }, h("summary", null, "How Muse Glimmer worked this out (" + items.length + " steps)"), h("ol", null, items));
+      return h("details", { class: "ex-sources proof ex-work", open: workOpen, ontoggle: function (e) { workOpen = e.target.open; } },
+        h("summary", null, "How Muse Glimmer worked this out (" + items.length + " steps)"), h("ol", null, items));
     }
     function waiting(msg) { clear(body); body.appendChild(h("p", { class: "muted ex-wait" }, h("span", { class: "spinner", "aria-hidden": "true" }), msg)); }
     function load(q) {
@@ -904,7 +1001,7 @@
         if (current !== q || !document.body.contains(body)) return;
         if (st.state === "done" && st.result === "pending") {
           var wp = body.querySelector(".ex-pending");
-          if (wp) wp.lastChild.textContent = "Explanation pending: the local model was busy with an evaluation run. Reload later for Muse Glimmer's version.";
+          if (wp) wp.lastChild.textContent = "Explanation pending: the model is busy right now. Reload later for Muse Glimmer's version.";
           if (wp && wp.firstChild.classList) wp.firstChild.remove();
           return;
         }
@@ -926,7 +1023,15 @@
     }
     if (!v.features || v.features.explain === false) return null;
     var plain = plainCompare(v);
-    if (plain) card.appendChild(plain);
+    if (plain) {
+      var pcq = qIds.filter(function (q) { return qs[q] === v.plain_compare.question; })[0];   // it answers one question: let the reader see HardRead's answer to the same one
+      if (pcq) {
+        pcBtn = h("button", { type: "button", class: "btn btn-ghost btn-sm", style: "margin-top:10px", hidden: current === pcq, onclick: function () { select(pcq); tabs.scrollIntoView({ block: "nearest", behavior: "smooth" }); } }, "See HardRead's answer to this question");
+        pcBtn.setAttribute("data-q", pcq);
+        plain.appendChild(pcBtn);
+      }
+      card.appendChild(plain);
+    }
     load(current);
     return card;
   }
@@ -1068,7 +1173,7 @@
         var finish = function (jobResult) {
           if (!r.identity_sha256 || (jobResult && jobResult.identity_sha256 !== r.identity_sha256)) {
             checkBtn.disabled = false;
-            msg.textContent = "The check receipt did not match this read. Retry the check.";
+            msg.textContent = "The check result did not match this read. Retry the check.";
             return;
           }
           if (!sameSubmittedRead()) {
@@ -1082,7 +1187,7 @@
             checkBtn.disabled = false;
             if (!receipt.ok || receipt.identity_sha256 !== r.identity_sha256 || !receipt.raw || !receipt.card ||
                 receipt.raw.cache_identity_sha256 !== r.identity_sha256 || !sameSubmittedRead()) {
-              msg.textContent = "No exact receipt matched this stated read. Retry the check.";
+              msg.textContent = "No check result matched this read. Retry the check.";
               return;
             }
             v.verdicts = v.verdicts || {};
@@ -1180,7 +1285,7 @@
       var dl = h("button", { type: "button", class: "btn btn-ghost btn-sm", onclick: function () { downloadPng(r.card, "hardread-" + id + ".png"); } }, "Download image");
       append(box, [h("img", { src: r.card, alt: "Share card: " + (v.summary_text || ""), class: "share-img", width: 600, height: 315 }),
         h("div", { class: "form-row" }, link, copy, dl),
-        h("p", { class: "hint" }, "The card shows numbers only: no names, no chat, no notes. This build runs on your machine, so the link works only here.")]);
+        h("p", { class: "hint" }, "The card shows numbers only: no names, no chat, no notes." + (/^(localhost|127\.|\[::1\])/.test(location.hostname) ? " This copy runs on your machine, so the link works only here." : ""))]);
     });
   }
   function downloadPng(src, name) {
@@ -1199,25 +1304,31 @@
     show([h("article", { class: "prose" },
       h("p", { class: "eyebrow" }, "About"),
       h("h1", { style: "font-size:36px" }, "About HardRead"),
-      h("p", null, "HardRead audits decisions made under hidden information against a champion search engine, with receipts. Competitive Pokémon is the testbed: each player hides most of their team, chance decides a lot, and a finished replay lets us price every decision and every roll of the dice."),
-      h("p", null, "The engine is Foul Play (GPL-3.0), the search agent that won the PokéAgent 2025 Gen 9 OU track, running on poke-engine. For every one of your decisions it samples teams your opponent could have and searches each of them; for every turn it enumerates the chance outcomes and prices the one that happened against the rest."),
+      h("p", null, "Chess players get an engine review after every game. Competitive Pokémon players don't, because the opponent's sets (moves, items) are hidden and dice decide many turns. HardRead reviews a finished Gen 9 OU game anyway, and tells you how much was luck."),
+      h("p", null, "The analysis comes from Foul Play (GPL-3.0), an open-source search engine by pmariglia that won the 2025 PokéAgent Gen 9 OU track, running on poke-engine. For each decision it samples teams your opponent could have and searches each of them; for each turn it goes through the chance outcomes and measures the one that happened against the rest."),
+      h("h2", null, "How Muse Glimmer is used"),
+      h("p", null, "Muse Glimmer-30B, Meta's open model, writes the explanations as an agent: it chooses which read-only engine tools to call, then submits an explanation. It cannot write a number. It writes sentences with empty slots that point at engine results, code fills in the values, and a checker rejects any draft with an uncited number, a mislabeled quantity or a verdict the engine didn't give. It gets one repair, then a labeled template takes over."),
+      h("p", null, "On a fixed set of 60 questions about 20 games (base model, no fine-tuning), 41 passed the checker on the first draft and 59 after at most one repair. Sentences flagged in a blind review: 3 of 60. The checker guarantees where numbers come from, not that every sentence is wise, which is why we ran that review too. It was done by an AI reviewer; the human label check is still pending."),
+      h("p", null, "For comparison, the same model with only the battle log and no engine put numbers in 27 of 30 answers, with nothing linking them to a source. That is a small sample, and the engine's estimate is not ground truth."),
+      h("p", null, "Separately, we fine-tuned Glimmer to play. It won 178 of 200 games against the Abyssal heuristic bot. Those teams were partly seen in development, so this doesn't measure general strength. The fine-tuned model doesn't write the explanations."),
       h("h2", null, "What the numbers mean"),
       h("ul", null,
         h("li", null, "Start: your win chance at team preview."),
         h("li", null, "Luck: the sum over turns of what the dice gave you, compared with the average outcome of the same turn."),
         h("li", null, "Choices, yours and your opponent's: the rest of the way to the result. The three always add up to the result."),
-        h("li", null, "Disagreements: at most three decisions in open positions where the engine preferred another option by 5 points or more. They are never added up and are not a skill score.")),
+        h("li", null, "Disagreements: at most three decisions in open positions where the engine preferred another option by 5 points or more. They are never added up and are not a skill score."),
+        h("li", null, "Without your team export, your own sets are assumed, and that can change a verdict. We haven't yet run a study with human players.")),
       h("h2", { id: "privacy" }, "Privacy"),
       h("ul", null,
-        h("li", null, "This build runs on your own machine. The only outside request is fetching the replay link you paste, from replay.pokemonshowdown.com."),
+        h("li", null, "HardRead runs on its own server: your machine if you started it yourself, rented cloud servers on the public site. The open Muse Glimmer weights run in the same setup, so nothing goes to an outside AI service. The only other outside request is fetching the replay link you paste, from replay.pokemonshowdown.com."),
         h("li", null, "Player names and chat are removed before the review runs; the review says “You” and “Opponent”. Names are shown once, on the side picker, and never stored."),
         h("li", null, "Reviews of public replays are kept 14 days so a reload is instant; private (password) replays 24 hours, with no share page and no card."),
-        h("li", null, "The pasted log is deleted when the review finishes, unless you added your team export: then the name-free log and the export stay with the review, for the same time, so you can check decisions. A note you write about a decision is read on this machine and not stored; the details you confirm are kept with that check."),
+        h("li", null, "The pasted log is deleted when the review finishes, unless you added your team export: then the name-free log and the export stay with the review, for the same time, so you can check decisions. A note you write about a decision is read by the same server and not stored; the details you confirm are kept with that check."),
         h("li", null, "Sharing is opt-in: a share page and card exist only after you press Share, and they show numbers only (no names, chat or notes)."),
         h("li", null, "No accounts, no tracking, no cookies. Your theme and the 18+ confirmation are remembered in this browser only.")),
       provenanceSection(),
       h("h2", null, "Built during the hackathon"),
-      h("p", null, "HardRead was built for the Meta hackathon (October 26 to November 4, 2026). The repository's BUILT_DURING_HACKATHON.md lists what existed before the kickoff and what was built after it, commit by commit."),
+      h("p", null, "HardRead was built during the Meta Global AI Developer Hackathon (October 26 to November 4, 2026). The repository's BUILT_DURING_HACKATHON.md lists what existed before the kickoff and what was built after it, commit by commit."),
       h("h2", null, "Fair play"),
       h("p", null, "HardRead only reviews finished games. Links to live battle rooms are refused."),
       h("h2", null, "Not affiliated"),
@@ -1225,6 +1336,7 @@
       h("p", null, h("a", { href: "#/" }, "← Review a game")))], "About");
   }
 
+  var MODE_LABEL = { auto: "Muse Glimmer when the model is available, otherwise fixed templates", loop: "Muse Glimmer agent with the checker", prefetch: "Muse Glimmer, prepared in advance", off: "Explanations turned off" };
   function provenanceSection() {
     var box = h("div", null, h("p", { class: "muted" }, STATIC ? "Not included in this static copy." : "Loading…"));
     if (!STATIC) api("/api/provenance").then(function (p) {
@@ -1232,18 +1344,18 @@
       if (!p.ok) { box.appendChild(h("p", { class: "muted" }, "Not available.")); return; }
       var ex = p.explainer || {}, en = p.engine || {}, lv = p.live || {};
       var rows = [
-        ["Explanation mode", lv.explain_mode === "template" ? "Fixed application templates" : (lv.explain_mode || "–")],
+        ["Explanation mode", lv.explain_mode === "template" ? "Fixed application templates" : (MODE_LABEL[lv.explain_mode] || lv.explain_mode || "–")],
         ["Available model", (ex.model || "–") + (ex.license ? " (" + ex.license + ")" : "")],
         ["Weights file", (ex.gguf || "–") + (ex.gguf_bytes ? " · " + (ex.gguf_bytes / 1e9).toFixed(1) + " GB" : "")],
         ["Weights SHA-256", ex.gguf_sha256 || "–"],
-        ["Served with", (ex.server || "–") + (ex.server_flags ? " · " + ex.server_flags : "")],
-        ["Model reachable now", lv.explainer_reachable ? "yes" : "no"],
+        ["Served with", String(ex.server || "–").replace(/\s*\(Metal\)/, "") + (ex.server_flags ? " · " + ex.server_flags : "")],
+        ["Model awake now", lv.explainer_reachable ? "yes" : "no (saved showcase answers still work)"],
         ["Search engine", (en.name || "–") + (en.license ? " (" + en.license + ")" : "") + (lv.foulplay_commit ? " · commit " + lv.foulplay_commit : "")],
         ["This app", lv.hardread_commit ? "commit " + lv.hardread_commit : "–"]];
       box.appendChild(h("dl", { class: "prov" }, rows.map(function (r) { return [h("dt", null, r[0]), h("dd", { class: r[0].indexOf("SHA") >= 0 ? "mono" : null }, r[1])]; })));
     });
     return h("section", { "aria-labelledby": "prov-title" }, h("h2", { id: "prov-title" }, "Provenance"),
-      h("p", null, "The explanation mode above identifies how this server produces explanations. In template mode, fixed application code supplies the words."), box);
+      h("p", null, "What is running behind this page. The explanation mode says how this server produces explanations. In template mode, fixed application code supplies the words."), box);
   }
 
   // ------------------------------------------------------------------ shared SVG defs (hatch for "against you")
