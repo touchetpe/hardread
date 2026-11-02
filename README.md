@@ -2,7 +2,7 @@
 
 **Chess players get an engine review after every game. Competitive Pokémon players don't, because the opponent's sets are hidden and dice decide many turns. HardRead reviews a finished Gen 9 OU game anyway, and tells you how much was luck.**
 
-**Try it:** [HardRead site](https://touchetpe.github.io/hardread-site/) (saved showcases, plus a link to live review when it's online) · **Watch it:** [3-minute demo](VIDEO_URL_PENDING) · Theme: *Build for Your World*
+**Try it:** [HardRead site](https://touchetpe.github.io/hardread-site/) (saved showcases, plus a link to live review when it's online) · Theme: *Build for Your World*
 
 Built during the Meta Global AI Developer Hackathon with Meta's open **Muse Glimmer** model. Fan-made and not affiliated with Nintendo, The Pokémon Company or Game Freak. 18+.
 
