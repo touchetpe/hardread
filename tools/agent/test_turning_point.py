@@ -115,7 +115,7 @@ class TurningPointTemplate(unittest.TestCase):
 
     def test_template_with_luck_as_main_cause(self):
         text = self.check(review(result="win", wps=(0.70, 0.98, 0.99), lucks=(0.51, 0.0, 0.0)))
-        self.assertIn("Most of that move came from luck (+51 points).", text)
+        self.assertIn("Luck on that turn was +51 points, the main cause of that move.", text)
 
     def test_template_with_luck_against_the_move(self):
         text = self.check(review(result="win", wps=(0.40, 0.70, 0.99), lucks=(-0.08, 0.0, 0.0)))
@@ -129,11 +129,13 @@ class TurningPointTemplate(unittest.TestCase):
     def test_template_with_engine_preference(self):
         shown = {"turn": 5, "k": 0, "action": "surf", "engine_best": "switch dragonite", "decision_cost": 0.12,
                  "win_prob": 0.25}
-        self.assertIn("the engine preferred switch to Dragonite by 12 points", self.check(review(), [shown]))
+        self.assertIn("Instead of Surf, the engine preferred switch to Dragonite by 12 points",
+                      self.check(review(), [shown]))
 
     def test_template_for_a_gradual_game(self):
         text = self.check(review(wps=(0.52, 0.45, 0.40, 0.33, 0.27, 0.20), lucks=(0.0,) * 6))
         self.assertIn("No single turn stands out", text)
+        self.assertIn("largest move toward the final result", text)
         self.assertNotIn("turning point", text)
 
 

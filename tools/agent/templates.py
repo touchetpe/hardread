@@ -106,8 +106,8 @@ def s_turning_point(m, gradual=False):
     """The largest win-chance move, what made it, and the engine's preference if the page displays one."""
     rid = m["id"]
     out = []
-    lead = "No single turn stands out in this game; the largest move came on turn {t}" if gradual else \
-        "The turning point was turn {t}"
+    lead = "No single turn stands out in this game; the largest move toward the final result came on turn {t}" \
+        if gradual else "The turning point was turn {t}"
     slots = {"t": f"{rid}.turn", "a": f"{rid}.wp_before_pct", "b": f"{rid}.wp_after_pct"}
     if m.get("what_happened"):
         lead += ", when {w}"
@@ -115,10 +115,11 @@ def s_turning_point(m, gradual=False):
     out.append({"text": lead + ": your win chance went from {a} to {b}.", "slots": slots})
     if m.get("main_cause") == "luck":
         if m.get("event"):
-            out.append({"text": "Most of that move came from luck ({l}): {e}.",
+            out.append({"text": "Luck on that turn was {l}, the main cause of that move: {e}.",
                         "slots": {"l": f"{rid}.luck_pts", "e": f"{rid}.event"}})
         else:
-            out.append({"text": "Most of that move came from luck ({l}).", "slots": {"l": f"{rid}.luck_pts"}})
+            out.append({"text": "Luck on that turn was {l}, the main cause of that move.",
+                        "slots": {"l": f"{rid}.luck_pts"}})
     elif "luck_pts" in m:
         out.append({"text": "Luck on that turn was {l}; most of the move came from choices, yours and your "
                             "opponent's ({c}).", "slots": {"l": f"{rid}.luck_pts", "c": f"{rid}.choices_pts"}})
@@ -126,7 +127,7 @@ def s_turning_point(m, gradual=False):
         out.append({"text": "That move came from choices, yours and your opponent's ({c}).",
                     "slots": {"c": f"{rid}.choices_pts"}})
     if "engine_best" in m and "gap_pts" in m:
-        out.append({"text": "On that turn you chose {chosen}; the engine preferred {best} by {g}.",
+        out.append({"text": "Instead of {chosen}, the engine preferred {best} by {g}.",
                     "slots": {"chosen": f"{rid}.chosen", "best": f"{rid}.engine_best", "g": f"{rid}.gap_pts"}})
     return out
 

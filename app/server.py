@@ -113,23 +113,24 @@ AGENT_QUESTIONS = {
     "q1": ("Was this game decided by luck or by my choices? Call get_summary, then answer in three separate sentences, "
            "one number each. Write the luck sentence as \"Luck was {l}.\" Write the choices sentence as \"Choices, "
            "yours and your opponent's, were {c}.\" and use no other word for them: never write \"your choices\", and "
-           "do not name luck in that sentence. End, in words alone, with whichever number is larger in size: \"So this "
-           "game was decided more by luck.\" or \"So this game was decided more by choices, yours and your "
-           "opponent's.\""),
+           "do not name luck in that sentence. End in words alone, comparing the two numbers by size and ignoring their "
+           "signs. If they are less than five points apart: \"So luck and choices mattered about equally.\" Otherwise "
+           "\"So this game was decided more by luck than by choices.\" or \"So this game was decided more by choices "
+           "than by luck.\""),
     "q4": ("What was the turning point of this game? Call list_key_moments with kind \"win_chance\". Its first moment "
            "is the turning point, the largest move of your win chance toward the final result; do not pick another "
            "turn, even one with more luck. Answer in two or three sentences, in this shape, leaving out any field the "
            "moment does not have.\n"
            "First: \"The turning point was turn {t}, when {w}: your win chance went from {a} to {b}.\" ({w} is "
            "what_happened, {a} is wp_before_pct, {b} is wp_after_pct.) If the tool's note says no single turn stands "
-           "out, begin instead \"No single turn stands out in this game; the largest move came on turn {t}, when {w}: "
-           "your win chance went from {a} to {b}.\"\n"
-           "Second, following main_cause. If it is \"luck\": \"Most of that move came from luck ({l}).\", ending "
-           "\"...({l}): {e}.\" if the moment has event. If it is \"choices\": \"Luck on that turn was {l}; most of the "
-           "move came from choices, yours and your opponent's ({c}).\", or without luck_pts, \"That move came from "
-           "choices, yours and your opponent's ({c}).\"\n"
-           "Third, only if the moment has engine_best: \"On that turn you chose {chosen}; the engine preferred {best} "
-           "by {g}.\" Otherwise say nothing about the engine."),
+           "out, begin instead \"No single turn stands out in this game; the largest move toward the final result came "
+           "on turn {t}, when {w}: your win chance went from {a} to {b}.\"\n"
+           "Second, following main_cause. If it is \"luck\": \"Luck on that turn was {l}, the main cause of that "
+           "move.\", ending \"...of that move: {e}.\" if the moment has event. If it is \"choices\": \"Luck on that "
+           "turn was {l}; most of the move came from choices, yours and your opponent's ({c}).\", or without luck_pts, "
+           "\"That move came from choices, yours and your opponent's ({c}).\"\n"
+           "Third, only if the moment has engine_best: \"Instead of {chosen}, the engine preferred {best} by {g}.\" "
+           "Otherwise say nothing about the engine."),
 }
 _SALT = secrets.token_hex(16)   # per process: hashed client addresses are never written anywhere
 
