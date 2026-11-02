@@ -15,7 +15,7 @@
         .then(function (hh) { done(hh && hh.ok ? l.url : null); });
     }).catch(function () { done(null); });
   }
-  var PUBLIC_COPY = !!document.querySelector('meta[name="hardread-public"]');
+  var PUBLIC_COPY = !!STATIC || !!document.querySelector('meta[name="hardread-public"]');
   var SVGNS = "http://www.w3.org/2000/svg";
   var MINUS = "−";
 
@@ -1342,7 +1342,7 @@
       h("ul", null,
         h("li", null, "HardRead runs on its own server: your machine if you started it yourself, the builder's own computer for the public copy. The open Muse Glimmer weights run in the same setup, so nothing goes to an outside AI service. The only other outside request is fetching the replay link you paste, from replay.pokemonshowdown.com."),
         h("li", null, "Player names and chat are removed before the review runs; the review says “You” and “Opponent”. Names are shown once, on the side picker, and never stored."),
-        h("li", null, "Reviews of public replays are kept 14 days so a reload is instant; private (password) replays 24 hours, with no share page and no card."),
+        h("li", null, PUBLIC_COPY ? "This public copy only takes public replay links. Reviews are kept 14 days at most, so a reload is instant, and may be cleared sooner." : "Reviews of public replays are kept 14 days so a reload is instant; private (password) replays 24 hours, with no share page and no card."),
         h("li", null, "The pasted log is deleted when the review finishes, unless you added your team export: then the name-free log and the export stay with the review, for the same time, so you can check decisions. A note you write about a decision is read by the same server and not stored; the details you confirm are kept with that check."),
         h("li", null, "Sharing is opt-in: a share page and card exist only after you press Share, and they show numbers only (no names, chat or notes)."),
         h("li", null, "No accounts, no tracking, no cookies. Your theme and the 18+ confirmation are remembered in this browser only.")),
