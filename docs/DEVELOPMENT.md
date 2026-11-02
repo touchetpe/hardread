@@ -1,3 +1,5 @@
+> Older development notes, kept as written. The README is current; where they differ, trust the README.
+
 # HardRead: was it luck, or was it you?
 
 HardRead reviews luck and moves with Foul Play and Meta’s Muse Glimmer. Its shared bot account ranked #199 on 30 October 2026.

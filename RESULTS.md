@@ -2038,3 +2038,9 @@ The saved answers and summaries are in `tools/agent/eval_q1_q4_20261102.json`; `
 ## 2026-11-02 — Luck meter in a test with a known edge (new, exploratory, one level)
 
 Rule written before running. An oracle bot that knows the opponent's sets played vanilla Foul Play over 300 side-swapped pairings (598 games plus 2 timeouts), with the meter settings and calibrator frozen. Plain win rate 68.67 ± 3.43; luck-adjusted win rate 65.14 ± 2.95. That is a bias of −3.52 points, 95% CI [−5.31, −1.73], which fails the rule that the interval must contain 0 and stay within 1.5. So the meter treated about 19% of a real edge as luck. Only one edge level has finished, and the cause isn't established: exploratory follow-ups with unconditioned worlds (−3.48) and a less steep calibrator (−2.60 ± 1.41) didn't remove it. This was a test between bots, not of how the meter reads a single human game.
+
+<a id="ladder-snapshots-20261030"></a>
+
+## 2026-10-30 — Ladder rank snapshots of the shared bot account (added 2 November)
+
+From dated screenshots, kept privately: #199, Elo 1712, 29 October 23:13 UTC; #195, Elo 1712, 30 October 23:08 UTC; #157, Elo 1727, 30 October 23:39 UTC. Other agents also used the account, it ran Foul Play, and it later left the top 500.

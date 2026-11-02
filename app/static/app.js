@@ -338,7 +338,7 @@
 
     show([h("section", { class: "hero" },
       h("h1", null, "Was it luck, or was it you?", h("span", { class: "h1-sub" }, "An engine review for competitive Pokémon")),
-      h("p", { class: "lede" }, "Chess players get an engine review after every game. Competitive Pokémon players don't, because the opponent's sets (moves, items) are hidden and dice decide many turns. HardRead reviews a finished game anyway, and tells you how much was luck."),
+      h("p", { class: "lede" }, "Chess players get an engine review after every game. Competitive Pokémon players don't, because the opponent's sets (moves, items) are hidden and dice decide many turns. HardRead reviews a finished game anyway, and estimates how much was luck."),
       h("div", { class: "form-row hero-cta" }, seeBtn,
         h("button", { type: "button", class: "btn btn-ghost", onclick: function () {
           form.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -1019,7 +1019,7 @@
     function load(q) {
       var have = (v.explanations || {})[q];
       if (have) { draw(have); return; }
-      if (STATIC) { clear(body); body.appendChild(h("p", { class: "muted" }, "Not included in this static copy.")); return; }
+      if (STATIC) { clear(body); body.appendChild(h("p", { class: "muted" }, "This saved page doesn't include that answer.")); return; }
       clear(body);
       body.appendChild(h("p", { class: "muted" }, "Preparing the explanation…"));
       var offeredKeys = (v.disagreements || []).map(function (d) { return { turn: d.turn, k: d.k }; });
@@ -1373,7 +1373,7 @@
 
   var MODE_LABEL = { auto: "Muse Glimmer when the model is available, otherwise fixed templates", loop: "Muse Glimmer agent with the checker", prefetch: "Muse Glimmer, prepared in advance", off: "Explanations turned off" };
   function provenanceSection() {
-    var box = h("div", null, h("p", { class: "muted" }, STATIC ? "Not included in this static copy." : "Loading…"));
+    var box = h("div", null, h("p", { class: "muted" }, STATIC ? "Engine and model details are in the GitHub repository." : "Loading…"));
     if (!STATIC) api("/api/provenance").then(function (p) {
       clear(box);
       if (!p.ok) { box.appendChild(h("p", { class: "muted" }, "Not available.")); return; }
