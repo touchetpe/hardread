@@ -20,7 +20,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-from names import action_entities, action_name, to_id  # noqa: E402
+from names import action_entities, action_name, species_name, to_id  # noqa: E402
 
 # research/27 §4.3 filter for "biggest disagreements with the engine"
 DIS_WP_LO, DIS_WP_HI, DIS_MIN_COST = 0.20, 0.80, 0.05
@@ -39,7 +39,8 @@ EVENT_TEXT = {  # (event, sufferer) -> (description, favours); sufferer 'u' = th
 
 NAME_FIELDS = {"species", "move", "action", "engine_best", "chosen", "your_action", "opp_action", "expected",
                "played", "opp_top"}
-TEXT_FIELDS = {"event", "description", "reference", "end", "favours", "kind", "note"}
+TEXT_FIELDS = {"event", "description", "reference", "end", "favours", "kind", "note", "what_happened", "main_cause"}
+GRADUAL_MAX_PTS = 10  # below this, list_key_moments(kind="win_chance") says no single turn stands out
 
 
 def field_kind(field):
@@ -159,8 +160,25 @@ SUBMIT_SCHEMA = {"type": "function", "function": {
 
 DATA_TOOLS = tuple(t["function"]["name"] for t in TOOL_SCHEMAS)
 
+# The turning-point question alone sees kind=win_chance. Q1-Q3 keep the exact schema bytes of the fixed A1 v2 record.
+TURNING_POINT_MOMENTS_SCHEMA = {"type": "function", "function": {
+    "name": "list_key_moments",
+    "description": "Up to k key turns. kind=win_chance: the biggest single-turn moves of your win chance toward the "
+                   "game's final result, largest first, whether they came from luck or not (wp_before_pct, "
+                   "wp_after_pct, what_happened, luck_pts, choices_pts, main_cause, and engine_best, chosen, gap_pts "
+                   "only if the engine's preference is on display for that turn). kind=luck: biggest luck swings "
+                   "(luck_pts, win chance before/after, chance of what happened). kind=disagreement: decisions where "
+                   "the engine preferred another option (gap_pts = how much higher it rated its option).",
+    "parameters": {"type": "object", "properties": {
+        "kind": {"type": "string", "enum": ["win_chance", "luck", "disagreement"]},
+        "k": {"type": "integer", "minimum": 1, "maximum": MAX_K}}, "required": ["kind"]}}}
 
-def all_tool_schemas():
+
+def all_tool_schemas(turning_point=False):
+    if turning_point:
+        data = [TURNING_POINT_MOMENTS_SCHEMA if t["function"]["name"] == "list_key_moments" else t
+                for t in TOOL_SCHEMAS]
+        return data + [SUBMIT_SCHEMA]
     return TOOL_SCHEMAS + [SUBMIT_SCHEMA]
 
 
@@ -330,6 +348,58 @@ class ToolSession:
         scored = [t for t in self.turns.values() if t.get("luck") is not None and _pts(t["luck"]) != 0]
         return sorted(scored, key=lambda t: -abs(t["luck"]))
 
+    def win_chance_moves(self):
+        """Per-turn moves of the displayed win chance, in the order the turning-point question reads them.
+
+        A move is the win chance at the start of the next turn minus the one at the start of this turn, on the
+        rounded integers shown to the player, so the numbers add up on the page. The last turn has no next value and
+        is not a move. Moves toward the final result come first, largest first: a brief recovery in a game that was
+        then lost is not its turning point. The choices part is the move minus its luck, the per-turn form of the
+        bridge identity (choices = everything that wasn't dice)."""
+        result = (self.review.get("summary") or {}).get("result")
+        toward = {"win": 1, "loss": -1}.get(result)
+        moves = []
+        for tn in sorted(self.turns):
+            before, after = _pct(self._wp_before(tn)), _pct(self._wp_after(tn))
+            if before is None or after is None or before == after:
+                continue
+            moves.append({"turn": tn, "before": before, "after": after, "move": after - before,
+                          "luck": _pts(self.turns[tn].get("luck")) or 0})
+        return sorted(moves, key=lambda m: (toward is not None and m["move"] * toward < 0, -abs(m["move"]), m["turn"]))
+
+    def _what_happened(self, t):
+        """The actions of a turn as a phrase that reads correctly after "when" (hidden actions are left out)."""
+        def clause(who, verb_who, action):
+            if action is None:
+                return None
+            if str(action).startswith("switch "):
+                return f"{who} switched to {species_name(str(action)[len('switch '):])}"
+            return f"{verb_who} {action_name(action)}"
+        parts = [clause("you", "you used", t.get("action")),
+                 clause("your opponent", "your opponent used", t.get("opponent_action"))]
+        return " and ".join(p for p in parts if p) or None
+
+    def _win_chance_moment(self, m):
+        tn = m["turn"]
+        t = self.turns[tn]
+        choices = m["move"] - m["luck"]
+        # l + c == move, so at least one part pushes the way the move went; the bigger of those is the main cause
+        main = "luck" if m["luck"] * m["move"] > 0 and abs(m["luck"]) >= abs(choices) else "choices"
+        fields = {
+            "turn": tn, "wp_before_pct": m["before"], "wp_after_pct": m["after"], "what_happened": self._what_happened(t),
+            "main_cause": main, "luck_pts": m["luck"] or None, "choices_pts": choices or None,
+            "event": " and ".join(d for d, _ in self._events(tn)) or None,
+        }
+        # the same capability as get_turn: only a decision the page displays as a disagreement
+        shown = next((d for d in self.disagreements() if d.get("turn") == tn), None)
+        if shown is not None:
+            fields.update({"engine_best": action_name(shown["engine_best"]), "chosen": action_name(shown["action"]),
+                           "gap_pts": _pts(shown["decision_cost"]),
+                           "_raw": {"engine_best": shown["engine_best"], "chosen": shown["action"]}})
+            if self.offered is not None:
+                fields["k"] = shown.get("k", 0)
+        return self._rec(fields)
+
     # ------------------------------------------------------------------ tools
     def get_summary(self):
         s = self.review.get("summary") or {}
@@ -367,6 +437,15 @@ class ToolSession:
             k = max(1, min(MAX_K, int(k)))
         except (TypeError, ValueError):
             k = MAX_K
+        if kind == "win_chance":
+            ranked = self.win_chance_moves()
+            out = {"kind": kind, "moments": [self._win_chance_moment(m) for m in ranked[:k]]}
+            # notes carry no numbers or number words: the model copies them into free text
+            if not ranked:
+                out["note"] = "no turn moved the win chance"
+            elif abs(ranked[0]["move"]) < GRADUAL_MAX_PTS:
+                out["note"] = "no single turn stands out: the win chance moved in small steps"
+            return out
         if kind not in ("luck", "disagreement"):
             return {"error": "kind must be 'luck' or 'disagreement'"}
         moments = []
@@ -495,8 +574,10 @@ class ToolSession:
         return self._rec(f)
 
     # ------------------------------------------------------------------ prefetch (single-call fallback mode)
-    def prefetch(self):
+    def prefetch(self, turning_point=False):
         """All tool outputs the explainer usually needs, in one go (fallback when multi-call loops fail)."""
         outs = [("get_summary", {}), ("list_key_moments", {"kind": "luck", "k": 2}),
                 ("list_key_moments", {"kind": "disagreement", "k": 2})]
+        if turning_point:
+            outs = [("list_key_moments", {"kind": "win_chance", "k": 3})]
         return [(n, a, self.call(n, a)) for n, a in outs]

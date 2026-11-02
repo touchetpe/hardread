@@ -7,7 +7,7 @@ The claim: every number shown is copied from a cited engine result. The model ne
 ## Files
 | File | What |
 |---|---|
-| `tools.py` | Read-only tools over one `review.py` JSON: `get_summary`, `list_key_moments(kind, k)`, `get_turn`, `get_luck_events`, `get_verdict` (cache only). Every returned dict with an `id` is a citable record. Bridge integers (start/luck/choices) come from the review's `bridge` block or `tools/review/bridge.py:from_review` (Ag-Sci). Disagreements use the research/27 §4.3 filter (known action, WP 0.20–0.80, gap ≥ 5 points, never summed). |
+| `tools.py` | Read-only tools over one `review.py` JSON: `get_summary`, `list_key_moments(kind, k)`, `get_turn`, `get_luck_events`, `get_verdict` (cache only). Every returned dict with an `id` is a citable record. Bridge integers (start/luck/choices) come from the review's `bridge` block or `tools/review/bridge.py:from_review` (Ag-Sci). Disagreements use the research/27 §4.3 filter (known action, WP 0.20–0.80, gap ≥ 5 points, never summed). The turning-point question alone also sees `list_key_moments(kind="win_chance")`: per-turn win-chance moves, toward the final result first; `eval_q1_q4.py` measures it. |
 | `render.py` | Fills slots by key type: `*_pts` points (signed, or magnitude when the words give the sign; gaps unsigned), `*_wp_pct`/`wp_*_pct` win chance %, `p`/`prob`/`*_prob` probability %, `turn`, names. |
 | `verifier.py`, `lexicon.py` | The 7 rules (below) + structure. `VERIFIER_VERSION`, `LEXICON_VERSION`. |
 | `explain.py` | The loop: ≤ 4 data-tool calls → `submit_explanation` → verifier → one repair turn → template fallback. Modes `loop` (product), `prefetch` (single-call fallback: tool outputs in the prompt), `template`. |

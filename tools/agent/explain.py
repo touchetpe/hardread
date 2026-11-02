@@ -44,6 +44,19 @@ How to answer:
 REPAIR_PROMPT = ("The verifier rejected this explanation:\n{failures}\n"
                  "Fix every listed problem and call submit_explanation again (same format). You may not call other "
                  "tools unless you need a field you do not have.")
+# Added to the repair turn when the choices number was rejected. A luck word near that slot binds the slot to luck,
+# so the number gets its own sentence, in the words the rule asks for. Repair text only: the checks are unchanged.
+CHOICES_REPAIR = ("\nFor the choices number: give it a sentence of its own with no luck word in it and never the words "
+                  "\"your choices\", written exactly: \"Choices, yours and your opponent's, were {c}.\" Say anything "
+                  "about luck, or which was larger, in a different sentence.")
+
+
+def repair_text(report):
+    """The repair turn's message: the checker's failures, plus how to phrase the choices number if it was rejected."""
+    text = REPAIR_PROMPT.format(failures=failure_text(report))
+    if any("choices_pts" in (f.get("message") or "") for f in report["failures"]):
+        text += CHOICES_REPAIR
+    return text
 
 
 def _now():
@@ -61,10 +74,11 @@ def run(review, question, client=None, mode="loop", verdicts=None, luck_referenc
     if mode == "template":
         return _finish_template(res, session, question, t0)
 
-    tools = all_tool_schemas()
+    turning_point = templates.question_kind(question)[0] == "turning_point"
+    tools = all_tool_schemas(turning_point=turning_point)
     msgs = [{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": f"Question: {question}"}]
     if mode == "prefetch":
-        pre = session.prefetch()
+        pre = session.prefetch(turning_point=turning_point)
         res["data_tool_calls"] = len(pre)
         blob = "\n".join(f"{n}({json.dumps(a)}) -> {session.model_view(o)}" for n, a, o in pre)
         msgs[1]["content"] = (f"Question: {question}\n\nTool outputs already fetched for you (cite them by id):\n{blob}\n\n"
@@ -131,8 +145,7 @@ def run(review, question, client=None, mode="loop", verdicts=None, luck_referenc
             break
         if repair and not repaired:
             repaired = True
-            msgs.append(tool_message(submit["id"], "submit_explanation",
-                                     REPAIR_PROMPT.format(failures=failure_text(report))))
+            msgs.append(tool_message(submit["id"], "submit_explanation", repair_text(report)))
             continue
         break
     if res["final"] is None:

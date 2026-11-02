@@ -10,11 +10,13 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-Q_KINDS = ("luck_or_choices", "biggest_luck", "disagreement", "turn")
+Q_KINDS = ("luck_or_choices", "biggest_luck", "disagreement", "turn", "turning_point")
 
 
 def question_kind(question):
     q = (question or "").lower()
+    if "turning point" in q:  # checked first: its instructions also mention the engine's preference
+        return "turning_point", None
     m = re.search(r"\bturn\s+(\d+)", q)
     if m:
         return "turn", int(m.group(1))
@@ -100,11 +102,49 @@ def s_turn(rec):
     return out
 
 
+def s_turning_point(m, gradual=False):
+    """The largest win-chance move, what made it, and the engine's preference if the page displays one."""
+    rid = m["id"]
+    out = []
+    lead = "No single turn stands out in this game; the largest move came on turn {t}" if gradual else \
+        "The turning point was turn {t}"
+    slots = {"t": f"{rid}.turn", "a": f"{rid}.wp_before_pct", "b": f"{rid}.wp_after_pct"}
+    if m.get("what_happened"):
+        lead += ", when {w}"
+        slots["w"] = f"{rid}.what_happened"
+    out.append({"text": lead + ": your win chance went from {a} to {b}.", "slots": slots})
+    if m.get("main_cause") == "luck":
+        if m.get("event"):
+            out.append({"text": "Most of that move came from luck ({l}): {e}.",
+                        "slots": {"l": f"{rid}.luck_pts", "e": f"{rid}.event"}})
+        else:
+            out.append({"text": "Most of that move came from luck ({l}).", "slots": {"l": f"{rid}.luck_pts"}})
+    elif "luck_pts" in m:
+        out.append({"text": "Luck on that turn was {l}; most of the move came from choices, yours and your "
+                            "opponent's ({c}).", "slots": {"l": f"{rid}.luck_pts", "c": f"{rid}.choices_pts"}})
+    elif "choices_pts" in m:
+        out.append({"text": "That move came from choices, yours and your opponent's ({c}).",
+                    "slots": {"c": f"{rid}.choices_pts"}})
+    if "engine_best" in m and "gap_pts" in m:
+        out.append({"text": "On that turn you chose {chosen}; the engine preferred {best} by {g}.",
+                    "slots": {"chosen": f"{rid}.chosen", "best": f"{rid}.engine_best", "g": f"{rid}.gap_pts"}})
+    return out
+
+
+def _turning_point(session):
+    got = _records(session, "list_key_moments", "win_chance")
+    out = got[0] if got else session.call("list_key_moments", {"kind": "win_chance", "k": 3})
+    ms = out.get("moments") or []
+    return s_turning_point(ms[0], gradual=bool(out.get("note"))) if ms else []
+
+
 def build(session, question):
     """-> submit_explanation payload {"sentences": [...]} (at most 4 sentences)."""
     kind, turn = question_kind(question)
     sents = []
-    if kind == "turn":
+    if kind == "turning_point":
+        sents = _turning_point(session)
+    elif kind == "turn":
         got = [o for o in _records(session, "get_turn") if o.get("turn") == turn]
         rec = got[0] if got else session.call("get_turn", {"turn": turn})
         if "error" not in rec:
