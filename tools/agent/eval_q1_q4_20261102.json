@@ -1,6 +1,6 @@
 {
  "note": "Descriptive runs outside the fixed A1 evaluation; see RESULTS.md, 2026-11-02. Labels hide replay ids.",
- "q4_code_commit": "74e0c73",
+ "q4_code_commit": "7ee7e2b",
  "verifier_version": "agent-verifier-v6 (agent-lex-v6)",
  "prompt_version": "explain-prompt-v3",
  "settings": {
