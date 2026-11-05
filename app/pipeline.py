@@ -546,6 +546,7 @@ def build_view_with_offered(review, ctx):
         "version": 1,
         "mode": ctx.get("mode", "draft"),
         "sets_note": DRAFT_SETS_TEXT if ctx.get("mode", "draft") == "draft" else None,
+        "teams": {"you": list(ctx.get("own_species") or []), "opponent": list(ctx.get("opp_species") or [])},
         "no_usage_stats": no_usage_stats(ctx),
         "ev_caveat_text": EV_CAVEAT,
         "side": review["meta"]["side"],

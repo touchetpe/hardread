@@ -79,6 +79,39 @@ class RequestBody:
         return self.payload
 
 
+class SpriteUiTests(unittest.TestCase):
+    def test_review_and_showcase_project_species_only(self):
+        ctx = dict(CTX, own_species=["Great Tusk"], opp_species=["Pikachu"],
+                   private_marker="not for the browser")
+        view, _ = P.build_view_with_offered(REVIEW, ctx)
+        self.assertEqual(view["teams"], {"you": ["Great Tusk"], "opponent": ["Pikachu"]})
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            (root / "index.json").write_text(json.dumps({"showcases": [{"id": "showcase-1"}]}))
+            (root / "showcase-1.ctx.json").write_text(json.dumps(ctx))
+            with patch.object(S, "SHOWCASES", root):
+                result = S.showcase_index()["showcases"][0]["teams"]
+        self.assertEqual(result, {"you": ["Great Tusk"], "opponent": ["Pikachu"]})
+        self.assertNotIn("not for the browser", json.dumps(result))
+
+    def test_sprite_names_and_displayed_gap(self):
+        script = r"""
+const fs = require('fs'), vm = require('vm');
+const source = fs.readFileSync(process.argv[1], 'utf8');
+const names = source.slice(source.indexOf('  var HYPHEN_NAMES'), source.indexOf('  function sprite(name'));
+const gap = source.slice(source.indexOf('  function displayedGap('), source.indexOf('  function fmtElapsed('));
+const ctx = {}; vm.createContext(ctx); vm.runInContext(names + gap, ctx);
+for (const [name, expected] of [['Flabébé','flabebe'], ['Nidoran-F','nidoranf'], ['Nidoran♂','nidoranm'],
+  ['Ho-Oh','hooh'], ['Ogerpon-Wellspring','ogerpon-wellspring']]) {
+  if (ctx.spriteId(name) !== expected) throw Error('wrong sprite id for ' + name);
+}
+if (ctx.displayedGap({best_wp:0.654, chosen_wp:0.559}) !== '9.5') throw Error('visible gap differs');
+if (ctx.displayedGap({best_wp:null, chosen_wp:0.559, gap_pts:7}) !== '7') throw Error('missing value fallback differs');
+"""
+        path = Path(__file__).parent / "static" / "app.js"
+        subprocess.run(["node", "-e", script, str(path)], check=True, capture_output=True, text=True, timeout=10)
+
+
 class OfferedListIntegrationTests(unittest.TestCase):
     def test_ui_route_job_and_worker_keep_exact_nonempty_list(self):
         view, offered = P.build_view_with_offered(REVIEW, CTX)

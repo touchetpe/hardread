@@ -257,7 +257,7 @@ class Jobs:
                 out["progress"] = 0.0
             elif j["state"] == "running":
                 st = _jsonfile(j["dir"] / "status.json", {}) or {}
-                out.update({k: st.get(k) for k in ("stage", "progress", "message", "done", "decisions")})
+                out.update({k: st.get(k) for k in ("stage", "progress", "message", "done", "decisions", "step")})
                 out["elapsed"] = round(time.time() - j.get("started", time.time()), 1)
             elif j["state"] == "done":
                 out["result"] = j.get("result")
@@ -358,6 +358,15 @@ def _stop_job(j):
 
 def review_id_for(key):
     return "r" + key[:19]
+
+
+def showcase_index():
+    """index.json plus each showcase's two teams (species only), for the landing-page cards."""
+    idx = _jsonfile(SHOWCASES / "index.json", {"showcases": []}) or {"showcases": []}
+    for sc in idx.get("showcases", []):
+        ctx = _jsonfile(SHOWCASES / f"{sc.get('id')}.ctx.json", {}) or {}
+        sc["teams"] = {"you": list(ctx.get("own_species") or []), "opponent": list(ctx.get("opp_species") or [])}
+    return idx
 
 
 def is_showcase(rid):
@@ -690,7 +699,7 @@ def create_app(concurrency=1, processes=4):
         resp.headers["X-Content-Type-Options"] = "nosniff"
         resp.headers["Referrer-Policy"] = "no-referrer"
         resp.headers["Content-Security-Policy"] = (
-            "default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; "
+            "default-src 'self'; img-src 'self' data: blob: https://play.pokemonshowdown.com; style-src 'self' 'unsafe-inline'; "
             "script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
         if request.url.path.startswith("/api/") and not request.url.path.startswith("/api/card/"):
             resp.headers["Cache-Control"] = "no-store"
@@ -713,7 +722,7 @@ def create_app(concurrency=1, processes=4):
 
     @app.get("/api/showcases")
     def showcases():
-        return _jsonfile(SHOWCASES / "index.json", {"showcases": []})
+        return showcase_index()
 
     @app.get("/api/own-ladder")
     def own_ladder():

@@ -49,6 +49,7 @@ def main():
         client = GlimmerClient(a.url, max_tokens=2048, temperature=0.0, reasoning="low", timeout=300)
         lock = Path(a.lock)
         raw_chat = client.chat
+        calls = {"n": 0}
 
         def chat(*args, **kw):
             """Check the evaluation lock before every request; wait for it to clear (the job stays pending)."""
@@ -60,7 +61,9 @@ def main():
                     state["locked_out"] = True
                     raise LLMError("evaluation lock")
                 time.sleep(10)
-            (d / "status.json").write_text(json.dumps({"stage": "writing", "message": "Muse Glimmer is writing"}))
+            calls["n"] += 1   # each request is one step: a look-up, a draft or a repair; the page shows the count
+            (d / "status.json").write_text(json.dumps({"stage": "writing", "message": "Muse Glimmer is writing",
+                                                       "step": calls["n"]}))
             return raw_chat(*args, **kw)
         client.chat = chat
     t0 = time.time()

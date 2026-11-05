@@ -86,6 +86,7 @@ def main():
         for sc in showcases:
             review = json.loads((SHOW / f"{sc['id']}.review.json").read_text())
             ctx = json.loads((SHOW / f"{sc['id']}.ctx.json").read_text())
+            sc["teams"] = {"you": list(ctx.get("own_species") or []), "opponent": list(ctx.get("opp_species") or [])}
             v, offered = P.build_view_with_offered(review, ctx)
             v.update(id=sc["id"], showcase=True, private=False)
             attach_read_example(v, sc["id"], review, ctx)
