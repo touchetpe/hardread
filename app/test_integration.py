@@ -666,6 +666,7 @@ const helpers = source.slice(source.indexOf('  function h(tag, attrs)'), source.
 const body = source.slice(source.indexOf('  var VERDICT_GLYPH'), source.indexOf('  // ------------------------------------------------------------------ share'));
 function element(tag) { return { tag, attrs: {}, children: [], style: { setProperty() {} },
   setAttribute(k, v) { this.attrs[k] = v; }, addEventListener() {}, appendChild(c) { this.children.push(c); },
+  querySelector(sel) { for (const child of this.children) { if (child && child.attrs && sel[0] === '.' && (child.attrs.class || '').split(' ').includes(sel.slice(1))) return child; if (child && child.querySelector) { const found = child.querySelector(sel); if (found) return found; } } return null; },
   set textContent(v) { this.children = [{text: String(v)}]; }, get textContent() { return ''; } }; }
 const context = {document: {createElement: element, createElementNS: (_, tag) => element(tag),
   createTextNode: (text) => ({text})}, SVGNS: 'svg', MINUS: '−', STATIC: true, location: {pathname: '/'}};

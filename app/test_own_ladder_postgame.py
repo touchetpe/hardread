@@ -96,21 +96,22 @@ const end = source.indexOf('  function legendKey(', start);
 if (start < 0 || end < 0) throw Error('bridge function missing');
 function h(tag, attrs, ...children) { return {children, appendChild(x){this.children.push(x);}}; }
 function s(tag, attrs) { return h(tag, attrs, attrs && attrs.text || ''); }
-function signedBar() { return h('svg', null); }
 function legendKey(kind, text) { return h('span', null, text); }
 function glyph(n) { return n >= 0 ? '+' : '-'; }
 function favour(n) { return n > 0 ? 'in your favour' : n < 0 ? 'against you' : 'neutral'; }
 function signed(n) { return String(n); }
 function pct(n) { return Math.round(100*n) + '%'; }
 const MINUS='-';
-const bridgeWidget = eval('(' + source.slice(start,end).trim() + ')');
+// The waterfall geometry helpers live alongside bridgeWidget and are used by it.
+const bridgeWidget = new Function('h','s','legendKey','glyph','favour','signed','pct','MINUS',
+  source.slice(start,end) + '\nreturn bridgeWidget;')(h,s,legendKey,glyph,favour,signed,pct,MINUS);
 function text(x) { if (x == null) return ''; if (Array.isArray(x)) return x.map(text).join(' '); if (typeof x === 'object') return text(x.children); return String(x); }
 const v={bridge:{available:true,tie:false,s:50,l:60,c:-10,r:100,L:.6,result:'win',swingy:true},summary_text:''};
 const bot=text(bridgeWidget(v,{subject:'HardReadBot'}));
 const human=text(bridgeWidget(v));
 for (const phrase of ['HardReadBot and its opponent','in HardReadBot’s favour','against HardReadBot','HardReadBot’s play alone','HardReadBot’s win chance']) if (!bot.includes(phrase)) throw Error('missing bot text: '+phrase);
 for (const phrase of ['your opponent', 'your favour', 'against you', 'your play alone', 'your win chance']) if (bot.includes(phrase)) throw Error('human copy leaked: '+phrase);
-for (const phrase of ["yours and your opponent's",'in your favour','against you','your play alone','your win chance']) if (!human.includes(phrase)) throw Error('ordinary copy changed: '+phrase);
+for (const phrase of ['Choices, both players','in your favour','against you','your play alone','your win chance']) if (!human.includes(phrase)) throw Error('ordinary copy changed: '+phrase);
 """
         path=Path(__file__).resolve().parent/'static/app.js'
         result=subprocess.run(['node','-e',script,str(path)],capture_output=True,text=True,timeout=10)
