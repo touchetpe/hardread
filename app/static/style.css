@@ -581,7 +581,7 @@ details.sure .sure-body p + p { margin-top: 8px; }
   .bridge .b-bar { height: 26px; }
   .bridge .wf-bar { top: 5px; height: 16px; }
   .bridge .wf-tick, .bridge .wf-over { top: 3px; bottom: 3px; }
-  .chip-side { display: none; }
+  .chip-side { font-size: 12px; }
   .how .step { padding: 12px 14px; }
   section[aria-labelledby="bridge-title"] .summary-text { display: none; }   /* same facts as the sum above it; saves a screen */
   .moments li { grid-template-columns: auto 1fr; gap: 2px 10px; }
@@ -614,3 +614,74 @@ nav.toc a { color: var(--pos-ink); text-decoration: none; font-weight: 600; }
 nav.toc a:hover { text-decoration: underline; }
 .prose h2 { scroll-margin-top: 72px; }
 .prose h1 { margin: 4px 0 14px; }
+
+/* last pass: one story above the fold, no empty columns */
+.review-top { align-items: stretch; }
+.review-top > .card { height: 100%; }
+.start-here { margin: 0 0 14px; padding: 14px 16px; border-radius: 12px; background: var(--pos-wash); border: 1px solid color-mix(in srgb, var(--pos) 30%, transparent); }
+.start-here h3 { font-size: 15px; margin: 0 0 6px; }
+.start-here .one-claim { margin: 0 0 6px; }
+.start-here .hint { margin: 0 0 8px; }
+.start-here details.sure { margin: 0 0 8px; }
+@media (min-width: 960px) { .dis-list { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); } }
+.dis-card .read-example { margin-top: 14px; }
+.cite.cite-clause { background: transparent; border-bottom: 1.5px dotted var(--pos); font-weight: inherit; padding: 0; }
+.cite.cite-clause:hover { background: var(--pos-wash); }
+.lg-glyph { display: inline-block; width: 14px; text-align: center; font-size: 13px; }
+.lg-up { color: var(--pos); }
+.lg-down { color: var(--neg); }
+table.tests-table { max-width: 70ch; margin: 6px 0 8px; }
+table.tests-table td, table.tests-table th { font-size: 14px; }
+@media (max-width: 560px) { .q-tab { min-height: 48px; } }
+.review-grid > .card + .card { margin-top: 0; }   /* side by side: no stacked-card gap */
+@media (min-width: 960px) {   /* three disagreement cards in a row: label above each bar, so the bars get the width */
+  .dis-list .opt-bars { grid-template-columns: 1fr auto; }
+  .dis-list .opt-bars > span:not(.num) { grid-column: 1 / -1; margin-top: 4px; }
+}
+/* blue means "in your favour" only: the win-chance line itself is ink */
+.wp-line { stroke: var(--ink-2); }
+.wp-area { fill: color-mix(in srgb, var(--ink) 6%, transparent); }
+.legend-line { border-top-color: var(--ink-2); }
+.cursor-dot { fill: var(--ink); }
+/* iteration 4 */
+.review-top { align-items: start; }
+.review-top > .card { height: auto; }
+.dis.dis-pick { border-color: color-mix(in srgb, var(--pos) 55%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--pos) 35%, transparent); }
+.pick-tag { margin: 0 0 6px; font-size: 12px; font-weight: 700; letter-spacing: .02em; color: var(--pos-ink); text-transform: uppercase; }
+.dis-pick .hint { margin: 8px 0 0; }
+.dis-pick .read-jump { margin-top: 10px; }
+.v-example-card .v-badge { background: var(--surface-2); color: var(--ink); border: 1px solid var(--line-strong); }
+.ex-scope { margin: 0 0 6px; font-size: 13px; color: var(--ink-3); }
+.src-field { font-size: 11.5px; color: var(--ink-3); }
+.mini-over { grid-column: 1 / -1; font-size: 12px; color: var(--ink-3); }
+.nowrap { white-space: nowrap; }
+a.showcase h3 { min-height: 2.5em; }
+.how .step b, .differ .step b, a.showcase h3 { text-wrap: balance; }
+@media (max-width: 860px) { a.showcase h3 { min-height: 0; } }
+@media (max-width: 560px) { .chart-legend { gap: 6px 12px; } .chart-legend .legend-key { margin: 0; } }
+a.showcase { display: flex; flex-direction: column; }
+a.showcase .go { margin-top: auto; padding-top: 10px; }
+/* iteration 5: blue = "in your favour" in the data; citations and the engine's option use ink */
+.cite { background: var(--surface-2); border-bottom-color: var(--ink-2); }
+.cite:hover { background: var(--surface-3); }
+.cite.cite-clause { background: transparent; border-bottom: 1.5px dotted var(--ink-3); }
+.opt-bars .ob-fill.best { background: var(--ink-2); }
+.opt-bars .ob-fill.chosen { background: var(--neutral-bar); opacity: .7; }
+.link-btn { font: inherit; font-size: 12.5px; color: var(--ink-2); background: none; border: 0; padding: 2px 0; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+.link-btn:hover { color: var(--ink); }
+.ex-q .ex-scope { font-weight: 500; color: var(--ink-3); }
+.runs-plot { max-width: 700px; }
+.dis:focus, .moments li:focus { outline: 3px solid var(--focus); outline-offset: 2px; }
+.dis-list { align-items: stretch; }
+/* iteration 6 */
+.review-top { align-items: stretch; }
+.dis { display: flex; flex-direction: column; }
+.dis .dis-chart { margin-top: auto; padding-top: 10px; align-self: flex-start; }
+.scope-add { color: var(--ink-2); font-style: italic; }
+@media (max-width: 560px) {   /* the turn details sit under the plot, so a finger never hides the line */
+  .chart-wrap .tooltip { position: static; max-width: none; min-width: 0; margin-top: 8px; box-shadow: none; }
+}
+@media (max-width: 560px) {   /* the readout box is always there on a phone, so tapping the chart never moves the page */
+  .chart-wrap .tooltip[hidden] { display: block !important; visibility: hidden; }
+  .chart-wrap .tooltip { min-height: 9.5em; }
+}

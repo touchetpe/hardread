@@ -138,6 +138,7 @@
   var lastRender = null;
   var pollTimer = null;
   var chartObserver = null;
+  var openReadExample = false;
   function route() {
     var hsh = location.hash.replace(/^#/, "") || "/";
     if (hsh.charAt(0) !== "/") return;   // in-page anchors (e.g. the skip link) are not routes
@@ -195,7 +196,7 @@
         h("p", { id: "export-hint", class: "hint" }, "Teambuilder → Export. Without it, your sets are guessed.")),
       errBox,
       step2,
-      h("div", { class: "form-row" }, go, h("span", { class: "hint", id: "go-hint", style: "margin:0" }, "About 1–2 minutes. Muse Glimmer's wording can take a few more.")));
+      h("div", { class: "form-row" }, go, h("span", { class: "hint", id: "go-hint", style: "margin:0" }, "About 1–2 minutes. Muse Glimmer's wording can take several more.")));
 
     function showError(msg) { errBox.textContent = msg; errBox.hidden = !msg; }
     function resetStep2() { formState.preflight = null; clear(step2); step2.hidden = true; go.textContent = "Check this game"; }
@@ -362,8 +363,8 @@
   // "53% start + 64 luck − 17 choices = 100% (win)"; b holds the rounded values. Used wherever a sum appears in a line.
   function sumLine(b, result) {
     return h("span", { class: "sum-line num" },
-      h("b", null, b.s + "%"), " start ", b.l < 0 ? MINUS + " " : "+ ", h("b", null, Math.abs(b.l)), " pts luck ",
-      b.c < 0 ? MINUS + " " : "+ ", h("b", null, Math.abs(b.c)), " pts choices = ", h("b", null, b.r + "%"), " (" + (result === "win" ? "win" : "loss") + ")");
+      h("b", null, b.s + "%"), " start ", b.l < 0 ? MINUS + " " : "+ ", h("b", null, Math.abs(b.l)), ptsWord(b.l) + " luck ",
+      b.c < 0 ? MINUS + " " : "+ ", h("b", null, Math.abs(b.c)), ptsWord(b.c) + " choices ", h("span", { class: "nowrap" }, "= ", h("b", null, b.r + "%"), " (" + (result === "win" ? "win" : "loss") + ")"));
   }
 
   function ownCitation(field) {
@@ -452,6 +453,8 @@
       wrap.appendChild(box);
       wrap.appendChild(h("span", { class: "num", style: "text-align:right;font-weight:600" }, r[4] === "level" ? r[1] + "%" : glyph(r[1]) + " " + signed(r[1])));
     });
+    var mid = b.s + b.l;   // past 100% or below 0% is a running total, never a win chance: say so where it happens
+    if (mid > 100 || mid < 0) wrap.appendChild(h("span", { class: "mini-over" }, "Luck took the running total " + (mid > 100 ? "past 100%" : "below 0%") + "; choices brought it back."));
     return wrap;
   }
 
@@ -476,7 +479,7 @@
       h("p", { class: "eyebrow" }, "Review in progress"),
       h("h1", { id: "job-title", style: "font-size:26px" }, "Reviewing your game"),
       bar, msg, said, stages,
-      h("p", { class: "hint", style: "margin-top:16px" }, "About 1–2 minutes. The review opens by itself; Muse Glimmer's wording follows a few minutes later."));
+      h("p", { class: "hint", style: "margin-top:16px" }, "About 1–2 minutes. The review opens by itself; Muse Glimmer's wording follows and can take several minutes."));
     show([card], "Reviewing");
     var started = Date.now();
     function tick() {
@@ -563,7 +566,7 @@
     var chartHost = h("div", { class: "chart-host" });
     var wpCard = h("section", { class: "card wp-card", "aria-labelledby": "wp-title" },
       h("h2", { id: "wp-title" }, "Your win chance, turn by turn"),
-      h("p", { class: "card-sub" }, "At the start of each turn. Early turns carry little signal. The sum starts at team preview, before turn 1."),
+      h("p", { class: "card-sub" }, "At the start of each turn, from team preview. Early turns carry little signal."),
       chartHost);
 
     function redrawChart() {
@@ -580,13 +583,13 @@
       if (tableHadFocus && chartHost.querySelector("details summary")) chartHost.querySelector("details summary").focus({ preventScroll: true });
     }
 
-    var oneDecision = oneDecisionCard(v);
     var disCard = h("section", { class: "card dis-card", "aria-labelledby": "dis-title" },
       h("h2", { id: "dis-title" }, "Where the engine disagreed"),
       h("p", { class: "card-sub" }, "Up to three moves, while the game was open, where the engine preferred another option by 5+ points."),
       sureNote([
         h("p", null, "Up to three decisions made while the game was still open (win chance 20–80%) where the engine preferred another option by 5 points or more. Never added up: searches usually differ by a few points from run to run, and sometimes by much more. Most offered disagreements aren't decisive: when 184 like these from bot games were rechecked with a deeper search, 139 came out within noise (measured before the fix to how reviews track hidden sets)."),
         h("p", null, "These are searched at the decision itself, so they can differ from the turn-start chart."),
+        h("p", null, "A rerun with new random draws can pick a different decision, so treat the biggest gap as one place to look, not the place. The engine can be wrong, especially about what you knew at the time."),
         v.sets_note && (v.disagreements || []).length ? h("p", null, (v.showcase || location.pathname.indexOf("/r/") === 0 ? "The reviewed player's sets" : "Your sets") +
           " are assumed, so real sets could change these.") : null]),
       disagreementsList(v, id), readExamplePointer(v));
@@ -601,12 +604,16 @@
     // Muse Glimmer's answer, then the whole game as a line, then the disagreements beside the luck.
     var exCard = explainCard(id, v, function (q) { if (q === "q4" && document.body.contains(chartHost)) redrawChart(); });
     var nodes = [head,
-      h("div", { class: "grid-2 review-grid review-top" }, h("div", { class: "stack" }, bridgeCard, oneDecision), exCard),
-      wpCard,
-      h("div", { class: "grid-2 review-grid review-rest" }, h("div", { class: "stack" }, disCard), h("div", { class: "stack" }, luckCard)),   // definitions live in the cards; method details on About
+      h("div", { class: "grid-2 review-grid review-top" }, bridgeCard, exCard),   // the sum beside the answer, same height
+      wpCard, disCard, luckCard,
       receipts];
     show(nodes, title, focus);
     redrawChart();
+    if (openReadExample) {   // arrived from another review's "See the saved example"
+      openReadExample = false;
+      var rx = document.getElementById("read-example");
+      if (rx) setTimeout(function () { rx.open = true; rx.scrollIntoView({ behavior: motion(), block: "start" }); var sm = rx.querySelector("summary"); if (sm) sm.focus({ preventScroll: true }); }, 60);
+    }
     if (window.ResizeObserver) {
       var lastWidth = chartHost.clientWidth;
       chartObserver = new ResizeObserver(function () {
@@ -622,24 +629,6 @@
     parts = (parts || []).filter(Boolean);
     if (!parts.length) return null;
     return h("details", { class: "sure" }, h("summary", null, label || "How sure is this?"), h("div", { class: "sure-body" }, parts));
-  }
-
-  // ---- what to do with a review: one place to start, chosen by the largest gap on the list below
-  function oneDecisionCard(v) {
-    var top = (v.disagreements || []).slice().sort(function (x, y) { return y.gap_pts - x.gap_pts; })[0];
-    if (!top) return null;
-    var hasExample = v.read_example && v.read_example.key === top.turn + ":" + top.k;
-    return h("section", { class: "card one-decision", "aria-labelledby": "one-title" },
-      h("h2", { id: "one-title" }, "Start here"),
-      h("p", { class: "one-claim" }, h("b", null, "Turn " + top.turn + ". "), "You chose ", h("b", null, top.chosen), ". The engine preferred ", h("b", null, top.best),
-        " by " + displayedGap(top) + " points of win chance."),
-      h("p", { class: "hint" }, (top.ev_caveat ? "This may depend on your exact EVs, so add your team export to check. " : "") +
-        "The biggest gap below. The engine can be wrong, especially about what you knew at the time."),
-      sureNote([h("p", null, "A rerun with new random draws can pick a different decision, so treat this as one place to look, not the place.")]),
-      hasExample ? h("button", { type: "button", class: "btn btn-ghost btn-sm read-jump", onclick: function () {
-        var box = document.getElementById("read-example");
-        if (box) { box.open = true; box.scrollIntoView({ behavior: motion(), block: "start" }); }
-      } }, "See how a read is checked ↓") : null);
   }
 
   // ---- the bridge: four rows on a shared running-total axis
@@ -676,8 +665,8 @@
     grid.appendChild(h("div", { class: "b-row b-axis-row", "aria-hidden": "true" }, h("div", { class: "b-label" }), h("div", { class: "b-axis-box" }, ax),
       h("div", { class: "muted b-val", style: "font-size:12px;font-weight:500;text-align:right" }, "win chance")));
     var eq = h("p", { class: "bridge-eq sum-line num" },
-      h("b", null, b.s + "%"), " start ", b.l < 0 ? MINUS + " " : "+ ", h("b", null, Math.abs(b.l)), " pts luck ",
-      b.c < 0 ? MINUS + " " : "+ ", h("b", null, Math.abs(b.c)), " pts choices = ", h("b", null, b.r + "%"), " (" + (b.result === "win" ? "win" : "loss") + ")");
+      h("b", null, b.s + "%"), " start ", b.l < 0 ? MINUS + " " : "+ ", h("b", null, Math.abs(b.l)), ptsWord(b.l) + " luck ",
+      b.c < 0 ? MINUS + " " : "+ ", h("b", null, Math.abs(b.c)), ptsWord(b.c) + " choices = ", h("b", null, b.r + "%"), " (" + (b.result === "win" ? "win" : "loss") + ")");
     var legend = h("div", { class: "bridge-legend" },
       legendKey("pos", subject ? "▲ solid: in HardReadBot’s favour" : "▲ solid: in your favour"), legendKey("neg", subject ? "▼ striped: against HardReadBot" : "▼ striped: against you"),
       legendKey("level", "grey: a win chance, not a change"),
@@ -716,6 +705,7 @@
     if (opt.dot) box.appendChild(h("span", { class: "wf-dot", style: "left:" + wfX(to, dom) + "%" }));
   }
 
+  function ptsWord(n) { return Math.abs(n) === 1 ? " pt" : " pts"; }
   function legendKey(kind, text) {
     var sv = s("svg", { viewBox: "0 0 22 12", "aria-hidden": "true" });
     sv.appendChild(s("rect", { x: 1, y: 1, width: 20, height: 10, rx: 2,
@@ -734,13 +724,15 @@
     var tip = h("div", { class: "tooltip", hidden: true });
     // The viewBox follows the space the chart gets (phone, one column, two columns), so labels stay near their real size.
     var W = Math.max(280, Math.round(width || window.innerWidth - 64));
-    var H = W < 500 ? 264 : W < 800 ? 294 : 314, m = { l: 42, r: 16, t: 28, b: 48 };
+    var H = W < 500 ? 264 : W < 800 ? 294 : 314, m = { l: 50, r: 42, t: 28, b: 48 };
     var iw = W - m.l - m.r, ih = H - m.t - m.b;
     var t0 = pts[0].turn, t1 = pts[pts.length - 1].turn;
     var hasEnd = v.result === "win" || v.result === "loss";
+    var S0 = v.bridge && Number.isFinite(v.bridge.S) ? v.bridge.S : null;   // team preview: where the sum above starts
+    var tStart = S0 !== null ? t0 - 1 : t0;
     var tEnd = t1 + (hasEnd ? Math.max(0.6, (t1 - t0) / 18) : 0);
-    var span = Math.max(1, tEnd - t0);
-    function X(t) { return m.l + (t - t0) / span * iw; }
+    var span = Math.max(1, tEnd - tStart);
+    function X(t) { return m.l + (t - tStart) / span * iw; }
     function Y(p) { return m.t + (1 - p) * ih; }
     var sv = s("svg", { viewBox: "0 0 " + W + " " + H, "aria-hidden": "true" });
     var grid = s("g", { class: "grid" });
@@ -754,25 +746,37 @@
       axis.appendChild(s("text", { x: X(t), y: H - m.b + 18, "text-anchor": "middle", text: String(t) }));
     }
     axis.appendChild(s("text", { x: W - m.r, y: H - 4, "text-anchor": "end", text: "turn" }));
+    if (S0 !== null) axis.appendChild(s("text", { x: X(tStart), y: H - m.b + 18, "text-anchor": "middle", text: "preview" }));
     sv.appendChild(grid);
     var line = pts.map(function (p, i) { return (i ? "L" : "M") + X(p.turn).toFixed(1) + "," + Y(p.wp).toFixed(1); }).join(" ");
     sv.appendChild(s("path", { class: "wp-area", d: line + " L" + X(t1) + "," + Y(0) + " L" + X(t0) + "," + Y(0) + " Z" }));
     sv.appendChild(s("path", { class: "wp-line", d: line }));
+    if (S0 !== null) {   // a dashed step from the team-preview value to turn 1, so the line starts where the sum does
+      sv.appendChild(s("path", { d: "M" + X(tStart) + "," + Y(S0) + " L" + X(t0) + "," + Y(pts[0].wp), fill: "none", stroke: "var(--ink-3)", "stroke-width": 1.5, "stroke-dasharray": "3 3" }));
+      sv.appendChild(s("circle", { cx: X(tStart), cy: Y(S0), r: 4, fill: "var(--surface)", stroke: "var(--ink-2)", "stroke-width": 2 }));
+    }
     if (hasEnd) {   // the result, after the last turn start: a dashed step, labelled
       var R = v.result === "win" ? 1 : 0, xl = X(t1), xe = X(tEnd);
       sv.appendChild(s("path", { d: "M" + xl + "," + Y(pts[pts.length - 1].wp) + " L" + xe + "," + Y(R), fill: "none",
         stroke: "var(--ink-3)", "stroke-width": 1.5, "stroke-dasharray": "3 3" }));
       sv.appendChild(s("circle", { cx: xe, cy: Y(R), r: 4, fill: "var(--ink)", stroke: "var(--surface)", "stroke-width": 2 }));
-      sv.appendChild(s("text", { class: "glyph-label", x: xe - 4, y: R ? Y(R) + 18 : Y(R) - 10, "text-anchor": "end", text: v.result === "win" ? "won" : "lost" }));
+      sv.appendChild(s("text", { class: "glyph-label", x: xe + 7, y: Y(R) + 4, "text-anchor": "start", text: v.result === "win" ? "won" : "lost" }));   // right of the dot: nothing is drawn there
     }
     sv.appendChild(axis);
     // Mark the luck events on the line; show their values below the chart so labels cannot cover the data.
-    pts.forEach(function (p) {
+    pts.forEach(function (p, i) {
       if (p.luck_pts === null || p.luck_pts === undefined || Math.abs(p.luck) < 0.03) return;
-      var x = X(p.turn), y = Y(p.wp);
+      var x = X(p.turn);
       var up = p.luck_pts > 0;
-      var gy = Math.max(m.t + 8, Math.min(H - m.b - 8, up ? y - 13 : y + 13));
-      var size = 7;
+      var x0 = X(p.turn), y0 = Y(p.wp), dx = (W < 480 ? 5 : 7) + 2, near = [y0];   // the line just left and right of the glyph
+      [pts[i - 1], pts[i + 1]].forEach(function (q) {
+        if (!q) return;
+        var xq = X(q.turn), yq = Y(q.wp), f = Math.min(1, dx / Math.max(1, Math.abs(xq - x0)));
+        near.push(y0 + (yq - y0) * f);
+      });
+      var y = up ? Math.min.apply(null, near) : Math.max.apply(null, near);
+      var off = dis[p.turn] ? 20 : 14, size = W < 480 ? 5 : 7;   // and clear of a ◆ on the same turn
+      var gy = Math.max(m.t + 8, Math.min(H - m.b - 8, up ? y - off : y + off));
       var d = up ? "M" + x + "," + (gy - size) + " L" + (x + size) + "," + (gy + size * 0.7) + " L" + (x - size) + "," + (gy + size * 0.7) + " Z"
         : "M" + x + "," + (gy + size) + " L" + (x + size) + "," + (gy - size * 0.7) + " L" + (x - size) + "," + (gy - size * 0.7) + " Z";
       sv.appendChild(s("path", { d: d, class: up ? "glyph-pos" : "glyph-neg", stroke: "var(--surface)", "stroke-width": up ? 1.5 : 1 }));
@@ -788,7 +792,8 @@
     if (tp !== null && tp >= t0 && tp <= t1) {
       var xt = X(tp);
       sv.appendChild(s("line", { class: "tp-line", x1: xt, x2: xt, y1: m.t - 6, y2: H - m.b }));
-      sv.appendChild(s("text", { class: "tp-label", x: xt > W - m.r - 90 ? xt - 4 : xt + 4, y: m.t - 8, "text-anchor": xt > W - m.r - 90 ? "end" : "start", text: "turning point, turn " + tp }));
+      var tpEnd = xt > m.l + 0.6 * (W - m.l - m.r);
+      sv.appendChild(s("text", { class: "tp-label", x: tpEnd ? xt - 4 : xt + 4, y: m.t - 8, "text-anchor": tpEnd ? "end" : "start", text: W < 480 ? "turning point" : "turning point, turn " + tp }));
     }
     var cross = s("line", { class: "crosshair", y1: m.t, y2: H - m.b, x1: -10, x2: -10, visibility: "hidden" });
     var dot = s("circle", { class: "cursor-dot", r: 5, cx: -10, cy: -10, visibility: "hidden" });
@@ -811,11 +816,7 @@
       cross.setAttribute("x1", x); cross.setAttribute("x2", x); dot.setAttribute("cx", x); dot.setAttribute("cy", y);
       clear(tip);
       tip.appendChild(h("div", { class: "tt-head" }, "Turn " + p.turn + " · " + pct(p.wp) + " to win"));
-      tip.appendChild(h("div", { class: "tt-row" }, "You", h("b", null, p.action || "not shown in the log")));
-      if (p.opponent_action) tip.appendChild(h("div", { class: "tt-row" }, "Opponent", h("b", null, p.opponent_action)));
-      if (p.luck_pts !== null && p.luck_pts !== undefined) tip.appendChild(h("div", { class: "tt-row" }, "Luck this turn", h("b", null, glyph(p.luck_pts) + " " + signed(p.luck_pts) + " pts")));
-      (p.events || []).forEach(function (e) { tip.appendChild(h("div", { class: "tt-row" }, "• " + e.text + (e.n > 1 ? " ×" + e.n : ""))); });
-      if (dis[p.turn]) tip.appendChild(h("div", { class: "tt-row" }, "◆ Engine preferred", h("b", null, dis[p.turn].best)));
+      turnRows(p).forEach(function (r) { tip.appendChild(r[1] === null ? h("div", { class: "tt-row" }, r[0]) : h("div", { class: "tt-row" }, r[0], h("b", null, r[1]))); });
       tip.hidden = false;
       var rect = sv.getBoundingClientRect(), sc = rect.width / W;
       var left = x * sc + 14, top = y * sc - 20;
@@ -833,19 +834,46 @@
     wrap.addEventListener("pointerleave", function (e) { if (e.pointerType !== "touch" && document.activeElement !== wrap) place(-1); });
     wrap.addEventListener("focus", function () { place(cur < 0 ? 0 : cur); });
     wrap.addEventListener("blur", function () { place(-1); });
+    function goToCard(i) {
+      var p = pts[i]; if (!p) return;
+      var el = document.getElementById("dis-t" + p.turn) || document.getElementById("luck-t" + p.turn);
+      if (el) { el.scrollIntoView({ behavior: motion(), block: "center" }); el.focus({ preventScroll: true }); }
+    }
+    wrap.showTurn = function (t) {   // from a card: put the chart's cursor on that turn, and say which turn it is
+      var i = pts.map(function (p) { return p.turn; }).indexOf(t);
+      if (i >= 0) { wrap.scrollIntoView({ behavior: motion(), block: "center" }); wrap.focus({ preventScroll: true }); place(i); announce(pts[i]); }
+    };
+    function sendName(a) { return String(a || "").replace(/^switch to /, ""); }
+    function turnRows(p) {   // [label, value]; value null for a plain line
+      var d = dis[p.turn], rows = [];
+      rows.push(["You", p.action || (d && d.kind === "switch" ? "sent in " + sendName(d.chosen) : "move hidden in the log")]);
+      if (p.opponent_action) rows.push(["Opponent", p.opponent_action]);
+      if (p.luck_pts !== null && p.luck_pts !== undefined) rows.push(["Luck this turn (net)", (p.luck_pts ? glyph(p.luck_pts) + " " : "") + signed(p.luck_pts) + ptsWord(p.luck_pts)]);
+      (p.events || []).forEach(function (e) { rows.push(["• " + e.text + (e.n > 1 ? " ×" + e.n : ""), null]); });
+      if (d && d.kind === "switch") rows.push(["◆ Who to send in", "engine " + sendName(d.best) + " · you " + sendName(d.chosen)]);
+      else if (d) rows.push(["◆ Engine preferred", gerund(d.best)]);
+      return rows;
+    }
+    function announce(q) {
+      live.textContent = "Turn " + q.turn + ", " + pct(q.wp) + " to win. " + turnRows(q).map(function (r) { return r[1] === null ? r[0].replace(/^• /, "") : r[0].replace(/^◆ /, "") + ": " + r[1]; }).join(". ") + ".";
+    }
+    wrap.addEventListener("click", function (e) { if (e.pointerType === "mouse") { /* a tap only reads the turn; a click goes to its card */ var i = nearest(e.clientX); if (dis[pts[i].turn] || (v.luck_moments || []).some(function (lm) { return lm.turn === pts[i].turn; })) goToCard(i); } });
     wrap.addEventListener("keydown", function (e) {
+      if (e.key === "Enter" && cur >= 0) { e.preventDefault(); goToCard(cur); return; }
       if (e.key === "ArrowRight" || e.key === "ArrowLeft" || e.key === "Home" || e.key === "End") {
         e.preventDefault();
         var i = e.key === "Home" ? 0 : e.key === "End" ? pts.length - 1 : Math.max(0, Math.min(pts.length - 1, cur + (e.key === "ArrowRight" ? 1 : -1)));
         place(i);
-        live.textContent = tip.textContent;
+        var q = pts[i];
+        announce(q);
       } else if (e.key === "Escape") { place(-1); }
     });
     var live = h("p", { class: "sr-only", "aria-live": "polite" });
 
     var legend = h("div", { class: "chart-legend" },
       h("span", { class: "legend-key" }, h("span", { class: "legend-line", "aria-hidden": "true" }), "your win chance"),
-      legendKey("pos", "▲ luck in your favour"), legendKey("neg", "▼ luck against you"),
+      h("span", { class: "legend-key" }, h("span", { class: "lg-glyph lg-up", "aria-hidden": "true" }, "▲"), "luck in your favour"),
+      h("span", { class: "legend-key" }, h("span", { class: "lg-glyph lg-down", "aria-hidden": "true" }, "▼"), "luck against you"),
       h("span", { class: "legend-key" }, "◆ disagreement with the engine"),
       tp !== null ? h("span", { class: "legend-key" }, h("span", { class: "legend-tp", "aria-hidden": "true" }), "turning point (from the answer above)") : null);
     var rows = pts.map(function (p) {
@@ -881,7 +909,9 @@
       return h("div", { class: "empty" }, emptyText);
     }
     var box = h("div", { class: "dis-list" });   // the assumed-sets caveat sits in the card's "How sure is this?" drawer
+    var topPick = list.slice().sort(function (x, y) { return y.gap_pts - x.gap_pts; })[0];
     list.forEach(function (d) {
+      var isTop = d === topPick && list.length > 1;
       var gap = displayedGap(d);
       var bw = function (p) { return Math.max(2, Math.round(100 * p)) + "%"; };
       var hasOptions = Number.isFinite(d.best_wp) && Number.isFinite(d.chosen_wp);
@@ -891,20 +921,23 @@
         h("p", { class: "hint" }, "Individual option win chances are unavailable.");
       var opp = (d.opponent_policy_top || []).filter(function (x) { return x[0] && x[0] !== "No Move"; }).slice(0, 2)
         .map(function (x) { return x[0] + " (" + Math.round(100 * x[1]) + "%)"; }).join(", ");
-      box.appendChild(h("article", { class: "dis", "aria-label": "Turn " + d.turn },
+      box.appendChild(h("article", { class: "dis" + (isTop ? " dis-pick" : ""), id: "dis-t" + d.turn, tabindex: "-1", "aria-label": "Turn " + d.turn + (isTop ? ", the biggest gap" : "") },
+        isTop ? h("p", { class: "pick-tag" }, "Start here: the biggest gap") : null,
         h("div", { class: "dis-top" },
           h("span", { class: "dis-turn" }, h("span", { class: "diamond", "aria-hidden": "true" }, "◆"),
-            d.kind === "teampreview" ? "Team preview (your lead)" : "Turn " + d.turn + (d.kind === "switch" ? " (switch-in)" : "")),
+            d.kind === "teampreview" ? "Team preview (your lead)" : "Turn " + d.turn + (d.kind === "switch" ? " · who to send in" : "")),
           null),   // no third "win chance before" figure: it came from a separate search and could disagree with both bars
         h("p", { class: "claim" }, "The engine prefers ", h("b", null, gerund(d.best)), " over ", h("b", null, gerund(d.chosen)), " by ", h("b", { class: "num" }, gap + " points"), "."),
         bars,
         opp ? h("p", { class: "opp" }, "Engine expected the opponent to pick: " + opp + ".") : null,
         d.ev_caveat ? h("p", { class: "ev-caveat" }, h("span", { "aria-hidden": "true" }, "⚠ "), v.ev_caveat_text || "May depend on your exact EVs: add your team export to check.") : null,
-        readBlock(id, v, d)));
+        readBlock(id, v, d),
+        d.kind === "teampreview" ? null : h("button", { type: "button", class: "link-btn dis-chart", onclick: function () { var c = document.querySelector(".chart-wrap"); if (c && c.showTurn) c.showTurn(d.turn); } }, "Show turn " + d.turn + " on the chart")));
     });
     var note = v.mode === "draft" ? h("p", { class: "footnote" }, "Options that rely on a move that was never revealed are left out." +
       (v.showcase ? "" : " To check one of these decisions against what you were thinking, review the game again with your team export.")) : null;
-    return h("div", null, box, note);
+    var ex = v.read_example && list.filter(function (d) { return v.read_example.key === d.turn + ":" + d.k; })[0];
+    return h("div", null, box, ex ? readExampleBlock(v.read_example.card, ex.turn) : null, note);
   }
 
   function gerund(a) { return /^switch to /.test(a || "") ? "switching to " + a.slice(10) : a; }
@@ -923,8 +956,8 @@
       var ev = (m.events || []).map(function (e) { return e.text; }).join("; ");
       var p = m.realised_prob;
       var odds = p !== null && p !== undefined && p < 0.5 ? " What happened had about a " + Math.max(1, Math.round(100 * p)) + "% chance." : "";
-      ul.appendChild(h("li", null, h("span", { class: "muted" }, "Turn " + m.turn),
-        h("span", { class: "m-pts num" }, h("span", { "aria-hidden": "true" }, glyph(m.luck_pts) + " "), signed(m.luck_pts), h("span", { class: "sr-only" }, " points " + favour(m.luck_pts))),
+      ul.appendChild(h("li", { id: "luck-t" + m.turn, tabindex: "-1" }, h("span", { class: "muted" }, "Turn " + m.turn),
+        h("span", { class: "m-pts num" }, h("span", { class: m.luck_pts > 0 ? "lg-up" : "lg-down", "aria-hidden": "true" }, glyph(m.luck_pts) + " "), signed(m.luck_pts), h("span", { class: "sr-only" }, " points " + favour(m.luck_pts))),
         h("span", null, (ev ? ev.charAt(0).toUpperCase() + ev.slice(1) + "." : "A damage roll or other hidden chance outcome.") + odds + (m.no_match ? " Rough: no set we sampled reproduced this turn." : ""))));
     });
     return ul;
@@ -982,10 +1015,19 @@
     return out;
   }
   function motion() { return window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth"; }
+  // Plain names for the engine fields an answer cites; the same field can be per-turn or whole-game depending on the tool.
+  var SRC_LABEL = {
+    get_summary: { luck_pts: "luck, whole game", choices_pts: "choices, whole game" },
+    list_key_moments: { turn: "turn", wp_before_pct: "win chance before that turn", wp_after_pct: "win chance after that turn", what_happened: "what happened",
+      standing: "who was ahead after", luck_pts: "luck on that turn", choices_pts: "choices on that turn", gap_pts: "gap between the two options",
+      chosen: "move played", engine_best: "engine's choice", realised_prob: "chance of what happened" },
+    get_luck_events: { turn: "turn", luck_pts: "luck on that turn", swing_pts: "swing on that turn", realised_prob: "chance of what happened" },
+    get_turn: { turn: "turn", your_action: "your move" } };
+  function fieldLabel(c) { return (SRC_LABEL[c.tool] || {})[c.field] || String(c.field || "").replace(/_(pct|pts)$/, "").replace(/_/g, " "); }
   function pct1(p) { return (Math.round(1000 * p) / 10).toFixed(1) + "%"; }   // one decimal, so "by N points" is the visible gap
   function displayedGap(d) {
     if (Number.isFinite(d.best_wp) && Number.isFinite(d.chosen_wp)) {
-      return ((Math.round(d.best_wp * 1000) - Math.round(d.chosen_wp * 1000)) / 10).toFixed(1);
+      return String(Math.round((Math.round(d.best_wp * 1000) - Math.round(d.chosen_wp * 1000)) / 10));   // whole points, like the model's answer
     }
     return String(d.gap_pts);
   }
@@ -1070,19 +1112,21 @@
       if (qs[current]) body.appendChild(h("p", { class: "ex-q" }, qs[current]));
       var r = ex.rendered || {};
       var p = h("p", { class: "ex-text" });
-      var sourceBox = null, citeN = 0;
+      var sourceBox = null, citeN = 0, lastCite = null;
       // An inline span, not a <button>: a button is one unbreakable box, so a clause-long value would leave its line.
       function citeBtn(c, shownAs) {
         var i = citeN++;
-        function reveal() {
+        function reveal(e) {
           if (!sourceBox) return;
+          lastCite = e && e.currentTarget;
           sourceBox.open = true;
           var rows = sourceBox.querySelectorAll("li");
           rows.forEach(function (li, k) { li.classList.toggle("hit", k === i); });
-          if (rows[i]) { rows[i].focus({ preventScroll: true }); rows[i].scrollIntoView({ block: "nearest", behavior: motion() }); }
+          if (rows[i]) { rows[i].focus({ preventScroll: true }); rows[i].scrollIntoView({ block: "center", behavior: motion() }); }
         }
-        return h("span", { role: "button", tabindex: "0", class: "cite", title: "from " + c.tool + " · " + c.field, "aria-label": c.shown + ": show its source",
-          onclick: reveal, onkeydown: function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); reveal(); } } }, shownAs || c.shown);
+        var clause = !/\d/.test(c.shown) || c.shown.length > 16;   // a phrase, not a value: underline only
+        return h("span", { role: "button", tabindex: "0", class: clause ? "cite cite-clause" : "cite", title: "from " + c.tool + " · " + c.field, "aria-label": c.shown + ": show its source",
+          onclick: reveal, onkeydown: function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); reveal(e); } } }, shownAs || c.shown);
       }
       (r.sentences || []).forEach(function (snt, i) {
         if (i) p.appendChild(document.createTextNode(" "));
@@ -1094,7 +1138,13 @@
           p.appendChild(citeBtn(c, text.slice(at, at + c.shown.length)));   // as written: a clause may open the sentence capitalised
           pos = at + c.shown.length;
         });
-        p.appendChild(document.createTextNode(text.slice(pos)));
+        var rest = text.slice(pos);
+        var scoped = (snt.citations || []).some(function (c) { return c.tool === "list_key_moments" && (c.field === "luck_pts" || c.field === "choices_pts"); });
+        if (scoped && !/\bturn\b/i.test(text) && /\.\s*$/.test(rest)) {
+          p.appendChild(document.createTextNode(rest.replace(/\.\s*$/, "")));
+          p.appendChild(h("span", { class: "scope-add", title: "Added by HardRead: this value is for that turn, not the whole game" }, " on that turn"));
+          p.appendChild(document.createTextNode("."));
+        } else p.appendChild(document.createTextNode(rest));
       });
       var cites = [];
       (r.sentences || []).forEach(function (snt) {   // same order as the buttons above: only citations found in the text
@@ -1106,18 +1156,30 @@
           pos = at + c.shown.length;
         });
       });
+      var citeEls = p.querySelectorAll(".cite");   // one tab stop for the whole answer; ← → move between its values
+      citeEls.forEach(function (el, k) {
+        el.setAttribute("tabindex", k === 0 ? "0" : "-1");
+        el.addEventListener("keydown", function (e) {
+          if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+          e.preventDefault();
+          var nx = citeEls[Math.max(0, Math.min(citeEls.length - 1, k + (e.key === "ArrowRight" ? 1 : -1)))];
+          el.setAttribute("tabindex", "-1"); nx.setAttribute("tabindex", "0"); nx.focus();
+        });
+      });
       body.appendChild(p);
-      if (cites.length) body.appendChild(h("p", { class: "ex-mode" }, "Select a highlighted value to see its source."));
+      if (cites.length) body.appendChild(h("p", { class: "ex-mode" }, "Select a highlighted value to see its source (← → move between them)."));
       body.appendChild(h("p", { class: "ex-mode" }, (pending ? "Fixed template for now." :
         ex.policy_rejected ? "Fixed template: Muse Glimmer's draft used wording HardRead does not allow (for example “cost” for choices)." : (MODE_TEXT[ex.final] || "")) +
         (ex.precomputed ? " Saved answer." : "")));
-      if (pending) body.appendChild(h("p", { class: "muted ex-wait ex-pending", "aria-live": "off" }, h("span", { class: "spinner", "aria-hidden": "true" }), h("span", null, "Muse Glimmer is writing its version (a few minutes). This answer is complete meanwhile.")));
+      if (pending) body.appendChild(h("p", { class: "muted ex-wait ex-pending", "aria-live": "off" }, h("span", { class: "spinner", "aria-hidden": "true" }), h("span", null, "Muse Glimmer is writing its version: several minutes, about 7 in our slowest live test. This answer is complete meanwhile.")));
       var work = pending ? null : workLog(ex);
       if (work) body.appendChild(work);
       if (cites.length) {
-        sourceBox = h("details", { class: "ex-sources proof" }, h("summary", null, "Sources for each number (" + cites.length + ")"),
+        sourceBox = h("details", { class: "ex-sources proof", onkeydown: function (e) {   // Escape: back to the value that opened the list
+            if (e.key === "Escape" && lastCite && document.body.contains(lastCite)) { e.preventDefault(); lastCite.focus(); }
+          } }, h("summary", null, "Sources for each number (" + cites.length + ")"),
           h("ul", null, cites.map(function (c) {
-            return h("li", { tabindex: "-1" }, h("b", null, c.shown), " ← ", h("code", null, c.tool + "." + c.field), " = " + JSON.stringify(c.value));
+            return h("li", { tabindex: "-1" }, h("b", null, c.shown), " ← " + fieldLabel(c) + " ", h("code", { class: "src-field" }, c.tool + "." + c.field));
           })));
         body.appendChild(sourceBox);
       }
@@ -1178,7 +1240,7 @@
         if (!d.job_id) { failJob(q, "The explanation job could not be found."); return; }
         jobs[q].template = d.template || null;
         jobs[q].state = "running";
-        jobs[q].message = d.template ? "Muse Glimmer is writing its version (a few minutes). This answer is complete meanwhile." : "Explanation job queued…";
+        jobs[q].message = d.template ? "Muse Glimmer is writing its version: several minutes, about 7 in our slowest live test. This answer is complete meanwhile." : "Explanation job queued…";
         showJob(q);
         poll(d.job_id, q);
       });
@@ -1199,7 +1261,7 @@
         if (st.state !== "queued" && st.state !== "running") { failJob(q, "The explanation job returned an unexpected state."); return; }
         jobs[q].state = st.state;
         jobs[q].message = (st.pending || st.stage === "pending") ? (st.message || "Explanation pending") + "; the template stands meanwhile." :
-          st.state === "queued" ? "Muse Glimmer is queued…" : "Muse Glimmer is writing its version (a few minutes); this page updates by itself. " + fmtElapsed(st.elapsed || 0);
+          st.state === "queued" ? "Muse Glimmer is queued…" : "Muse Glimmer is writing its version (about 7 minutes in our slowest live test); this page updates by itself. " + fmtElapsed(st.elapsed || 0);
         if (current === q) {
           var w = body.querySelector(".ex-pending");
           if (jobs[q].template && w) w.lastChild.textContent = jobs[q].message;
@@ -1262,7 +1324,7 @@
 
   function readBlock(id, v, d) {
     var key = d.turn + ":" + d.k;
-    if (v.read_example && v.read_example.key === key) return readExampleBlock(v.read_example.card);
+    if (v.read_example && v.read_example.key === key) return null;   // shown once, after the list (disagreementsList)
     // A review view has no current note/chip identity. Never show its most
     // recently cached read as if it answered the read the user is entering now.
     var have = STATIC ? (v.verdicts || {})[key] : null;
@@ -1429,22 +1491,23 @@
 
   // The one saved example (app/data/showcases/*.read.json), so a showcase can show the read test without a team export.
   // A drawer under the decision it belongs to, not a fourth nested box: the "See a saved example" button opens it.
-  function readExampleBlock(c) {
+  function readExampleBlock(c, turn) {
     var card = verdictCard(c), badge = card.querySelector(".v-badge");
-    if (badge) badge.appendChild(h("span", { class: "v-example" }, " · example"));   // a worked example, not a verdict on this player
+    var EXAMPLE_LABEL = { "Misplay": "Engine option clearly better", "Misread": "The read changed the answer", "Defensible": "The move played holds up", "Within noise": "Within noise" };
+    card.className = "verdict v-example-card";   // a worked example, not a verdict on this player: no red badge
+    if (badge) badge.textContent = (EXAMPLE_LABEL[c.verdict] || c.verdict) + " · example";
     return h("details", { class: "read-example", id: "read-example" },
-      h("summary", null, "Example: checking a read on this decision (saved)"),
+      h("summary", null, "Example: checking a read on turn " + turn + " (saved)"),
       h("p", { class: "small re-what" }, "Checking a read reruns this decision with what you believed about the opponent. It needs your own game and team export."),
-      h("p", { class: "hint" }, "We assumed this player's sets, so this doesn't say the real player made a mistake. And here the belief barely changed the result: it shows how the test works, not a read changing the answer."),
-      h("p", { class: "small" }, "We wrote this belief ourselves. It is not a real player's read: nobody in this game said it. It runs on assumed sets, and this is a saved result, not a live check. The live test needs your own game and team export."),
+      h("p", { class: "hint" }, "We wrote this belief ourselves: it is not a real player's read, it runs on assumed sets, and this is a saved result, not a live check."),
       card,
-      h("p", { class: "footnote" }, "Measured before the fix to how reviews track hidden sets: in bot self-play, on 184 moves chosen by a deeper search, it called 18 clear misplays. No read was stated in this test, so it doesn't measure how well real reads are judged."));
+      h("p", { class: "footnote" }, "Measured before the fix to how reviews track hidden sets: in bot self-play, on 184 moves chosen by a deeper search, it called 18 clear misplays. No read was stated in that test, so it doesn't measure how well real reads are judged."));
   }
   function readExamplePointer(v) {
     if (!v.read_example_at) return null;
     var base = location.pathname.indexOf("/r/") === 0 ? "/" : "";
     return h("p", { class: "hint read-pointer" }, "Checking a read needs your own game and team export to run live. ",
-      h("a", { href: base + "#/review/" + encodeURIComponent(v.read_example_at) }, "See a saved example"), ".");
+      h("a", { href: base + "#/review/" + encodeURIComponent(v.read_example_at), onclick: function () { openReadExample = true; } }, "See the saved example"), ".");
   }
 
   function verdictCard(c, reviewId, identitySha) {
@@ -1459,13 +1522,14 @@
       c.third_option ? h("p", { class: "small" }, c.third_option) : null,
       readCheckBlock(c.read_check),
       c.has_expected_action && !c.read_check ? h("p", { class: "small read-check" }, "The expected opponent action could not be checked for this decision.") : null,
-      h("p", { class: "footnote" }, (c.runs || 3) + " independent runs on the same sampled worlds · " + (c.worlds || 4) + " worlds × " + (c.iterations || 20000).toLocaleString("en") + " iterations each" + (c.seconds ? " · " + Math.round(c.seconds) + " s" : "") + ". ",
+      h("p", { class: "footnote" }, (c.runs || 3) + " independent runs on the same sampled worlds · " + (c.worlds || 4) + " worlds × " + (c.iterations || 20000).toLocaleString("en") + " iterations each" + (c.seconds ? " · " + Math.round(c.seconds) + "\u00a0s" : "") + ". ",
         reviewId && identitySha && !STATIC ? h("a", { href: "/api/review/" + encodeURIComponent(reviewId) + "/verdict/" + c.turn + "/" + c.k +
           "?identity_sha256=" + encodeURIComponent(identitySha), target: "_blank", rel: "noopener" }, "Full output (JSON)") : null));
     return box;
   }
   function runsPlot(c) {
-    var W = 520, rowH = 36, top = 8, lab = 112, R = 20;
+    var narrow = typeof window !== "undefined" && window.innerWidth < 560;   // the tests run this outside a browser
+    var W = narrow ? 330 : 700, rowH = 40, top = 8, lab = W < 400 ? 100 : 120, R = 20;
     var readName = c.example ? "Example belief" : "Your read";
     var moveName = c.example ? "the reviewed player's move" : "your move";
     var rows = [[c.has_retained_set_hypothesis ? readName : "Engine baseline", c.delta_U], ["Reference", c.delta_R]];
@@ -1483,15 +1547,15 @@
       sv.appendChild(s("line", { x1: lab, x2: lab + plotW, y1: y, y2: y, stroke: "var(--line)", "stroke-width": 1 }));
       (r[1] || []).forEach(function (dv) {
         if (dv === null || dv === undefined) return;
-        sv.appendChild(s("circle", { cx: X(dv), cy: y, r: 5.5, fill: "var(--ink)", stroke: "var(--surface)", "stroke-width": 2 }));
+        var k = (r[1] || []).indexOf(dv);
+        sv.appendChild(s("circle", { cx: X(dv), cy: y + (k - 1) * 5, r: 5, fill: "none", stroke: "var(--ink)", "stroke-width": 2 }));   // hollow and offset: three runs stay three
       });
     });
     [-20, -10, 0, 10, 20].forEach(function (t) {
       sv.appendChild(s("text", { x: X(t), y: H - 4, "text-anchor": "middle", class: "rp-axis", text: t > 0 ? "+" + t : t < 0 ? MINUS + Math.abs(t) : "0" }));
     });
     return h("figure", { class: "runs" }, sv, h("figcaption", { class: "small muted" },
-      c.x + " minus " + moveName + " (" + c.chosen + "), in win-chance points. Each dot is one run. Reference: " + c.reference_label +
-      ". The shaded zone starts at +" + c.margin_pts + ". The engine's option counts as clearly better when the three runs average +" + c.margin_pts + " or more and all three are above zero."));
+      "Each dot is one run: " + c.x + " minus " + moveName + ", in win-chance points. Clearly better: the three runs average +" + c.margin_pts + " or more and all three are above zero."));
   }
 
   // ------------------------------------------------------------------ share (opt-in; public replays only)
@@ -1535,15 +1599,23 @@
       aboutToc(),
       h("h2", { id: "glimmer" }, "How Muse Glimmer is used"),
       h("p", null, "Muse Glimmer-30B, Meta's open model, writes the explanations as an agent: it chooses which read-only engine tools to call, then submits an explanation. Its own numbers can't reach you. It writes sentences with empty slots that point at engine results, code fills in the values, and a checker rejects uncited numbers and citations of the wrong kind of value. It gets one repair, then a labeled template takes over. Passing means each number comes from an engine result and has the right type. It doesn't mean the explanation is true: a real number can still be the wrong one for its sentence, and plain-word claims aren't checked."),
-      h("h2", { id: "tests" }, "How we tested the explanations"),
-      h("ul", null,
+      h("h2", { id: "tests" }, "How we tested it"),
+      h("table", { class: "data tests-table" },
+        h("thead", null, h("tr", null, h("th", { scope: "col" }, "Check"), h("th", { scope: "col", class: "r" }, "Result"))),
+        h("tbody", null,
+          h("tr", null, h("td", null, "Explanations whose numbers passed the checker (60 answers, 20 games)"), h("td", { class: "r num" }, "41 first try, 59 after one repair")),
+          h("tr", null, h("td", null, "Sentences flagged in a blind AI review"), h("td", { class: "r num" }, "3 of 60")),
+          h("tr", null, h("td", null, "Same model with no engine: answers with unsourced numbers"), h("td", { class: "r num" }, "27 of 30")))),
+      h("p", { class: "muted small" }, "No human has checked the answers, so we don't claim the prose is accurate."),
+      h("details", { class: "sure" }, h("summary", null, "Details, dates and the luck and win-chance tests"),
+        h("div", { class: "sure-body" }, h("ul", null,
         h("li", null, "On 28 October's versions of three questions, under the review flow from before the fix, 60 answers about 20 games (base model, no fine-tuning), 41 passed the checker (numbers and required wording) first time and 59 after one repair. Those figures don't cover the turning-point question."),
         h("li", null, "An earlier version of the newer turning-point question, before the fix and tuned on the same 14 game-sides it was tested on, passed 9 of 14 on the first draft and 14 of 14 after repair, and an AI read judged 2 of the 14 misleading."),
         h("li", null, "Sentences flagged in a blind review: 3 of 60. We ran that review because the checker doesn't check whether the words are true. It was done by an AI reviewer; no human has checked these answers or the turning-point answers, so we don't claim the prose is accurate."),
         h("li", null, "For comparison, the same model with only the battle log and no engine put numbers in 27 of 30 answers, with nothing linking them to a source."),
         h("li", null, "Luck: in two tests where one bot had a real information edge, the estimate shifted part of that edge, in opposite directions (measured before a 2 November fix to how reviews track hidden sets). The cause isn't known and may relate to that flaw. A luck number doesn't rule out skill. After the fix, both seats' luck mirrors at r = −0.82 on 499 engine-vs-engine games and −0.54 on 146 human games, with different search settings from the page."),
         h("li", null, "Win chances: mapped by a formula fitted to top-50 ladder games, with a different search and team guess, before the 2 November fix, and not refitted. Its published test doesn't cover reviews as they run now, or other ratings."),
-        h("li", null, "Disagreements: when 184 from bot games were rechecked with a deeper search, 139 came out within noise. Checking a read, on 184 moves chosen by a deeper search, called 18 clear misplays. Both measured before the fix. No read was stated in this test, so it doesn't measure how well real reads are judged.")),
+        h("li", null, "Disagreements: when 184 from bot games were rechecked with a deeper search, 139 came out within noise. Checking a read, on 184 moves chosen by a deeper search, called 18 clear misplays. Both measured before the fix. No read was stated in this test, so it doesn't measure how well real reads are judged.")))),
       h("p", null, "Separately, we fine-tuned Glimmer to play. It won 178 of 200 games against the Abyssal heuristic bot. Those teams were partly seen in development, so this doesn't measure general strength. The fine-tuned model doesn't write the explanations."),
       h("h2", { id: "numbers" }, "What the numbers mean"),
       h("ul", null,
