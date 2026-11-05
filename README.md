@@ -95,3 +95,19 @@ python3 app/server.py   # http://127.0.0.1:18051
 Showcases work with just `fastapi` and `uvicorn`. To review new games, clone [the engine fork](https://github.com/touchetpe/foul-play-hardread) into `foul-play/` and install its `requirements.txt` in a Python 3.13 environment (it needs Rust 1.89), then set `HARDREAD_FP_PYTHON` to that Python. The first run downloads current set data, so numbers can differ from the saved reviews; on an Apple-silicon Mac with Python 3.13, `tools/setup/clean_cli.py` fetches the pinned data instead. Live explanations need a `llama-server` running Muse Glimmer. More in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 
 **Running the bot directly:** results were measured at the evaluated Foul Play commit f061e63 (public id 175e591). That commit crashes in games against a species missing from its usage table, such as Roaring Moon. In a local test of short games on Showdown 8f421176bf7c, it crashed in 9 of 12 games against a Roaring Moon team, and 0 of 12 with the guard. [The fork's `roaring-moon-guard` branch](https://github.com/touchetpe/foul-play-hardread) fixes the crash. In our seeded checks, sampling for species in the table didn't change. HardRead's review has its own guard.
+
+## Target architecture and planned features
+
+These diagrams show HardRead's proposed architecture and product vision for future development.
+
+### Target architecture
+
+A proposed personal-use system connecting team preparation, play, replay review, training and validation.
+
+![HardRead target architecture: one roster, action proposals from Student, C8 and Glimmer, majority voting, damage checks, and a replay-to-training-to-validation loop.](docs/images/hardread-target-architecture.png)
+
+### Three planned features
+
+A **team-building assistant**, a **live battle coach**, and an **autonomous competitor** for testing teams and strategies through self-play and replays.
+
+![HardRead product vision: a team-building assistant, a live battle coach explaining options, damage and risks, and an autonomous competitor, connected by a play, review, test and improve loop.](docs/images/hardread-planned-features.png)
