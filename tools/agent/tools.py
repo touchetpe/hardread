@@ -39,7 +39,8 @@ EVENT_TEXT = {  # (event, sufferer) -> (description, favours); sufferer 'u' = th
 
 NAME_FIELDS = {"species", "move", "action", "engine_best", "chosen", "your_action", "opp_action", "expected",
                "played", "opp_top"}
-TEXT_FIELDS = {"event", "description", "reference", "end", "favours", "kind", "note", "what_happened", "main_cause"}
+TEXT_FIELDS = {"event", "description", "reference", "end", "favours", "kind", "note", "what_happened", "main_cause",
+               "standing"}
 GRADUAL_MAX_PTS = 10  # below this, list_key_moments(kind="win_chance") says no single turn stands out
 
 
@@ -164,8 +165,10 @@ DATA_TOOLS = tuple(t["function"]["name"] for t in TOOL_SCHEMAS)
 TURNING_POINT_MOMENTS_SCHEMA = {"type": "function", "function": {
     "name": "list_key_moments",
     "description": "Up to k key turns. kind=win_chance: the biggest single-turn moves of your win chance toward the "
-                   "game's final result, largest first, whether they came from luck or not (wp_before_pct, "
-                   "wp_after_pct, what_happened, luck_pts, choices_pts, main_cause, and engine_best, chosen, gap_pts "
+                   "game's final result, largest first, whether they came from luck or not; in a game ended by "
+                   "knockouts the last turn's move ends at the result (wp_before_pct, "
+                   "wp_after_pct, what_happened, standing, luck_pts, choices_pts, main_cause, and engine_best, chosen, "
+                   "gap_pts "
                    "only if the engine's preference is on display for that turn). kind=luck: biggest luck swings "
                    "(luck_pts, win chance before/after, chance of what happened). kind=disagreement: decisions where "
                    "the engine preferred another option (gap_pts = how much higher it rated its option).",
@@ -355,16 +358,21 @@ class ToolSession:
         rounded integers shown to the player, so the numbers add up on the page. The last turn has no next value and
         is not a move. Moves toward the final result come first, largest first: a brief recovery in a game that was
         then lost is not its turning point. The choices part is the move minus its luck, the per-turn form of the
-        bridge identity (choices = everything that wasn't dice)."""
+        bridge identity (choices = everything that wasn't dice). In a game ended by knockouts the last turn's move ends at
+        the result, as a reader of the chart sees it; a forfeit is not a move (forfeit_note says so when it matters)."""
         result = (self.review.get("summary") or {}).get("result")
         toward = {"win": 1, "loss": -1}.get(result)
+        ko = (self.review.get("meta") or {}).get("end_reason") == "ko" and toward is not None
         moves = []
         for tn in sorted(self.turns):
             before, after = _pct(self._wp_before(tn)), _pct(self._wp_after(tn))
+            final = after is None and ko
+            if final:
+                after = 100 if toward == 1 else 0
             if before is None or after is None or before == after:
                 continue
             moves.append({"turn": tn, "before": before, "after": after, "move": after - before,
-                          "luck": _pts(self.turns[tn].get("luck")) or 0})
+                          "luck": _pts(self.turns[tn].get("luck")) or 0, "final": final})
         return sorted(moves, key=lambda m: (toward is not None and m["move"] * toward < 0, -abs(m["move"]), m["turn"]))
 
     def _what_happened(self, t):
@@ -379,6 +387,39 @@ class ToolSession:
                  clause("your opponent", "your opponent used", t.get("opponent_action"))]
         return " and ".join(p for p in parts if p) or None
 
+    def forfeit_note(self, ranked):
+        """A game given up, with a larger jump to the result than any listed move: true of the chart, and not a move."""
+        end = (self.review.get("meta") or {}).get("end_reason")
+        toward = {"win": 100, "loss": 0}.get((self.review.get("summary") or {}).get("result"))
+        last = _pct(self.turns[max(self.turns)].get("win_prob")) if self.turns else None
+        if end not in ("forfeit", "timeout", "disconnect") or toward is None or last is None or not ranked:
+            return None
+        if abs(toward - last) <= abs(ranked[0]["move"]):
+            return None
+        return f"the game ended by {end}, and that jump to the final result is larger than any move listed but is not counted as a move"
+
+    def _standing(self, m):
+        """Who led around this move, worked out here so that the answer can cite it instead of guessing it. "Ahead" is
+        above 50 on the displayed win chance; a lead only counts as kept if that side also won."""
+        before, after = m["before"], m["after"]
+        summary = self.review.get("summary") or {}
+        start = _pct(summary.get("start_win_prob"))
+        shown = {t: _pct(x.get("win_prob")) for t, x in self.turns.items() if x.get("win_prob") is not None}
+        game = list(shown.values()) + ([] if start is None else [start])
+        rest = [w for t, w in shown.items() if t > m["turn"]]
+        if after == 50:
+            return "it brought the game level"
+        you = after > 50
+        who, won = ("you", summary.get("result") == "win") if you else ("your opponent", summary.get("result") == "loss")
+        side_of = (lambda w: w >= 50) if you else (lambda w: w <= 50)
+        if m.get("final") and (before == 50 or not side_of(before)):
+            return f"{who} {'were' if you else 'was'} not ahead before it and won the game on this turn"
+        if before == 50 or not side_of(before):
+            kept = won and all(side_of(w) for w in rest)
+            return f"it put {who} ahead" + (" for the rest of the game" if kept else ", though the lead changed again later")
+        return f"{who} {'were' if you else 'was'} already ahead before it" + (
+            " and never trailed in this game" if won and all(side_of(w) for w in game) else "")
+
     def _win_chance_moment(self, m):
         tn = m["turn"]
         t = self.turns[tn]
@@ -387,7 +428,7 @@ class ToolSession:
         main = "luck" if m["luck"] * m["move"] > 0 and abs(m["luck"]) >= abs(choices) else "choices"
         fields = {
             "turn": tn, "wp_before_pct": m["before"], "wp_after_pct": m["after"], "what_happened": self._what_happened(t),
-            "main_cause": main, "luck_pts": m["luck"] or None, "choices_pts": choices or None,
+            "standing": self._standing(m), "main_cause": main, "luck_pts": m["luck"] or None, "choices_pts": choices or None,
             "event": " and ".join(d for d, _ in self._events(tn)) or None,
         }
         # the same capability as get_turn: only a decision the page displays as a disagreement
@@ -445,6 +486,9 @@ class ToolSession:
                 out["note"] = "no turn moved the win chance"
             elif abs(ranked[0]["move"]) < GRADUAL_MAX_PTS:
                 out["note"] = "no single turn stands out: the win chance moved in small steps"
+            end_note = self.forfeit_note(ranked)
+            if end_note:
+                out["end_note"] = end_note
             return out
         if kind not in ("luck", "disagreement"):
             return {"error": "kind must be 'luck' or 'disagreement'"}

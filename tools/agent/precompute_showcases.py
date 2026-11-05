@@ -66,6 +66,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--urls", default="http://127.0.0.1:18131/v1/chat/completions")
     ap.add_argument("--only")
+    ap.add_argument("--keep-plain", action="store_true", help="the plain-prompt answers read only the log: leave them as saved")
     a = ap.parse_args()
     urls = a.urls.split(",")
     tasks = []
@@ -74,7 +75,7 @@ def main():
         if a.only and sid != a.only:
             continue
         review, ctx = json.loads(f.read_text()), json.loads((OUT / f"{sid}.ctx.json").read_text())
-        tasks += [(sid, q, review, ctx) for q in S.QUESTIONS] + [(sid, "plain", review, ctx)]
+        tasks += [(sid, q, review, ctx) for q in S.QUESTIONS] + ([] if a.keep_plain else [(sid, "plain", review, ctx)])
     results, pending = {}, list(tasks)
 
     def worker(url):

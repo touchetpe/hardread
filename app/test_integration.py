@@ -261,7 +261,38 @@ class OfferedListIntegrationTests(unittest.TestCase):
                 self.assertEqual(json.loads(app.state.jobs.files["verdicts.json"]), {"2:1": verdicts["2:1"]})
 
 
+class MissingSetDataTests(unittest.TestCase):
+    def test_no_file_is_a_clear_error_not_an_empty_table(self):
+        with tempfile.TemporaryDirectory() as td, patch.object(P, "FP_DIR", Path(td)), patch.object(P, "_SETS", None):
+            with self.assertRaises(P.InputError) as got:
+                P._set_counts()
+            self.assertIn("no set data", str(got.exception))
+
+
+class NoMatchTurnsTests(unittest.TestCase):
+    def test_a_game_counts_its_own_rough_luck_turns(self):
+        rv = json.loads(json.dumps(REVIEW))
+        scored = [t for t in rv["turns"] if t.get("luck") is not None]
+        self.assertTrue(scored)
+        scored[0]["luck_no_match"] = True
+        view = P.build_view(rv, CTX)
+        self.assertEqual(view["luck_no_match"], {"turns": 1, "of": len(scored)})
+
+    def test_a_saved_review_without_the_field_says_nothing(self):
+        self.assertEqual(P.build_view(REVIEW, CTX)["luck_no_match"]["turns"], 0)
+
+
 class PublicCopyTests(unittest.TestCase):
+    def test_species_without_usage_stats_are_named(self):
+        with patch.object(P, "_USAGE_NAMES", {"greattusk"}):
+            self.assertEqual(P.no_usage_stats({"own_species": ["Great Tusk"], "opp_species": ["Roaring Moon"]}), ["Roaring Moon"])
+            self.assertEqual(P.no_usage_stats({"own_species": ["Roaring Moon"], "opp_species": ["Great Tusk"]}), [])   # own team isn't sampled
+        with patch.object(P, "_USAGE_NAMES", {"maushold"}):   # a form isn't flagged when its base species is covered
+            self.assertEqual(P.no_usage_stats({"own_species": [], "opp_species": ["Maushold-Four"]}), [])
+        with patch.object(P, "_USAGE_NAMES", set()):   # no statistics file: say nothing rather than name everyone
+            with patch.object(P, "FP_DIR", Path("/nonexistent")):
+                self.assertEqual(P.no_usage_stats({"own_species": [], "opp_species": ["Great Tusk"]}), [])
+
     def test_non_text_input_is_refused_cleanly(self):
         with self.assertRaises(P.InputError):
             S.resolve_input(123)
@@ -525,6 +556,141 @@ class TemplateGateTests(unittest.TestCase):
             data = json.loads(html.split("window.HARDREAD_STATIC = ", 1)[1].split(";\nif (!location.hash)", 1)[0])
             self.assertEqual({q: x["final"] for q, x in data["views"]["showcase-1"]["explanations"].items()},
                              {"q1": "template", "q2": "template", "q3": "glimmer_raw", "q4": "template"})
+
+
+class SavedReadExampleTests(unittest.TestCase):
+    """The saved read-test example: a real verdict file, kept apart from verdict results, labelled on the page."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.saved = json.loads((S.SHOWCASES / "showcase-6.read.json").read_text())
+        cls.raw = cls.saved["verdict"]
+        cls.review = json.loads((S.SHOWCASES / "showcase-6.review.json").read_text())
+        cls.ctx = json.loads((S.SHOWCASES / "showcase-6.ctx.json").read_text())
+
+    def test_saved_file_is_what_the_verdict_rule_gives_with_product_settings(self):
+        sys.path.insert(0, str(S.HARDREAD / "tools" / "review"))
+        import verdict as V
+        raw, settings = self.raw, S.VI.PRODUCT_SETTINGS
+        self.assertEqual(raw["verdict"], V.decide(raw["delta_U"], raw["delta_R"], raw["margin"], raw["ok_margin"]))
+        for cond in ("U", "R"):
+            self.assertEqual(raw["delta_" + cond], [round(run[cond]["delta"], 4) for run in raw["runs"]])
+        self.assertEqual((raw["seeds"], raw["worlds"], raw["iterations"], raw["margin"], raw["ok_margin"], raw["calibration"]),
+                         (settings["seeds"], settings["worlds"], settings["iterations"], settings["margin"],
+                          settings["ok_margin"], settings["calibration"]))
+        self.assertEqual(raw["cache_identity"]["settings"]["reference"], settings["reference"])
+        self.assertEqual(raw["cache_identity"]["review_id"], "showcase-6")
+        self.assertEqual(S.VI.sha256_bytes(self.saved["team_text"].encode()), raw["cache_identity"]["inputs"]["team_sha256"])
+        self.assertEqual(S.VI.sha256_json(raw["app_belief"]), raw["cache_identity"]["belief_sha256"])
+
+    def test_decision_is_the_largest_offered_gap_and_the_team_matches_the_review(self):
+        view, offered = P.build_view_with_offered(self.review, self.ctx)
+        top = max(offered, key=lambda d: d["decision_cost"])
+        self.assertEqual((self.raw["turn"], self.raw["k"], self.raw["chosen"], self.raw["X"]),
+                         (top["turn"], top["k"], top["action"], top["engine_best"]))
+        self.assertEqual(self.raw["stated"], self.raw["app_belief"])
+        species = [next(iter(self.raw["app_belief"]["sets"]))]
+        self.assertEqual(species, [self.ctx["opp_active"][f"{top['turn']}:{top['k']}"]])
+        self.assertEqual(P.clean_belief(self.raw["app_belief"]), self.raw["app_belief"])
+        for row in self.ctx["draft_rows"]:   # the same assumed team: every revealed move is in the export text
+            block = next(b for b in self.saved["team_text"].split("\n\n") if b.startswith(row["species"]))
+            for move in row["moves"]:
+                self.assertIn("- " + move, block)
+
+    def test_saved_file_carries_no_local_path_or_replay_id(self):
+        text = (S.SHOWCASES / "showcase-6.read.json").read_text()
+        self.assertNotIn("/Users/", text)
+        self.assertNotIn("/opt/", text)
+        self.assertNotIn("gen9ou-", text)
+        self.assertNotIn("runtime", self.raw["cache_identity"])
+
+    def views(self):
+        with tempfile.TemporaryDirectory() as td, patch.object(S, "STATE", Path(td)):
+            served = {sid: S.load_view(sid) for sid in ("showcase-1", "showcase-6")}
+        exported = {}
+        for sid in served:
+            review = json.loads((S.SHOWCASES / f"{sid}.review.json").read_text())
+            ctx = json.loads((S.SHOWCASES / f"{sid}.ctx.json").read_text())
+            exported[sid] = {}
+            static_export.attach_read_example(exported[sid], sid, review, ctx)
+        return served, exported
+
+    def test_server_and_static_views_show_it_apart_from_verdict_results(self):
+        served, exported = self.views()
+        example = served["showcase-6"]["read_example"]
+        self.assertEqual(example, exported["showcase-6"]["read_example"])
+        self.assertEqual(example["key"], "9:1")
+        self.assertIn("9:1", {f"{d['turn']}:{d['k']}" for d in served["showcase-6"]["disagreements"]})
+        self.assertIs(example["card"]["example"], True)
+        self.assertEqual(example["card"]["verdict"], self.raw["verdict"])
+        self.assertEqual(example["card"]["stated"], ["Ogerpon-Wellspring: has Swords Dance"])
+        self.assertEqual(served["showcase-6"]["verdicts"], {})
+        self.assertFalse(served["showcase-6"]["features"]["verdict"])
+        self.assertNotIn("read_example_at", served["showcase-6"])
+        for side in (served, exported):
+            self.assertEqual(side["showcase-1"]["read_example_at"], "showcase-6")
+            self.assertNotIn("read_example", side["showcase-1"])
+
+    def test_no_saved_file_means_no_example_and_no_dead_link(self):
+        with tempfile.TemporaryDirectory() as td:
+            with patch.object(S, "SHOWCASES", Path(td)):
+                view = {}
+                S._attach_read_example(view, "showcase-1", self.review, self.ctx)
+                self.assertEqual(view, {})
+            with patch.object(static_export, "SHOW", Path(td)):
+                view = {}
+                static_export.attach_read_example(view, "showcase-1", self.review, self.ctx)
+                self.assertEqual(view, {})
+
+    def test_live_check_on_a_showcase_is_still_refused(self):
+        app = S.create_app()
+        endpoint = next(r.endpoint for r in app.routes if getattr(r, "path", "") == "/api/verdict")
+
+        class Body:
+            async def body(self):
+                return json.dumps({"review_id": "showcase-6", "turn": 9, "k": 1, "belief": {}}).encode()
+
+            async def json(self):
+                return {"review_id": "showcase-6", "turn": 9, "k": 1, "belief": {}}
+            headers = {}
+            client = SimpleNamespace(host="127.0.0.1")
+        response = asyncio.run(endpoint(Body()))
+        self.assertEqual(response.status_code, 422)
+        self.assertIn("team export", response.body.decode())
+
+    def test_page_labels_it_as_ours_assumed_and_saved(self):
+        script = r"""
+const fs = require('fs'), vm = require('vm');
+const source = fs.readFileSync(process.argv[1], 'utf8');
+const helpers = source.slice(source.indexOf('  function h(tag, attrs)'), source.indexOf('  function clear(el)'));
+const body = source.slice(source.indexOf('  var VERDICT_GLYPH'), source.indexOf('  // ------------------------------------------------------------------ share'));
+function element(tag) { return { tag, attrs: {}, children: [], style: { setProperty() {} },
+  setAttribute(k, v) { this.attrs[k] = v; }, addEventListener() {}, appendChild(c) { this.children.push(c); },
+  set textContent(v) { this.children = [{text: String(v)}]; }, get textContent() { return ''; } }; }
+const context = {document: {createElement: element, createElementNS: (_, tag) => element(tag),
+  createTextNode: (text) => ({text})}, SVGNS: 'svg', MINUS: '−', STATIC: true, location: {pathname: '/'}};
+vm.createContext(context); vm.runInContext(helpers + body, context);
+const input = JSON.parse(fs.readFileSync(0, 'utf8'));
+process.stdout.write(JSON.stringify({block: context.readExampleBlock(input.card), pointer: context.readExamplePointer({read_example_at: 'showcase-6'}),
+  none: context.readExamplePointer({})}));
+"""
+        served, _ = self.views()
+        result = subprocess.run(["node", "-e", script, str(Path(__file__).parent / "static" / "app.js")],
+                                input=json.dumps(served["showcase-6"]["read_example"]), text=True, capture_output=True, check=True)
+        out = json.loads(result.stdout)
+        block = json.dumps(out["block"], ensure_ascii=False)
+        for words in ("We wrote this belief ourselves", "not a real player's read", "assumed sets", "saved result, not a live check",
+                      "own game and team export", "Example belief: Ogerpon-Wellspring: has Swords Dance", "the reviewed player's move",
+                      "Measured before the fix to how reviews track hidden sets: in bot self-play, on 184 moves chosen by a deeper search, it called 18 clear misplays.",
+                      "average +8 or more and all three are above zero"):   # the rule in verdict.k_bad; one run here is below 8
+            self.assertIn(words, block)
+        self.assertLess(min(self.raw["delta_U"]), self.raw["margin"])
+        self.assertNotIn("Your read", block)
+        self.assertNotIn("your move", block)
+        pointer = json.dumps(out["pointer"])
+        self.assertIn("team export", pointer)
+        self.assertIn("#/review/showcase-6", pointer)
+        self.assertIsNone(out["none"])
 
 
 class ReadContextTests(unittest.TestCase):

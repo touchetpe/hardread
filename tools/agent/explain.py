@@ -13,6 +13,7 @@ Numbers shown are always rendered by code from cited tool fields (render.py).
 """
 import argparse
 import json
+import re
 import sys
 import time
 from pathlib import Path
@@ -23,7 +24,7 @@ from lexicon import PLACEHOLDER_RE  # noqa: E402
 from llm import GlimmerClient, LLMError, assistant_message, tool_message  # noqa: E402
 from render import render  # noqa: E402
 import templates  # noqa: E402
-from tools import DATA_TOOLS, SUBMIT_SCHEMA, ToolSession, all_tool_schemas  # noqa: E402
+from tools import DATA_TOOLS, GRADUAL_MAX_PTS, SUBMIT_SCHEMA, ToolSession, all_tool_schemas  # noqa: E402
 from verifier import VERIFIER_VERSION, failure_text, verify  # noqa: E402
 
 PROMPT_VERSION = "explain-prompt-v3"
@@ -61,7 +62,25 @@ def repair_text(report):
 
 
 # The turning-point answer is in the model's own words, but it must show these facts of the moment it chose, by slot.
-TURNING_POINT_REQUIRED = ("turn", "what_happened", "wp_before_pct", "wp_after_pct", "luck_pts", "choices_pts")
+TURNING_POINT_REQUIRED = ("turn", "what_happened", "standing", "wp_before_pct", "wp_after_pct", "luck_pts", "choices_pts")
+LEANING_PCT = 70      # the eventual winner this far up before a move: a larger later move does not outrank an earlier one
+OPEN_MAX_PCT = 60     # above this for the eventual winner, the answer may not call the game open
+NEAR_TIE_PTS = 2
+# Words the checker does not test (it was measured as it is, so this lives here): claims about who led.
+FLIP_RE = re.compile(r"\bflip\w*|\b(?:chang\w*|swung|swap\w*|revers\w*|took|take[sn]?|taking|gave|lost)\b[^.;,]{0,25}\blead\b"
+                     r"|\bput(?:s|ting)?\s+(?:you|your\s+opponent|the\s+opponent|a\s+different\s+side|the\s+other\s+side)"
+                     r"\s+(?:ahead|behind|in\s+front)\b|\bovert(?:ook|ake|akes|aking)\b|\bcross(?:ed|es|ing)\b", re.I)
+OPEN_RE = re.compile(r"\b(?:still|was|remained|wide)\s+(?:open|close|even|level|balanced|undecided|contested)\b|\bopen\s+game\b"
+                     r"|\bclose\s+game\b|\bin\s+the\s+balance\b|\bup\s+for\s+grabs\b|\beither\s+way\b", re.I)
+ALREADY_RE = re.compile(r"\balready\b[^.;]{0,30}\b(?:ahead|behind|lead\w*|trailing|winning|losing|lean\w*|decided)\b", re.I)
+# A reason in words, needed when the standing itself does not give one (the chosen move did not put the winner ahead).
+REASON_RE = re.compile(r"\b(?:largest|biggest|bigger|larger|greatest|more\s+than|because|unlike|whereas|lean\w*|stands?\s+out)\b", re.I)
+SIZE_CLAIM_RE = re.compile(r"\b(?:largest|biggest|greatest)\b", re.I)
+# "After turn 3 when you used X, which moved your win chance from a to b." never reaches a main clause.
+NO_MAIN_CLAUSE_RE = re.compile(r"^\s*(?:(?:after|when)\b[^.]*,\s*which\b[^,.]*\.?\s*$"
+                               r"|turn\s+\{[^}]+\}\s+(?:when|after)\b[^.]*,\s*which\b)", re.I)
+ROUGH_RE = re.compile(r"\b(?:after\s+when|happened\s+when)\b", re.I)
+CONTRAST_RE = re.compile(r"\b(?:whereas|unlike|rather\s+than|later|the\s+others?|other\s+(?:moves?|swings?|drops?|turns?))\b", re.I)
 
 
 def _turning_point_moments(session):
@@ -99,16 +118,116 @@ def chosen_moment(payload, session):
     return None
 
 
+def _winner_pct(pct, session):
+    """A win chance from the eventual winner's side; None if the game has no winner."""
+    result = (session.review.get("summary") or {}).get("result")
+    return pct if result == "win" else 100 - pct if result == "loss" else None
+
+
+def _crossed(m):
+    return (m["wp_before_pct"] - 50) * (m["wp_after_pct"] - 50) < 0 or (m["wp_before_pct"] == 50 and m["wp_after_pct"] != 50)
+
+
+def _won_it_for_good(m, session):
+    """It put the eventual winner ahead and they stayed there. A lead that changed again doesn't explain the game: a reader
+    of the chart sees the later swing, however large."""
+    lasting = ("for the rest of the game", "won the game on this turn")
+    return (_crossed(m) and (_winner_pct(m["wp_after_pct"], session) or 0) > 50
+            and any(x in (m.get("standing") or "") for x in lasting))
+
+
+def _pick_problem(m, moments, session):
+    """A smaller listed move needs a fact that sets it apart from each larger one: it put the eventual winner ahead for
+    good, or the larger one started with the winner already well up. "Most telling" is not a fact."""
+    size = lambda x: abs(x["wp_after_pct"] - x["wp_before_pct"])
+    if m is moments[0] or size(moments[0]) < GRADUAL_MAX_PTS or _winner_pct(m["wp_after_pct"], session) is None:
+        return None
+    if _won_it_for_good(m, session):
+        return None
+    for x in moments:
+        if x is m:
+            return None
+        if size(x) - size(m) > NEAR_TIE_PTS and _winner_pct(x["wp_before_pct"], session) < LEANING_PCT:
+            return (f"turn {m['turn']} is a smaller move than turn {x['turn']}, did not put the eventual winner ahead for "
+                    f"good, and turn {x['turn']} started before the winner was well up: choose turn {x['turn']}, or a listed "
+                    "moment whose standing says it put the eventual winner ahead for the rest of the game")
+    return None
+
+
+def _claim_problems(payload, m, moments, session):
+    """Who-led words in the answer's own text, compared with the win chances of the listed moments."""
+    out = []
+    before = _winner_pct(m["wp_before_pct"], session)
+    sentences = (payload.get("sentences") if isinstance(payload, dict) else None) or []
+    free = " ".join(PLACEHOLDER_RE.sub(" ", s.get("text") or "") for s in sentences)
+    if not _won_it_for_good(m, session) and not REASON_RE.search(free):
+        out.append(f"say in words why turn {m['turn']} rather than the others, for example that it was the largest move "
+                   "toward the final result")
+    if re.search(r"\bstanding\b", free, re.I):
+        out.append("do not use the word \"standing\": put its slot in the sentence and say the rest in plain words")
+    size = abs(m["wp_after_pct"] - m["wp_before_pct"])
+    for s in sentences:
+        text = PLACEHOLDER_RE.sub(" ", s.get("text") or "")
+        if NO_MAIN_CLAUSE_RE.search(s.get("text") or ""):
+            out.append("a sentence built as \"Turn {t} when ..., which ...\" or \"After ..., which ...\" has no main verb: "
+                       "rewrite it, for example \"Turn {t} moved your win chance from {a} to {b} when {what_happened}.\"")
+        hit = ROUGH_RE.search(text)
+        if hit:
+            out.append(f"\"{hit.group(0)}\" doesn't read correctly: write \"Turn {{t}} moved your win chance from {{a}} to {{b}} "
+                       "when {what_happened}.\"")
+        hit = SIZE_CLAIM_RE.search(text)
+        cites_it = any((s.get("slots") or {}).get(n) == f"{m['id']}.turn" for n in PLACEHOLDER_RE.findall(s.get("text") or ""))
+        if hit and cites_it and size < abs(moments[0]["wp_after_pct"] - moments[0]["wp_before_pct"]):
+            out.append(f"\"{hit.group(0)}\" is not true of turn {m['turn']}: turn {moments[0]['turn']} moved the win chance more")
+        hit = FLIP_RE.search(text)
+        if hit and not _crossed(m):
+            out.append(f"\"{hit.group(0)}\" is not supported: the win chance stayed on the same side of even on turn "
+                       f"{m['turn']}; use its standing instead")
+        hit = OPEN_RE.search(text)
+        if hit and before is not None and before > OPEN_MAX_PCT:
+            out.append(f"\"{hit.group(0)}\" is not supported: the eventual winner was already well up before turn "
+                       f"{m['turn']}; use its standing instead")
+        hit = ALREADY_RE.search(text)
+        if hit and before is not None and CONTRAST_RE.search(text):
+            later = [x for x in moments if x["turn"] > m["turn"] and _winner_pct(x["wp_before_pct"], session) < 50]
+            if before > 50:
+                out.append(f"\"{hit.group(0)}\" sets turn {m['turn']} apart from other moves, but the eventual winner was "
+                           "already ahead before it too; use its standing instead")
+            elif later:
+                out.append(f"\"{hit.group(0)}\" is not true of turn {later[0]['turn']}: the eventual winner was not ahead "
+                           "before it")
+    return out
+
+
+def _note_problem(payload, session):
+    """The lookup's note that no single turn stands out is true and useful, so the answer has to keep it."""
+    gradual = any("no single turn stands out" in ((c["output"] or {}).get("note") or "") for c in session.calls
+                  if c["name"] == "list_key_moments")
+    free = " ".join(PLACEHOLDER_RE.sub(" ", s.get("text") or "") for s in payload.get("sentences") or [])
+    if gradual and not re.search(r"\bno\s+single\s+turn\b", free, re.I):
+        return "the lookup says no single turn stands out: say so in the answer, in those words"
+    gave_up = any((c["output"] or {}).get("end_note") for c in session.calls if c["name"] == "list_key_moments")
+    if gave_up and not re.search(r"\b(?:forfeit\w*|timeout|timed\s+out|disconnect\w*)\b", free, re.I):
+        return "the lookup's end_note applies: say in words how the game ended, and that this is not counted as a move"
+    return None
+
+
 def turning_point_failures(payload, session):
-    """Failures in the checker's format if the answer does not show the required facts of a listed moment."""
+    """Failures in the checker's format if the answer does not show the required facts of a listed moment, picks a
+    smaller move with no fact behind it, or says something about who led that the win chances do not show."""
     def fail(msg):
         return [{"rule": "content", "sentence": None, "slot": None, "message": msg}]
     if not any(c["name"] == "list_key_moments" and (c["args"] or {}).get("kind") == "win_chance"
                for c in session.calls):
         return fail("call list_key_moments with kind \"win_chance\" and choose one of its moments")
     moments = _turning_point_moments(session)
-    if not moments or chosen_moment(payload, session) is not None:
+    if not moments:
         return []
+    chosen = chosen_moment(payload, session)
+    if chosen is not None:
+        problems = [_pick_problem(chosen, moments, session), _note_problem(payload, session)] + _claim_problems(
+            payload, chosen, moments, session)
+        return [f for p in problems if p for f in fail(p)]
     cited = _cited_facts(payload, session)
     turns = [v for f, v in cited if f == "turn"]
     target = next((m for t in turns for m in moments if m["turn"] == t), None)
@@ -116,6 +235,15 @@ def turning_point_failures(payload, session):
         return fail("name the turn of one of the listed win_chance moments, citing its turn field")
     missing = [f"#{target['id'][1:]}.{f}" for f in TURNING_POINT_REQUIRED if f in target and (f, target[f]) not in cited]
     return fail("the answer must cite these facts of the moment you chose, each in a slot: " + ", ".join(missing))
+
+
+def _capitalized(rendered):
+    """A turning-point sentence may be one slot alone, a lowercase clause such as `standing`: start it with a capital."""
+    for r in rendered["sentences"]:
+        r["text"] = r["text"][:1].upper() + r["text"][1:]
+        r["text"] = re.sub(r"(?<![\d.])([+−-]?1) points\b", r"\1 point", r["text"])   # the model writes "{l} points"
+    rendered["text"] = " ".join(r["text"] for r in rendered["sentences"])
+    return rendered
 
 
 def _now():
@@ -207,6 +335,7 @@ def run(review, question, client=None, mode="loop", verdicts=None, luck_referenc
             res["final"] = "glimmer_raw" if phase == "raw" else "glimmer_repaired"
             res["rendered"] = render(payload, session, res["final"])
             if turning_point:
+                res["rendered"] = _capitalized(res["rendered"])
                 res["chosen_turn"] = (chosen_moment(payload, session) or {}).get("turn")
             break
         if repair and not repaired:

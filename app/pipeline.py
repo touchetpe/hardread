@@ -521,6 +521,7 @@ def build_view_with_offered(review, ctx):
                    "luck_pts": None if lk is None else int(round(100 * lk)),
                    "events": _events(t.get("luck_events")),
                    "realised_prob": t.get("luck_realised_prob"),
+                   "no_match": bool(t.get("luck_no_match")),
                    "action": pretty_action(t.get("action"), names),
                    "opponent_action": pretty_action(t.get("opponent_action"), names)})
     offered = disagreements(review, ctx.get("draft_rows") if ctx.get("mode") == "draft" else None, ctx.get("active"))
@@ -545,6 +546,7 @@ def build_view_with_offered(review, ctx):
         "version": 1,
         "mode": ctx.get("mode", "draft"),
         "sets_note": DRAFT_SETS_TEXT if ctx.get("mode", "draft") == "draft" else None,
+        "no_usage_stats": no_usage_stats(ctx),
         "ev_caveat_text": EV_CAVEAT,
         "side": review["meta"]["side"],
         "result": s.get("result") or ("tie" if ctx.get("winner") == "tie" else None),
@@ -555,7 +557,8 @@ def build_view_with_offered(review, ctx):
         "wp": wp,
         "disagreements": dis,
         "luck_moments": [{"turn": m["turn"], "luck_pts": m["luck_pts"], "events": m["events"],
-                          "realised_prob": m["realised_prob"]} for m in moments],
+                          "realised_prob": m["realised_prob"], "no_match": m["no_match"]} for m in moments],
+        "luck_no_match": {"turns": sum(w["no_match"] for w in wp), "of": sum(w["luck"] is not None for w in wp)},
         "filter": {"wp_lo": WP_LO, "wp_hi": WP_HI, "min_gap": MIN_GAP, "noise_pts": 3},
         "engine": review["meta"].get("engine"),
         "seconds": review["meta"].get("seconds"),
@@ -619,6 +622,25 @@ def summary_text(view):
 
 # ---------------------------------------------------------------- the player's read and the verdict card
 
+_USAGE_NAMES = None
+
+
+def no_usage_stats(ctx):
+    """Opposing species the usage statistics don't cover (Roaring Moon joined OU after they were made).
+    Only the opponent's hidden sets are sampled, so the reviewed player's own team isn't affected."""
+    global _USAGE_NAMES
+    if _USAGE_NAMES is None:
+        try:
+            _USAGE_NAMES = {_norm(k) for k in json.loads((FP_DIR / "fp" / "data" / "smogon_stats_cache" / "gen9ou-0.json").read_text())}
+        except (OSError, ValueError):
+            _USAGE_NAMES = set()
+    if not _USAGE_NAMES:
+        return []
+    _, opp = species_lists(ctx)
+    covered = lambda n: _norm(n) in _USAGE_NAMES or _norm(n.split("-")[0]) in _USAGE_NAMES   # forms use the base entry
+    return sorted({n for n in opp if isinstance(n, str) and not covered(n)})
+
+
 def species_lists(ctx):
     """(own six, opponent six) display names for the note parser."""
     own = ctx.get("own_species") or [r["species_preview"] for r in ctx.get("draft_rows") or []]
@@ -632,10 +654,10 @@ def _set_counts():
     global _SETS
     if _SETS is None:
         p = FP_DIR / "fp" / "data" / "pkmn_sets_cache" / "gen9ou" / "pokemon_full_sets.json"
-        try:
+        try:   # this process runs without the engine, so a review has to have fetched the file
             _SETS = json.loads(p.read_text())
-        except (OSError, ValueError):
-            _SETS = {}
+        except (OSError, ValueError) as e:
+            raise InputError("HardRead has no set data yet (pokemon_full_sets.json). Review a game first, then try again.") from e
     return _SETS
 
 

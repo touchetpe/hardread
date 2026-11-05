@@ -1,6 +1,6 @@
 # Hax or You: replay review engine
 
-Paste a Showdown replay plus your team export; get, per turn, a calibrated win probability, the luck you got from chance events, and the cost of each of your decisions. Everything runs offline on Foul Play's own code (battle updates, set sampler, poke-engine MCTS); no server.
+Paste a Showdown replay plus your team export; get, per turn, a win probability from a fitted formula, the luck you got from chance events, and the cost of each of your decisions. Everything runs offline on Foul Play's own code (battle updates, set sampler, poke-engine MCTS); no server.
 
 ```sh
 PY=../environments/foulplay/bin/python   # from hardread/
@@ -193,6 +193,8 @@ At each turn start:
 | Mean \|luck\| per decision | 0.013 | 0.013 | 0.013 |
 | **(4) Event-count baseline** (crits, misses, full para/sleep/freeze/flinch; for − against) | 0.18 [0.10, 0.26] | 0.20 [0.11, 0.28] | **0.19 [0.13, 0.24]** |
 
+**3 November 2026:** Measured before the 2 November fix to how reviews track hidden sets. On the same 499 paired games after the fix: mirror −0.82 [−0.85, −0.79], variance removed 22.5% [16.1, 28.5] (test settings, which differ from the page's search).
+
 **Reading:**
 - **(1)** Chance-only luck removes about 20–23% of outcome variance (CIs well below 1). After also subtracting the starting value, the ratio stays at 0.79–0.80.
 - **(2)** The two seats largely agree on the sign and size of each game's luck. v1 was −0.55.
@@ -274,6 +276,8 @@ Turn-start decisions, farm absolute calibrator.
 | 0.15 | 0.26 | 0.16 |
 | 0.85 | 0.79 | 0.82 |
 | 0.95 | 0.92 | 0.96 |
+
+These figures test the fit's own valuation: the luck run at 3 worlds × 10k iterations, with a Draft A team, before the 2 November fix. A review runs 4 worlds × 1 s, with a Smogon draft or your export. So don't read .027 as the accuracy of the win chances on the page.
 
 **Human-specific calibrator** (fitted on 255 games, tested on the other 258): P = σ(0.60 · 0.0125·A + 0.13), much flatter than the farm calibrator (slope 0.97).
 

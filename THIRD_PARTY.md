@@ -1,4 +1,4 @@
-> Status notes below are dated records. The README is current; where they differ, trust the README. Modal and Starlette hosting entries describe an unused option.
+> The fork's pinned commit `f061e63` is public as `175e591`, with the same tree. Status notes below are dated records. The README is current; where they differ, trust the README. Modal and Starlette hosting entries describe an unused option.
 
 # Third-party software, models and data
 

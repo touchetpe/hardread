@@ -6,11 +6,16 @@ CONTEXT=${1:?clean export directory}
 HERE=$(cd "$(dirname "$0")" && pwd)
 PROFILE=hardread-public
 RUN_DIR=${HARDREAD_PUBLIC_RUN:-$HOME/.hardread-public}
+# Private team pools must never reach the image. The content check exists only in the private tree.
+if find -L "$CONTEXT" -path '*teams/gen9/hr_*' | grep -q .; then echo "private team pool in $CONTEXT; refusing to build" >&2; exit 1; fi
+CHECK=$HERE/../../handoff/release/check_protected.py
+[ ! -f "$CHECK" ] || python3 "$CHECK" --dir "$CONTEXT" >/dev/null || { echo "protected team content in $CONTEXT; refusing to build" >&2; exit 1; }
 mkdir -p "$RUN_DIR/vm-empty"
 colima status -p "$PROFILE" >/dev/null 2>&1 || colima start "$PROFILE" --cpu 6 --memory 8 --disk 20 --mount "$RUN_DIR/vm-empty" >/dev/null 2>&1
 export DOCKER_HOST=unix://$HOME/.colima/$PROFILE/docker.sock
 
 docker build -q -t hardread-public -f "$HERE/Dockerfile" "$CONTEXT" >/dev/null
+if docker run --rm --network none --entrypoint find hardread-public /srv /opt -path '*teams/gen9/hr_*' | grep -q .; then echo "private team pool in the image; refusing to start" >&2; exit 1; fi
 docker network inspect hardread-public >/dev/null 2>&1 || docker network create --subnet 172.30.0.0/24 hardread-public >/dev/null
 
 # Firewall inside the VM. The container may reach: DNS, public HTTPS, and the model gate. Nothing else on this Mac or

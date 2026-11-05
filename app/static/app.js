@@ -188,7 +188,7 @@
         h("p", { id: "export-hint", class: "hint" }, "Teambuilder → Export. Without it, HardRead drafts your sets from what the replay revealed plus the most common set for the rest.")),
       errBox,
       step2,
-      h("div", { class: "form-row" }, go, h("span", { class: "hint", id: "go-hint", style: "margin:0" }, "Takes 30–100 seconds once it starts.")));
+      h("div", { class: "form-row" }, go, h("span", { class: "hint", id: "go-hint", style: "margin:0" }, "About 40–140 seconds for the review, plus the explanation.")));
 
     function showError(msg) { errBox.textContent = msg; errBox.hidden = !msg; }
     function resetStep2() { formState.preflight = null; clear(step2); step2.hidden = true; go.textContent = "Check this game"; }
@@ -270,9 +270,9 @@
         h("div", { class: "step" }, h("span", { class: "n", "aria-hidden": "true" }, "1"), h("b", null, "Start"),
           h("p", null, "Your win chance at team preview, before anyone moved.")),
         h("div", { class: "step" }, h("span", { class: "n", "aria-hidden": "true" }, "2"), h("b", null, "Luck"),
-          h("p", null, "Each crit, miss, roll and speed tie, measured against every outcome that could have happened instead.")),
+          h("p", null, "Crits, misses, speed ties and KO-deciding rolls, each measured against what else could have happened.")),
         h("div", { class: "step" }, h("span", { class: "n", "aria-hidden": "true" }, "3"), h("b", null, "Choices, both players"),
-          h("p", null, "Everything that was not dice. Plus the few turns where the engine clearly disagreed with you."))));
+          h("p", null, "Everything that was not dice. Plus up to three turns where the engine preferred another option by 5 points or more."))));
 
     var showcaseSec = h("section", { "aria-labelledby": "sc-title", id: "showcases", style: "margin-top:34px" },
       h("h2", { id: "sc-title", class: "section-title" }, "See a finished review"),
@@ -332,9 +332,9 @@
           h("p", null, "Foul Play, the open-source engine that won the 2025 PokéAgent Gen 9 OU track, samples the hidden sets and searches the continuations.")),
         h("div", { class: "step" }, h("b", null, "Muse Glimmer explains it"),
           h("p", null, "Meta's open model chooses which engine results to look up, then explains them in plain words.")),
-        h("div", { class: "step" }, h("b", null, "The model can't write a number"),
-          h("p", null, "It writes sentences with slots pointing at engine results. Code fills in the values. A checker rejects uncited numbers and citations of the wrong kind of value. It can't tell if a number is the right one, and it doesn't check the words."))),
-      h("p", { class: "hint" }, "On 28 October's versions of three questions, 41 of 60 explanations passed the checker first time and 59 after one repair. ", h("a", { href: "#/about" }, "How this was measured")));
+        h("div", { class: "step" }, h("b", null, "The model's own numbers can't reach you"),
+          h("p", null, "It writes sentences with slots pointing at engine results. Code fills in the values. A checker rejects uncited numbers and citations of the wrong kind of value. It can't tell if a number is the right one, and it doesn't check whether the words are true."))),
+      h("p", { class: "hint" }, "On 28 October's versions of three questions, under the review flow from before the fix, 41 of 60 explanations passed the checker first time and 59 after one repair. Those figures don't cover the turning-point question. ", h("a", { href: "#/about" }, "How this was measured")));
 
     show([h("section", { class: "hero" },
       h("h1", null, "Was it luck, or was it you?", h("span", { class: "h1-sub" }, "An engine review for competitive Pokémon")),
@@ -348,7 +348,7 @@
       differ, showcaseSec, h("div", { style: "margin-top:34px" }, form), how, ownBox], null, false);
   }
 
-  // "53% start + 73 luck − 26 choices = 100% (win)"; b holds the rounded values. Used wherever a sum appears in a line.
+  // "53% start + 64 luck − 17 choices = 100% (win)"; b holds the rounded values. Used wherever a sum appears in a line.
   function sumLine(b, result) {
     return h("span", { class: "sum-line num" },
       h("b", null, b.s + "%"), " start ", b.l < 0 ? MINUS + " " : "+ ", h("b", null, Math.abs(b.l)), " luck ",
@@ -404,7 +404,7 @@
       section.appendChild(h("p", { class: "empty" }, p.reason === "cache_missing" ? "Engine review unavailable in this copy of the app." : "Engine review unavailable.")); return section;
     }
     section.appendChild(h("p", { class: "footnote" }, "Postgame estimates from the existing review search and calibration; they are not the bot’s logged beliefs. Luck is measured after observed outcomes. Choices includes both players."));
-    if (p.human_fit) section.appendChild(h("p", { class: "footnote" }, "Calibration was fitted on human games."));
+    if (p.human_fit) section.appendChild(h("p", { class: "footnote" }, "Calibration was fitted on human games, not on this bot's."));
     if (p.percent_hp_approx) section.appendChild(h("p", { class: "footnote" }, "Own HP was approximated from recorded percentages."));
     var b=p.bridge;
     section.appendChild(bridgeWidget({ bridge:b, summary_text:"", result:p.result }, { subject:"HardReadBot" }));
@@ -452,7 +452,7 @@
 
   // ------------------------------------------------------------------ job progress
   var STAGES = [["team", "Preparing your team"], ["reconstruct", "Replaying the log through the engine"],
-    ["evaluate", "Searching each of your decisions"], ["luck", "Measuring every chance event"]];
+    ["evaluate", "Searching each of your decisions"], ["luck", "Measuring chance events"]];
   function renderJob(id) {
     lastRender = null;
     if (STATIC) { show([h("p", null, "This page only keeps the saved showcases. Reviews of your own games run on the live app, linked from the home page.")], "Review"); return; }
@@ -469,7 +469,7 @@
       h("p", { class: "eyebrow" }, "Review in progress"),
       h("h1", { id: "job-title", style: "font-size:26px" }, "Reviewing your game"),
       bar, msg, stages,
-      h("p", { class: "hint", style: "margin-top:16px" }, "Every decision gets a full search on sampled opponent teams; a typical game takes 30–100 seconds. You can leave this page open."));
+      h("p", { class: "hint", style: "margin-top:16px" }, "Every decision gets a full search on sampled opponent teams; about 40–140 seconds for the review, plus the explanation. You can leave this page open."));
     show([card], "Reviewing");
     var started = Date.now();
     function tick() {
@@ -534,9 +534,11 @@
     var setsNote = v.sets_note ? h("p", { class: "sets-note" }, h("span", { "aria-hidden": "true" }, "ⓘ "),
       (sharedPage || v.showcase ? "“You” means the reviewed player. Their sets (moves, items) are assumed: the most common set consistent with the replay where we have one, otherwise a plain default."
         : "Your sets are assumed (the most common set consistent with the replay where we have one, otherwise a plain default). Add your team export for exact numbers and to check decisions.")) : null;
+    var statsNote = (v.no_usage_stats || []).length ? h("p", { class: "sets-note" }, h("span", { "aria-hidden": "true" }, "ⓘ "),
+      "The usage statistics we use don't cover " + v.no_usage_stats.join(", ") + ". The review still ran, and the engine still guesses hidden sets from a list of known sets. But once some moves are known, it may assume fewer than four. We haven't measured how much this changes these numbers well enough to quote.") : null;
     var head = h("div", null,
       h("div", { class: "head-top" }, h("a", { class: "back", href: location.pathname.indexOf("/r/") === 0 ? "/" : "#/" }, "← Review " + (location.pathname.indexOf("/r/") === 0 ? "your own game" : "another game")), shareBtn),
-      h("div", { class: "review-head" }, h("h1", null, title), chips), setsNote, shareBox);
+      h("div", { class: "review-head" }, h("h1", null, title), chips), setsNote, statsNote, shareBox);
 
     var bridgeCard = h("section", { class: "card", "aria-labelledby": "bridge-title" },
       h("h2", { id: "bridge-title" }, "The whole game as one sum"),
@@ -551,13 +553,13 @@
     var oneDecision = oneDecisionCard(v);
     var disCard = h("section", { class: "card", "aria-labelledby": "dis-title" },
       h("h2", { id: "dis-title" }, "Biggest disagreements with the engine"),
-      h("p", { class: "card-sub" }, "Up to three decisions made while the game was still open (win chance 20–80%) where the engine preferred another option by 5 points or more. Never added up: searches differ by a few points from run to run. Most offered disagreements aren't decisive: when 184 like these from bot games were rechecked with a deeper search, 139 came out within noise."),
-      disagreementsList(v, id));
+      h("p", { class: "card-sub" }, "Up to three decisions made while the game was still open (win chance 20–80%) where the engine preferred another option by 5 points or more. Never added up: searches usually differ by a few points from run to run, and sometimes by much more. Most offered disagreements aren't decisive: when 184 like these from bot games were rechecked with a deeper search, 139 came out within noise (measured before the fix to how reviews track hidden sets)."),
+      disagreementsList(v, id), readExamplePointer(v));
 
     var luckCard = h("section", { class: "card", "aria-labelledby": "luck-title" },
       h("h2", { id: "luck-title" }, "Biggest luck moments"),
       h("p", { class: "card-sub" }, "Chance outcomes measured against everything that could have happened on that turn."),
-      luckMoments(v));
+      noMatchNote(v), luckMoments(v));
 
     var receipts = receiptsDrawer(id, v);
     // Desktop: the sum and Muse Glimmer's answer sit side by side above the fold. Phone: the CSS orders the cards
@@ -575,12 +577,17 @@
   function oneDecisionCard(v) {
     var top = (v.disagreements || []).slice().sort(function (x, y) { return y.gap_pts - x.gap_pts; })[0];
     if (!top) return null;
+    var hasExample = v.read_example && v.read_example.key === top.turn + ":" + top.k;
     return h("section", { class: "card one-decision", "aria-labelledby": "one-title" },
       h("h2", { id: "one-title" }, "The one decision to look at again"),
       h("p", null, h("b", null, "Turn " + top.turn + ". "), "You chose ", h("b", null, top.chosen), ". The engine preferred ", h("b", null, top.best),
-        " by " + top.gap_pts + " points of win chance. Searches differ by a few points from run to run."),
+        " by " + top.gap_pts + " points of win chance. Searches usually differ by a few points from run to run, and sometimes by much more."),
       h("p", { class: "hint" }, (top.ev_caveat ? "This may depend on your exact EVs, so add your team export to check. " : "") +
-        "It's the largest gap on the list below, and a place to start thinking, not a verdict: the engine can be wrong, especially about what you knew at the time."));
+        "It's the largest gap on the list below, and a place to start thinking, not a verdict: the engine can be wrong, especially about what you knew at the time. A rerun with new random draws can pick a different decision, so treat this as one place to look, not the place."),
+      hasExample ? h("button", { type: "button", class: "btn btn-ghost btn-sm read-jump", onclick: function () {
+        var box = document.getElementById("read-example");
+        if (box) box.scrollIntoView({ behavior: "smooth", block: "start" });
+      } }, "See a saved example of the read test ↓") : null);
   }
 
   // ---- the bridge: four bars on one points axis, each anchored at zero (never a running total)
@@ -846,6 +853,12 @@
 
   function gerund(a) { return /^switch to /.test(a || "") ? "switching to " + a.slice(10) : a; }
 
+  function noMatchNote(v) {
+    var n = v.luck_no_match;
+    if (!n || !n.turns) return null;
+    return h("p", { class: "hint" }, "On " + n.turns + " of " + n.of + " turns, no set we sampled could reproduce what the log shows, so luck on those turns is rough.");
+  }
+
   function luckMoments(v) {
     var list = v.luck_moments || [];
     if (!list.length) return h("div", { class: "empty" }, "No single turn moved your win chance by 3 points or more through luck.");
@@ -856,7 +869,7 @@
       var odds = p !== null && p !== undefined && p < 0.5 ? " What happened had about a " + Math.max(1, Math.round(100 * p)) + "% chance." : "";
       ul.appendChild(h("li", null, h("span", { class: "muted" }, "Turn " + m.turn),
         h("span", { class: "m-pts num" }, h("span", { "aria-hidden": "true" }, glyph(m.luck_pts) + " "), signed(m.luck_pts), h("span", { class: "sr-only" }, " points " + favour(m.luck_pts))),
-        h("span", null, (ev ? ev.charAt(0).toUpperCase() + ev.slice(1) + "." : "A damage roll or other hidden chance outcome.") + odds)));
+        h("span", null, (ev ? ev.charAt(0).toUpperCase() + ev.slice(1) + "." : "A damage roll or other hidden chance outcome.") + odds + (m.no_match ? " Rough: no set we sampled reproduced this turn." : ""))));
     });
     return ul;
   }
@@ -866,9 +879,9 @@
       h("h2", { id: "how2-title" }, "How to read this"),
       h("p", { class: "card-sub", style: "margin-bottom:8px" }, "Luck and choices are measured on the same scale, in points of win chance."),
       h("ul", { style: "margin:0;padding-left:18px;color:var(--ink-2);font-size:14px" },
-        h("li", null, "Luck is an estimate. In two tests where one bot had a real information edge, the estimate shifted part of that edge, in opposite directions, and the cause isn't known. So a luck number doesn't rule out skill. It measures crits, misses, secondary effects, speed ties and KO-deciding damage rolls. It was checked on 500 engine-vs-engine games, where both seats' luck mirror each other."),
+        h("li", null, "Luck is an estimate. In two tests where one bot had a real information edge, the estimate shifted part of that edge, in opposite directions. Those tests were measured before a 2 November fix to how reviews track hidden sets; the cause isn't known and may relate to that flaw. So a luck number doesn't rule out skill. It measures crits, misses, secondary effects, speed ties and KO-deciding damage rolls. It was checked on 499 engine-vs-engine games, where both seats' luck mirrors at r = −0.82, and on 146 human games, at −0.54, measured after the fix with different search settings from the page."),
         h("li", null, "Choices is the rest of the swing, for both players together. A big negative number can come from your opponent's good play as much as from yours."),
-        h("li", null, "Win chances come from the engine's search, mapped to real ladder outcomes; early turns carry little signal.")));
+        h("li", null, "Win chances come from the engine's search, mapped by a formula fitted to the results of top-50 ladder games. That fit used a different search and a different guess at your team, before a 2 November fix, and wasn't refitted. Its published test doesn't cover reviews as they run now, or other ratings. Win chances can move between runs, and early turns carry little signal.")));
   }
 
   function receiptsDrawer(id, v) {
@@ -896,8 +909,8 @@
 
   // ------------------------------------------------------------------ explanation (Muse Glimmer, async)
   var MODE_TEXT = {
-    glimmer_raw: "Written by Muse Glimmer-30B (base model, no fine-tuning). It passed the checker on the first draft. The checker doesn't judge the words.",
-    glimmer_repaired: "Written by Muse Glimmer-30B (base model, no fine-tuning). It passed the checker after one repair. The checker doesn't judge the words.",
+    glimmer_raw: "Written by Muse Glimmer-30B (base model, no fine-tuning). It passed the checker on the first draft. The checker doesn't check whether the words are true.",
+    glimmer_repaired: "Written by Muse Glimmer-30B (base model, no fine-tuning). It passed the checker after one repair. The checker doesn't check whether the words are true.",
     template: "Fixed template: the words come from application code, not the model."
   };
   // The same model on the same game with no engine: what a one-prompt analyzer gives you.
@@ -914,7 +927,7 @@
       h("summary", null, "Compare: the same model with a plain prompt and no engine"),
       h("p", { class: "muted" }, "Muse Glimmer given only the battle log and the question “" + pc.question + "”. " +
         (n ? "Nothing links the " + n + " marked number" + (n > 1 ? "s" : "") + " to a source: some may come from the log, others may be guesses, and you can't tell which." : "Nothing in it links back to a calculation.")), p,
-      h("p", { class: "footnote" }, "Across our test, this setup put numbers in 27 of 30 answers, with nothing linking them to a source. Asked for the biggest piece of luck, it named the same turn as the engine in 3 of 10 games. That is a small sample, and the engine's estimate is not ground truth."));
+      h("p", { class: "footnote" }, "Across our test, this setup put numbers in 27 of 30 answers, with nothing linking them to a source."));
   }
   // Short tab labels; the full question stays on the button (aria-label, title) and above the answer.
   var Q_SHORT = { q4: "Turning point", q1: "Luck or choices?", q2: "Biggest luck", q3: "Biggest disagreement" };
@@ -930,7 +943,7 @@
     var badge = h("span", { class: "badge-model" }, "Muse Glimmer");
     var card = h("section", { class: "card explain-card", "aria-labelledby": "ex-title" },
       h("div", { class: "ex-head" }, h("h2", { id: "ex-title" }, "In plain words"), badge),
-      h("p", { class: "card-sub" }, "The engine did the analysis. Muse Glimmer, Meta's open model, explains it, but it can't write a number: it writes sentences with slots pointing at engine results, code fills in the values, and a checker rejects uncited numbers and citations of the wrong kind of value. It can't tell if a number is the right one, and it doesn't check the words."),
+      h("p", { class: "card-sub" }, "The engine did the analysis. Muse Glimmer, Meta's open model, explains it, but its own numbers can't reach you: it writes sentences with slots pointing at engine results, code fills in the values, and a checker rejects uncited numbers and citations of the wrong kind of value. It can't tell if a number is the right one, and it doesn't check whether the words are true."),
       tabs, body);
     var pcBtn = null;
     function select(q) {
@@ -1094,6 +1107,7 @@
 
   function readBlock(id, v, d) {
     var key = d.turn + ":" + d.k;
+    if (v.read_example && v.read_example.key === key) return readExampleBlock(v.read_example.card);
     // A review view has no current note/chip identity. Never show its most
     // recently cached read as if it answered the read the user is entering now.
     var have = STATIC ? (v.verdicts || {})[key] : null;
@@ -1171,7 +1185,7 @@
     // add a detail by hand
     var add = h("details", { class: "add-detail" }, h("summary", null, "Add a detail by hand"));
     api("/api/options/" + encodeURIComponent(id)).then(function (o) {
-      if (!o.ok) return;
+      if (!o.ok) { add.appendChild(h("p", { class: "hint" }, o.error || "Details can't be added by hand right now. Your written read still works.")); return; }
       var active = (o.opp_active || {})[d.turn + ":" + d.k];
       var spSel = h("select", { "aria-label": "Their Pokémon" }, (o.opp_species || []).map(function (sp) { return h("option", { value: sp, selected: sp === active }, sp); }));
       var fSel = h("select", { "aria-label": "Detail" }, ["item", "ability", "tera", "moves_has", "moves_not", "expects_action"].map(function (f) { return h("option", { value: f }, FIELD_LABEL[f]); }));
@@ -1258,14 +1272,30 @@
       rc.sentence || "", h("br"), h("span", { class: "muted" }, rc.scope || ""));
   }
 
+  // The one saved example (app/data/showcases/*.read.json), so a showcase can show the read test without a team export.
+  function readExampleBlock(c) {
+    return h("div", { class: "read-example", id: "read-example" },
+      h("p", { class: "re-title" }, "Example of the read test (saved)"),
+      h("p", { class: "hint" }, "We assumed this player's sets, so this doesn't say the real player made a mistake. And here the belief barely changed the result: it shows how the test works, not a read changing the answer."),
+      h("p", { class: "small" }, "We wrote this belief ourselves. It is not a real player's read: nobody in this game said it. It runs on assumed sets, and this is a saved result, not a live check. The live test needs your own game and team export."),
+      verdictCard(c),
+      h("p", { class: "footnote" }, "Measured before the fix to how reviews track hidden sets: in bot self-play, on 184 moves chosen by a deeper search, it called 18 clear misplays. No read was stated in this test, so it doesn't measure how well real reads are judged."));
+  }
+  function readExamplePointer(v) {
+    if (!v.read_example_at) return null;
+    var base = location.pathname.indexOf("/r/") === 0 ? "/" : "";
+    return h("p", { class: "hint read-pointer" }, "The read test needs your own game and team export to run live. ",
+      h("a", { href: base + "#/review/" + encodeURIComponent(v.read_example_at) }, "See a saved example"), ".");
+  }
+
   function verdictCard(c, reviewId, identitySha) {
-    var cls = { "Misplay": "v-misplay", "Misread": "v-misread", "Defensible": "v-ok", "Within noise": "v-noise" }[c.verdict] || "v-noise";
+    var cls ={ "Misplay": "v-misplay", "Misread": "v-misread", "Defensible": "v-ok", "Within noise": "v-noise" }[c.verdict] || "v-noise";
     var box = h("div", { class: "verdict " + cls },
       h("h3", { tabindex: "-1" }, h("span", { class: "v-badge" }, h("span", { "aria-hidden": "true" }, VERDICT_GLYPH[c.verdict] + " "), c.verdict)),
       h("p", { class: "v-head" }, c.headline),
       runsPlot(c),
       !c.has_stated_hypothesis ? h("p", { class: "small muted" }, "No testable read was recorded. This card compares the moves using the engine's assumptions; it does not check what you expected the opponent to do.") :
-        c.stated && c.stated.length ? h("p", { class: "small muted" }, "Your read: " + c.stated.join("; ") + ".") : null,
+        c.stated && c.stated.length ? h("p", { class: "small muted" }, (c.example ? "Example belief: " : "Your read: ") + c.stated.join("; ") + ".") : null,
       (c.contradictions || []).map(function (t) { return h("p", { class: "small notice-inline" }, t + ". That detail was left out."); }),
       c.third_option ? h("p", { class: "small" }, c.third_option) : null,
       readCheckBlock(c.read_check),
@@ -1277,12 +1307,14 @@
   }
   function runsPlot(c) {
     var W = 520, rowH = 34, top = 8, lab = 92, R = 20;
-    var rows = [[c.has_retained_set_hypothesis ? "Your read" : "Engine baseline", c.delta_U], ["Reference", c.delta_R]];
+    var readName = c.example ? "Example belief" : "Your read";
+    var moveName = c.example ? "the reviewed player's move" : "your move";
+    var rows = [[c.has_retained_set_hypothesis ? readName : "Engine baseline", c.delta_U], ["Reference", c.delta_R]];
     var H = top + rows.length * rowH + 22;
     var plotW = W - lab - 14;
     function X(p) { var q = Math.max(-R, Math.min(R, p)); return lab + (q + R) / (2 * R) * plotW; }
     var sv = s("svg", { viewBox: "0 0 " + W + " " + H, class: "runs-plot", role: "img",
-      "aria-label": c.x + " minus your move, in points, three runs per row: " + (c.has_retained_set_hypothesis ? "under your read " : "Engine baseline ") + (c.delta_U || []).join(", ") + "; under " + c.reference_label + " " + (c.delta_R || []).join(", ") + ". Threshold " + c.margin_pts + " points." });
+      "aria-label": c.x + " minus " + moveName + ", in points, three runs per row: " + (c.has_retained_set_hypothesis ? "under " + readName.toLowerCase() + " " : "Engine baseline ") + (c.delta_U || []).join(", ") + "; under " + c.reference_label + " " + (c.delta_R || []).join(", ") + ". Threshold " + c.margin_pts + " points." });
     sv.appendChild(s("rect", { x: X(c.margin_pts), y: top - 4, width: X(R) - X(c.margin_pts), height: rows.length * rowH, fill: "var(--pos-wash)" }));
     sv.appendChild(s("line", { x1: X(0), x2: X(0), y1: top - 4, y2: top + rows.length * rowH, stroke: "var(--ink-3)", "stroke-width": 1.5 }));
     sv.appendChild(s("line", { x1: X(c.margin_pts), x2: X(c.margin_pts), y1: top - 4, y2: top + rows.length * rowH, stroke: "var(--pos)", "stroke-width": 1, "stroke-dasharray": "4 3" }));
@@ -1299,8 +1331,8 @@
       sv.appendChild(s("text", { x: X(t), y: H - 4, "text-anchor": "middle", class: "rp-axis", text: t > 0 ? "+" + t : t < 0 ? MINUS + Math.abs(t) : "0" }));
     });
     return h("figure", { class: "runs" }, sv, h("figcaption", { class: "small muted" },
-      c.x + " minus your move (" + c.chosen + "), in win-chance points. Each dot is one run. Reference: " + c.reference_label +
-      ". The shaded zone (+" + c.margin_pts + " or more, in all three runs) is where the engine's option is clearly better."));
+      c.x + " minus " + moveName + " (" + c.chosen + "), in win-chance points. Each dot is one run. Reference: " + c.reference_label +
+      ". The shaded zone starts at +" + c.margin_pts + ". The engine's option counts as clearly better when the three runs average +" + c.margin_pts + " or more and all three are above zero."));
   }
 
   // ------------------------------------------------------------------ share (opt-in; public replays only)
@@ -1342,9 +1374,9 @@
       h("p", null, "Chess players get an engine review after every game. Pokémon has luck calculators and win-chance tools, but none we found splits a game into start, luck and both players' choices using search over hidden sets. You can't see the opponent's moves and items, and dice decide many turns. HardRead reviews a finished Gen 9 OU game anyway, and estimates how much was luck."),
       h("p", null, "The analysis comes from Foul Play (GPL-3.0), an open-source search engine by pmariglia that won the 2025 PokéAgent Gen 9 OU track, running on poke-engine. For each decision it samples teams your opponent could have and searches each of them; for each turn it goes through the chance outcomes and measures the one that happened against the rest."),
       h("h2", null, "How Muse Glimmer is used"),
-      h("p", null, "Muse Glimmer-30B, Meta's open model, writes the explanations as an agent: it chooses which read-only engine tools to call, then submits an explanation. It cannot write a number. It writes sentences with empty slots that point at engine results, code fills in the values, and a checker rejects uncited numbers and citations of the wrong kind of value. It gets one repair, then a labeled template takes over. Passing means each number comes from an engine result and has the right type. It doesn't mean the explanation is true: a real number can still be the wrong one for its sentence, and plain-word claims aren't checked."),
-      h("p", null, "On 28 October's versions of three questions, 60 answers about 20 games (base model, no fine-tuning), 41 passed the checker (numbers and required wording) first time and 59 after one repair. The newer turning-point question, tuned on those games, passed 9 of 14 first time and 14 of 14 after repair. Sentences flagged in a blind review: 3 of 60. We ran that review because the checker doesn't judge the words. It was done by an AI reviewer; the human label check is still pending, so we don't claim the prose is accurate."),
-      h("p", null, "For comparison, the same model with only the battle log and no engine put numbers in 27 of 30 answers, with nothing linking them to a source. That is a small sample, and the engine's estimate is not ground truth."),
+      h("p", null, "Muse Glimmer-30B, Meta's open model, writes the explanations as an agent: it chooses which read-only engine tools to call, then submits an explanation. Its own numbers can't reach you. It writes sentences with empty slots that point at engine results, code fills in the values, and a checker rejects uncited numbers and citations of the wrong kind of value. It gets one repair, then a labeled template takes over. Passing means each number comes from an engine result and has the right type. It doesn't mean the explanation is true: a real number can still be the wrong one for its sentence, and plain-word claims aren't checked."),
+      h("p", null, "On 28 October's versions of three questions, under the review flow from before the fix, 60 answers about 20 games (base model, no fine-tuning), 41 passed the checker (numbers and required wording) first time and 59 after one repair. An earlier version of the newer turning-point question, before the fix and tuned on the same 14 game-sides it was tested on, passed 9 of 14 on the first draft and 14 of 14 after repair, and an AI read judged 2 of the 14 misleading. Sentences flagged in a blind review: 3 of 60. We ran that review because the checker doesn't check whether the words are true. It was done by an AI reviewer; no human has checked these answers or the turning-point answers, so we don't claim the prose is accurate."),
+      h("p", null, "For comparison, the same model with only the battle log and no engine put numbers in 27 of 30 answers, with nothing linking them to a source."),
       h("p", null, "Separately, we fine-tuned Glimmer to play. It won 178 of 200 games against the Abyssal heuristic bot. Those teams were partly seen in development, so this doesn't measure general strength. The fine-tuned model doesn't write the explanations."),
       h("h2", null, "What the numbers mean"),
       h("ul", null,
@@ -1355,7 +1387,8 @@
         h("li", null, "Without your team export, your own sets are assumed, and that can change a verdict. We haven't yet run a study with human players.")),
       h("h2", { id: "privacy" }, "Privacy"),
       h("ul", null,
-        h("li", null, "HardRead runs on its own server: your machine if you started it yourself, the public copy's own server if live review is online. The open Muse Glimmer weights run in the same setup, so nothing goes to an outside AI service. The only other outside request is fetching the replay link you paste, from replay.pokemonshowdown.com."),
+        h("li", null, PUBLIC_COPY ? "HardRead runs on its own server, and the open Muse Glimmer weights run in the same setup. The public copy runs on the developer's own computer and is reached through a Cloudflare tunnel, so Cloudflare carries what you send it, including a team export or note. Your replay and team aren't sent to any AI service. The server also fetches the replay link you paste, from replay.pokemonshowdown.com."
+          : "HardRead runs on its own server: your machine if you started it yourself, the public copy's own server if live review is online. The open Muse Glimmer weights run in the same setup, so nothing goes to an outside AI service. The only other outside request is fetching the replay link you paste, from replay.pokemonshowdown.com."),
         h("li", null, "Player names and chat are removed before the review runs; the review says “You” and “Opponent”. Names are shown once, on the side picker, and never stored."),
         h("li", null, PUBLIC_COPY ? "This public copy only takes public replay links. Reviews are kept 14 days at most, so a reload is instant, and may be cleared sooner." : "Reviews of public replays are kept 14 days so a reload is instant; private (password) replays 24 hours, with no share page and no card."),
         h("li", null, "The pasted log is deleted when the review finishes, unless you added your team export: then the name-free log and the export stay with the review, for the same time, so you can check decisions. A note you write about a decision is read by the same server and not stored; the details you confirm are kept with that check."),
@@ -1363,7 +1396,7 @@
         h("li", null, "No accounts, no tracking, no cookies. Your theme and the 18+ confirmation are remembered in this browser only.")),
       provenanceSection(),
       h("h2", null, "Built during the hackathon"),
-      h("p", null, "HardRead was built during the Meta Global AI Developer Hackathon (October 26 to November 4, 2026). The repository's BUILT_DURING_HACKATHON.md lists what existed before the kickoff and what was built after it, commit by commit."),
+      h("p", null, "HardRead was built during the Meta Global AI Developer Hackathon (October 26 to November 4, 2026). The repository's BUILT_DURING_HACKATHON.md lists what existed before the kickoff and what was built after it, commit by commit. I designed and directed this project; AI coding agents (Claude Code and Codex) wrote much of the code."),
       h("h2", null, "Fair play"),
       h("p", null, "HardRead only reviews finished games. Links to live battle rooms are refused."),
       h("h2", null, "Not affiliated"),

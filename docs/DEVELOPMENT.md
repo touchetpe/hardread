@@ -77,7 +77,7 @@ This is the pre-test reservation record. A 1,000-team pool, one team per reserve
 
 - **Installed in the fork:**
   - `gen9/hr_hl_dev`: 2,000 development teams;
-  - `gen9/hr_comp`: 11 legal expert teams.
+  - 11 legal expert teams, kept private.
 - **Pairing:** `--team-pool gen9/hr_hl_dev --seed N` draws two different teams per game. Tested: 6 of 6 games completed, 27–92 s each.
 
 - `foul-play/fp/teams/teams/gen9/ou/example` is **rejected** by current Gen9 OU rules: Spore (Sleep Moves Clause) and Tera Blast (banned).

@@ -107,12 +107,16 @@ def s_turning_point(m, gradual=False):
     rid = m["id"]
     out = []
     lead = "No single turn stands out in this game; the largest move toward the final result came on turn {t}" \
-        if gradual else "The turning point was turn {t}"
+        if gradual else "The turning point was turn {t}, the largest move toward the final result"
     slots = {"t": f"{rid}.turn", "a": f"{rid}.wp_before_pct", "b": f"{rid}.wp_after_pct"}
     if m.get("what_happened"):
         lead += ", when {w}"
         slots["w"] = f"{rid}.what_happened"
-    out.append({"text": lead + ": your win chance went from {a} to {b}.", "slots": slots})
+    tail = ": your win chance went from {a} to {b}"
+    if m.get("standing"):
+        tail += ", and {s}"
+        slots["s"] = f"{rid}.standing"
+    out.append({"text": lead + tail + ".", "slots": slots})
     if m.get("main_cause") == "luck":
         if m.get("event"):
             out.append({"text": "Luck on that turn was {l}, the main cause of that move: {e}.",
@@ -136,7 +140,11 @@ def _turning_point(session):
     got = _records(session, "list_key_moments", "win_chance")
     out = got[0] if got else session.call("list_key_moments", {"kind": "win_chance", "k": 3})
     ms = out.get("moments") or []
-    return s_turning_point(ms[0], gradual=bool(out.get("note"))) if ms else []
+    sents = s_turning_point(ms[0], gradual=bool(out.get("note"))) if ms else []
+    if sents and out.get("end_note"):
+        note = out["end_note"]
+        sents.insert(1, {"text": note[0].upper() + note[1:] + ".", "slots": {}})
+    return sents
 
 
 def build(session, question):

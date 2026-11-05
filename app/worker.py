@@ -93,7 +93,7 @@ def main():
     except Exception as e:  # noqa: BLE001
         (jobdir / "stderr_tail.txt").write_text(f"{type(e).__name__}: {str(e)[:500]}")
         write_status(jobdir, state="error", stage="team", progress=1.0,
-                     message="Could not prepare this game for review.")
+                     message=str(e) if type(e).__name__ == "NoSetData" else "Could not prepare this game for review.")
         return 1
 
 

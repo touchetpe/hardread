@@ -41,7 +41,7 @@ def review(log_lines, side, team_text, worlds=4, search_ms=1000, hax_worlds=4, h
     import reconstruct as R
     from calibrate import load_calibrator
     from evaluate import Evaluator
-    from luck import LuckMeter, load_abs_calibrator, turn_summary
+    from luck import LuckMeter, load_abs_calibrator, no_world_matched, turn_summary
 
     cal_root = load_calibrator(calibrator_path)
     cal_abs = load_abs_calibrator(calibrator_path, human=human)  # reviews are of human games by default
@@ -114,7 +114,7 @@ def review(log_lines, side, team_text, worlds=4, search_ms=1000, hax_worlds=4, h
                       "opponent_action": lk.get("opp_action"), "luck": lk.get("luck"),
                       "luck_events": lk.get("visible_events"), "luck_realised_prob": lk.get("realised_prob"),
                       "chance_swing_vs_counterfactual": lk.get("counterfactual_swing"),
-                      "luck_note": lk.get("skipped"),
+                      "luck_note": lk.get("skipped"), "luck_no_match": no_world_matched(lk),
                       "decision_cost": _round(tc), "engine_best": dd["engine_best"],
                       "forced_switches": [{"action": x["action"], "decision_cost": x["decision_cost"],
                                            "engine_best": x["engine_best"]} for x in extra]})
@@ -153,8 +153,9 @@ def review(log_lines, side, team_text, worlds=4, search_ms=1000, hax_worlds=4, h
         "caveats": [
             "Luck is chance-only (crits, misses, secondary effects, speed ties, KO damage rolls, random targets, "
             "consecutive Protect) and belief-averaged: computed in opponent sets sampled from what you knew and "
-            "kept only if they reproduce the damage the replay shows. Validated on bot self-play (250 games): it "
-            "explains about 20-25% of outcome variance and mirrors between the two seats (tools/review/README.md). "
+            "kept only if they reproduce the damage the replay shows. Checked on bot self-play (499 paired games, after "
+            "the 2 November fix, with test settings that differ from the page's search): the two seats' luck mirrors "
+            "at r = −0.82, and subtracting it removes about 22% of outcome variance (tools/review/README.md). "
             "Damage-roll luck is only counted where a roll decides a KO (poke-engine averages other rolls).",
             "Win probabilities are absolute values (poke-engine eval + search correction) mapped by a calibrator fit "
             "on top-50 ladder games (flatter than the self-play one: human games swing back more often).",

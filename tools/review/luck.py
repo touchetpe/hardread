@@ -20,6 +20,7 @@ Estimators (all in win-probability units after calibrating A on farm outcomes, c
               paralysis, sleep/freeze skip, flinch, secondary status); other turns count 0
 """
 import argparse
+import copy
 import gzip
 import hashlib
 import json
@@ -242,7 +243,11 @@ class LuckMeter:
             return rec
         fo = _feat_battle(observed_battle)
         n_draw = self.worlds * self.max_draw_factor
-        _, sampled = sample_worlds(d.battle, n_draw, seed=_seed_for(("luck", d.idx, d.turn)))
+        # Luck prices an outcome the log already shows, so its worlds may know that outcome, and nothing after it. The
+        # decision's own lists can't reproduce it: a set the outcome just proved has been kept out of them.
+        at_outcome = copy.copy(d.battle)
+        at_outcome.mode = observed_battle.mode
+        _, sampled = sample_worlds(at_outcome, n_draw, seed=_seed_for(("luck", d.idx, d.turn)))
         pending = []
         accepted = 0
         for wi, (b, _chance) in enumerate(sampled):
@@ -449,6 +454,11 @@ def turn_summary(rec, cal, estimator="branch_cond"):
             "visible_events": {k: v for k, v in rec["events"].items() if v["u"] or v["o"]},
             "worlds_accepted": sum(w["accepted"] for w in ws), "worlds_used": len(acc),
             "user_action": rec.get("user_action"), "opp_action": rec.get("opp_action"), "skipped": rec.get("skipped")}
+
+
+def no_world_matched(summary):
+    """Every sampled world was rejected, so turn_summary fell back to all of them: this turn's luck is rough."""
+    return summary.get("luck") is not None and summary.get("worlds_accepted") == 0
 
 
 def load_abs_calibrator(path=None, human=False):

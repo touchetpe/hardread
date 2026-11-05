@@ -155,11 +155,30 @@ def draft_team_smogon(sets_rows, profiles, gender_by_species):
 _FULL = None
 
 
+class NoSetData(RuntimeError):
+    """Said to the player as it stands."""
+
+    def __init__(self):
+        super().__init__("HardRead couldn't get its set data (pokemon_full_sets.json), so it can't guess your team. "
+                         "Connect to the internet and try again, or add your team export.")
+
+
 def _full_sets():
+    """Foul Play's full-set data: its cached file, or a download into that cache. A missing file used to mean an
+    empty table, which quietly gave every Pokemon the default draft."""
     global _FULL
     if _FULL is None:
-        p = HARDREAD / "foul-play/fp/data/pkmn_sets_cache/gen9ou/pokemon_full_sets.json"
-        _FULL = json.loads(p.read_text()) if p.exists() else {}
+        import fpenv  # noqa: F401  (puts the fork on sys.path)
+        from fp.data.sets.base import PKMN_SETS_CACHE_DIR
+        from fp.data.sets.team_datasets import get_pkmn_sets_file
+        try:
+            full = get_pkmn_sets_file("gen9ou", "pokemon_full_sets.json")
+        except Exception as e:  # noqa: BLE001  (no network, or a bad reply)
+            raise NoSetData() from e
+        if not full:   # the loader caches an empty table when the server refuses: don't keep it
+            Path(PKMN_SETS_CACHE_DIR, "gen9ou", "pokemon_full_sets.json").unlink(missing_ok=True)
+            raise NoSetData()
+        _FULL = full
     return _FULL
 
 

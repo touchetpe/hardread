@@ -55,7 +55,7 @@ GLIMMER_URL = LLM_URL + "/v1/chat/completions"
 EVAL_LOCK = HARDREAD / "scratch_ds" / "agent" / "EVAL_LOCK"   # present = a recorded evaluation is running: no calls
 LLM_GATE = threading.Lock()   # at most one model call in flight from this app (the server runs --parallel 1)
 EXPLAIN_MODE = os.environ.get("HARDREAD_EXPLAIN_MODE", "auto")   # auto | loop | prefetch | template | off
-EXPLANATION_POLICY_VERSION = "offered-scope-v3"
+EXPLANATION_POLICY_VERSION = "offered-scope-v7"
 SHOW_SAVED_ANSWERS = True
 # Public copy (reached only through the tunnel): public replay links only, no owner-only or path-revealing endpoints.
 PUBLIC = os.environ.get("HARDREAD_PUBLIC") == "1"
@@ -119,22 +119,37 @@ AGENT_QUESTIONS = {
            "than by luck.\""),
     "q4": ("What was the turning point of this game? First call get_summary for the result, then list_key_moments with "
            "kind \"win_chance\" and k 3: the three largest moves of your win chance toward the final result, largest "
-           "first. Decide which of the three really turned the game. The largest is not automatically the answer: a "
-           "move that takes a close game to one side can matter more than a bigger move later, when the game was "
-           "already going that way. You may look closer with get_turn or get_luck_events.\n"
-           "Then explain in your own words, in two to four sentences, which turn you chose and why it mattered more "
-           "than the other two, for example that it put a different side ahead or came while the game was still open. "
-           "Your answer must cite these fields of the moment you chose, each in a slot: turn, what_happened, wp_before_pct, "
-           "wp_after_pct, and luck_pts and choices_pts if the moment has them. Its main_cause says which of the two "
-           "pushed the move most; do not contradict it. You may add what the engine preferred only if the moment has "
-           "engine_best. what_happened is a lowercase clause that only reads correctly straight after \"when\" or "
-           "\"after\", in the middle of a sentence, so put its slot there. The checker rejects a choices_pts number unless its sentence also says \"yours and your "
-           "opponent's\" beside the word choices, so give that number its own sentence, with no mention of luck. "
-           "A placeholder straight after the word \"turn\" must be the turn number.\n"
-           "If the eventual winner already led by a lot before the turn you chose, roughly seventy percent or more, say "
-           "in your own words that the game was already leaning that way rather than presenting it as a turn, and do "
-           "not call the game still open. If that is true of all three moments, say so. If the tool's note says no "
-           "single turn stands out, say that too."),
+           "first. Each moment's standing says who was ahead around that move. You may look closer with get_turn or "
+           "get_luck_events.\n"
+           "A moment whose standing says it put the eventual winner ahead for the rest of the game is usually the turning "
+           "point, even if it is not the largest. Otherwise start from the largest, and choose a smaller one only if its "
+           "standing says it put the eventual winner ahead, or if the larger ones started with the eventual winner at "
+           "seventy percent or more. A large luck number alone is not a reason.\n"
+           "Then explain in your own words, in two to four sentences, which turn was the turning point and why it mattered "
+           "more than the others. Write it the way you would tell the player, starting from whatever matters most in this "
+           "game, with no fixed pattern. Never write \"I\" or the word \"standing\", and no number words such as \"other "
+           "two\". Every answer needs its reason in words: that it put the eventual winner ahead for good, or that it was the "
+           "largest move toward the final result, or that the larger moves came when the eventual winner was already "
+           "well up. Take the reason from the standing fields and the win chances, not from habit: say the lead changed "
+           "only if the standing says so, and say the game was open only if the eventual winner was not well up before "
+           "that turn. If the standing says a side was already ahead, do not contrast this turn with others on that "
+           "point. If the eventual winner started the turn at seventy percent or more, say in your own words that the "
+           "game was already leaning that way.\n"
+           "Your answer must cite these fields of the moment you chose, each in a slot: turn, what_happened, standing, "
+           "wp_before_pct, wp_after_pct, and luck_pts and choices_pts if the moment has them. Its main_cause says which "
+           "of the two pushed the move most; do not contradict it. You may add what the engine preferred only if the "
+           "moment has engine_best. what_happened is a lowercase clause that only reads correctly straight after "
+           "\"when\" or \"after\", in the middle of a sentence that already has its verb, such as \"Turn {t} moved your "
+           "win chance from {a} to {b} when {what_happened}.\" Every sentence needs a main verb of its own: \"Turn {t} when "
+           "...\" and \"After turn {t} when ...\" are not sentences. standing is a complete clause: give it a sentence that is "
+           "only its slot and a full stop, with no words before it. Keep to one idea in each sentence, and end every "
+           "sentence with a full stop. The checker rejects a choices_pts number unless its sentence also says \"choices, "
+           "yours and your opponent's,\" with those commas, so give that number its own sentence, with a verb and no "
+           "mention of luck. A placeholder straight after "
+           "the word \"turn\" must be the turn number.\n"
+           "If the tool's note says no single turn stands out, say \"no single turn stands out\" and call your turn the "
+           "largest move rather than the turning point. If the tool gives end_note, say in words how the game ended and "
+           "that this is not counted as a move."),
 }
 _SALT = secrets.token_hex(16)   # per process: hashed client addresses are never written anywhere
 
@@ -514,6 +529,24 @@ def _visible_verdicts(offered, verdicts):
     return {key: value for key, value in (verdicts or {}).items() if key in keys}
 
 
+READ_EXAMPLE = "showcase-6"
+
+
+def _attach_read_example(view, rid, review, ctx):
+    """The saved read-test example, kept apart from view["verdicts"]: it is our belief, not an answer to a player's
+    read, and it never reaches the explanation tools. Same rule as static_export.attach_read_example."""
+    saved = _jsonfile(SHOWCASES / f"{READ_EXAMPLE}.read.json")
+    if not isinstance(saved, dict):
+        return
+    if rid != READ_EXAMPLE:
+        view["read_example_at"] = READ_EXAMPLE
+        return
+    raw = saved["verdict"]
+    names = dict(ctx.get("names") or {}, **saved.get("names", {}))
+    view["read_example"] = {"key": f"{raw['turn']}:{raw['k']}",
+                            "card": dict(P.verdict_card(raw, dict(ctx, names=names), review), example=True)}
+
+
 def load_view(rid):
     parts = load_parts(rid)
     if parts is None:
@@ -521,6 +554,8 @@ def load_view(rid):
     review, ctx, extra = parts
     view, offered = P.build_view_with_offered(review, ctx)
     view.update(extra, id=rid)
+    if is_showcase(rid):
+        _attach_read_example(view, rid, review, ctx)
     d = cache_dir(rid)
     view["features"] = {"verdict": bool(VERDICTS_ON and ctx.get("mode") == "export" and d is not None
                                         and (d / "team.txt").exists()),
@@ -870,7 +905,10 @@ def create_app(concurrency=1, processes=4):
         parts = load_parts(rid)
         if parts is None:
             return err(404, "This review does not exist or has expired.")
-        return {"ok": True, **P.belief_options(parts[1])}
+        try:
+            return {"ok": True, **P.belief_options(parts[1])}
+        except P.InputError as e:
+            return err(503, str(e))
 
     # ---- verdicts (tools/review/verdict.py one; export mode only)
     @app.post("/api/verdict")

@@ -2,13 +2,15 @@
 # Prove the public copy's isolation right now. Exit 1 on any leak: a reachable host port, a host mount, or a writable path.
 PROFILE=hardread-public
 export DOCKER_HOST=unix://$HOME/.colima/$PROFILE/docker.sock
+HERE=$(cd "$(dirname "$0")" && pwd)
+limit() { "$HERE/limit.sh" "$@"; }
 RUN_DIR=${HARDREAD_PUBLIC_RUN:-$HOME/.hardread-public}
 MAC_PORTS=$(lsof -nP -iTCP -sTCP:LISTEN 2>/dev/null | awk 'NR>1{n=split($9,a,":"); print a[n]}' | sort -un | tr '\n' ' ')
-VM_IPS=$(colima ssh -p "$PROFILE" -- sh -c "ip -4 -o addr | awk '{print \$4}' | cut -d/ -f1" | tr '\n' ' ')
-MOUNTS=$(colima ssh -p "$PROFILE" -- sh -c "mount | grep -E 'virtiofs|sshfs|9p|fuse\.' | grep -v fusectl | awk '{print \$3}'" | tr '\n' ' ')
-RESTART=$(docker inspect -f '{{.HostConfig.RestartPolicy.Name}}' hardread-public)
-RULES=$(colima ssh -p "$PROFILE" -- sudo iptables -S DOCKER-USER | grep -c '172.30.0.0/24 -j DROP')
-docker exec -i -e MAC_PORTS="$MAC_PORTS" -e VM_IPS="$VM_IPS" -e EXPECT_MOUNT="$RUN_DIR/vm-empty" -e MOUNTS="$MOUNTS" -e RESTART="$RESTART" -e RULES="$RULES" hardread-public python - <<'P'
+VM_IPS=$(limit 30 colima ssh -p "$PROFILE" -- sh -c "ip -4 -o addr | awk '{print \$4}' | cut -d/ -f1" | tr '\n' ' ')
+MOUNTS=$(limit 30 colima ssh -p "$PROFILE" -- sh -c "mount | grep -E 'virtiofs|sshfs|9p|fuse\.' | grep -v fusectl | awk '{print \$3}'" | tr '\n' ' ')
+RESTART=$(limit 30 docker inspect -f '{{.HostConfig.RestartPolicy.Name}}' hardread-public)
+RULES=$(limit 30 colima ssh -p "$PROFILE" -- sudo iptables -S DOCKER-USER | grep -c '172.30.0.0/24 -j DROP')
+limit 60 docker exec -i -e MAC_PORTS="$MAC_PORTS" -e VM_IPS="$VM_IPS" -e EXPECT_MOUNT="$RUN_DIR/vm-empty" -e MOUNTS="$MOUNTS" -e RESTART="$RESTART" -e RULES="$RULES" hardread-public python - <<'P'
 import os, socket, sys
 from concurrent.futures import ThreadPoolExecutor
 def can(target):

@@ -209,6 +209,8 @@ Concurrency was conservative, so C1t1 and C2 may gain ≈20–40% when tuned (no
 | Mean luck per decision | −0.0005 [−0.0010, −0.0001] | close; residual ≈ −0.02 win probability per game |
 | Event-count baseline | corr 0.19; luck correlates 2.4× better | pass |
 
+- **Rerun, 3 November 2026, after the 2 November fix to how reviews track hidden sets** (Scientist; test settings, which differ from the page's search): on 499 paired games, since one of the 500 has data for only one player, the mirror is **−0.82 [−0.85, −0.79]** and the variance cut 22.5% [16.1, 28.5], against −0.81 and 22.6% on the same 499 before the fix. First 250: −0.83 and 25.3% (before: −0.83, 25.8%). Second 249: −0.81 and 19.5% (before: −0.78, 19.3%). On the second half the mirror moved by −0.028 [−0.057, −0.001]; running the same code again moved it by 0.0005. We didn't test whether the fix or another code change since 26 October caused it. The two information-edge tests weren't rerun.
+
 - **Replication:** each 250-game half passes, including the games the student never trained on.
 - **Estimator ablations:**
   - an events-only estimator mirrors best (−0.90) but removes almost no variance (0.96–0.98);
@@ -247,7 +249,7 @@ Concurrency was conservative, so C1t1 and C2 may gain ≈20–40% when tuned (no
 - **Win-probability calibration:**
   - raw absolute value on humans: Brier 0.203, ECE 0.052 (self-play: 0.154 / 0.021);
   - humans are less extreme than the engine (predicted 5% → 12% actual, 95% → 92%);
-  - a human calibrator (slope 0.60), fitted on half the games, gives ECE 0.042 → 0.027 on the other half. The review uses it.
+  - a human calibrator (slope 0.60), fitted on half the games, gives ECE 0.042 → 0.027 on the other half. The review uses this formula on a different search and team draft, and this test doesn't cover that path.
 - **Luck:**
   - corr(Σluck, outcome) 0.41 [0.34, 0.48] vs 0.14 for the net chance-event count;
   - variance ratio 0.80 symmetrised (on humans this is an upper bound on the luck share: luck and skill covary);
@@ -478,6 +480,8 @@ These rules are fixed now. The dev-A screens end at 08:00 UTC (argmax, value, do
 | V5 corr(L_p1, L_p2) | −0.526 | ≤ −0.40 ✔ | −0.442 | **−0.172 ✘** |
 | V5 corr(C_p1, C_p2) | −0.888 | ≤ −0.80 ✔ | −0.864 | −0.820 |
 | V6 corr(Σact, C) | 0.717 | ≥ 0.50 ✔ | 0.605 | 0.588 |
+
+- **V5 rerun, 3 November 2026, after the 2 November fix to how reviews track hidden sets** (Scientist; test settings, which differ from the page's search; the review's own guess at each team, checked before the start): on the same 146 games, corr(L_p1, L_p2) is **−0.54 [−0.78, −0.31]**, against −0.53 before. Paired by game, the change is −0.013 [−0.060, +0.036], so no clear change. A first rerun used the wrong team guess and was withdrawn. The other rows weren't rerun.
 
 - **Informational (not gated):** S + L outside [0, 1] on 4.1% of Draft-B sides (so the UI uses signed bars, never a running total); "swingy" flag (|L| > 0.5 or |C| > 1) on 3.8%; variance shares of C: act 0.63, drift 0.37, end 0.11; mean \|end\| KO 0.023 / forfeit 0.123 / timeout 0.261. **Mean \|S_p1 + S_p2 − 1\| is 0.066 on Draft B** (0.046 on Draft A `run520`): research/27 §4.2 listed ≤ 0.06 measured on Draft A only; research/28 S1.5 does not gate it. Reported, not hidden.
 - **Reading:** the bridge passes on the shipped Draft-B path; Draft A fails the bias row (as expected) and is never shipped. These numbers reproduce the proposer's prototype exactly. Rerun on D2 with `run_b.jsonl` and `absolute_human_b` (S2.2).
@@ -2045,4 +2049,122 @@ Second level (smaller edge: set revelation p=.25, 300 pairings): bias +1.63 poin
 
 ## 2026-10-30 — Ladder rank snapshots of the shared bot account (added 2 November)
 
-From dated screenshots, kept privately: #199, Elo 1712, 29 October 23:13 UTC; #195, Elo 1712, 30 October 23:08 UTC; #157, Elo 1727, 30 October 23:39 UTC. Other agents also used the account, it ran Foul Play, and it later left the top 500.
+From dated screenshots, kept privately: #199, Elo 1712, 29 October 23:13 UTC; #195, Elo 1712, 30 October 23:08 UTC; #157, Elo 1727, 30 October 23:39 UTC. Other agents also used the account, it ran Foul Play, and it later left the top 500. (Correction, 2 Nov: the only logged absence predates these ranks; we have no later dated check.)
+
+<a id="turning-point-heldout-20261102"></a>
+
+## 2026-11-02 — Turning-point answers: where they mislead, and a check on games kept apart
+
+> Note added later on 2 Nov: these games aren't held out for later versions of the answer. Their answers shaped later changes to the check and prompt, and some were read. The final version is tested on 15 other games. This section is otherwise as written.
+
+**Written before any held-out game was fetched, before any change, and before any held-out answer was read.** This subsection is the plan and stays as committed; results are added below it.
+
+**Held-out games: pick rule.**
+
+1. Read `https://replay.pokemonshowdown.com/search.json?format=gen9ou` once, in listed order, following pages with `before=<uploadtime of the page's last row>` until 300 distinct rows or the end of the listing.
+2. Walk the rows at positions 0, 5, 10, 15, … (every 5th).
+3. Skip a row, with no replacement from the rows in between, if: it is one of the 8 games of the original set; either player is already in a kept game (compared in memory, so that no one person dominates the sample); the app's `/api/preflight` refuses it; the game ended by forfeit, timeout or disconnect before turn 5; or its review job fails or times out.
+4. Seat: p1 if the replay number is even, p2 if odd. One side per game, so the game-sides are 15 different games.
+5. Stop at 15 kept. If the walk runs out first, the set is smaller and is reported as such.
+
+The script keeps labels and the counts of each skip reason. It does not keep or print names, winners or results. Only the anonymized `review.json` and `ctx.json` of each kept side are kept, in the gitignored `scratch_ds/q4_holdout_20261102/`, and they are not published. Replay ids are not kept.
+
+**Order of work.** Baseline of the current q4 on the original 14 and on the held-out set, the held-out output going to a file that is not read. Tuning on the original 14 only. Code frozen (hash of the diff recorded). Final version run once on the held-out set with no change afterwards, and on the original 14. Only then are the held-out answers read.
+
+**Definitions used for every answer on both sets, before and after.** These are AI reads, not human labels. Answers are read against the win-chance list of the whole game, the three listed moments and the result. "Ahead" means above 50% win chance at that point. "Winner" means the side that eventually won.
+
+An answer is **misleading** if any of these holds:
+
+- **M1, false lead claim.** It says or clearly implies that a turn changed who was ahead, that a side was or was not already ahead, or that a side never led or never trailed, and the win-chance list contradicts it.
+- **M2, false contrast.** It sets the chosen turn apart from others by a difference that the list does not show, for example "still open" against "already ahead" when the chosen turn also started with that side ahead, or "later moves were smaller" when they were not.
+- **M3, overstated openness.** It calls the game open, close or undecided before a turn that started with the winner at 70% or more.
+- **M4, misdirecting pick.** It presents a turn as the turning point although all of the following are true: another listed move is at least twice as large; that other move started with the winner below 70%; the chosen turn did not put the winner ahead; and the answer gives no reason that holds.
+- **M5, wrong cause or invented fact.** It contradicts the moment's main cause or the sign of its luck or choices number, names an event that is in no tool output, or says one player's decision was good or bad when the numbers do not show that.
+
+A debatable but true choice, poor grammar, a missing reason or a tie-break between near-equal moves is **not** misleading by itself; the other two labels cover those.
+
+An answer is **awkward** if it has a run-on or missing punctuation that a reader would stumble on, clauses joined only by a comma, a first-person opening such as "I chose", broken grammar, or a filled slot that reads wrongly where it sits. "Yours and your opponent's choices" alone is not counted, as in the earlier read.
+
+An answer **gave a reason** if it says in words why this turn, rather than the others, turned the game: for example that it put a side ahead, that the other moves came after the game was already going that way, or that it was the largest move and the answer says so. "The most telling", "the turning point" or restating the numbers does not count. A reason that turns out to be false still counts as a reason, and the answer is then also misleading.
+
+**Who judges.** A fresh AI reader that did not write the change, given the answers in shuffled order, with no version or set label, plus each game's facts. The author then reads the same answers, and any disagreement is reported. Other figures come from `eval_q1_q4.py` as it stands.
+
+**What counts as better, on the held-out set.** Better means fewer misleading answers than the baseline with no fall in "gave a reason". If both versions have the same misleading count, it means more answers giving a reason and no new misleading answer. Template fallbacks count as answers and are reported apart. If neither holds, the code changes are not committed. With 15 pairs, only 5 or more one-way changes with none the other way would reach p < 0.05 on a one-sided sign test, so smaller gaps are described as not enough to say.
+
+**Results, added after the final run.** The plan above was committed first (36bb076). One small disclosure on the order: before writing it I fetched the listing once and printed its field names and two replay ids to see its shape, and no results.
+
+**What was run.** Base Muse Glimmer on one llama server, one request at a time, with the product's loop settings, through `eval_q1_q4.py` unchanged. The walk used 25 of its 60 positions and kept 15 game-sides from 15 different games, 5 wins and 10 losses for the seat picked. It skipped 6 for a repeated player, 3 refused by the app and 1 early forfeit, and no review job failed. The original set is the same 14 game-sides from 8 games as before. Its 8 non-showcase sides are the opposite seat of games in the set, so they are not independent of it; the held-out sides are independent of each other as far as the skip rule can make them.
+
+**Cause, as far as it can be found.**
+
+1. **The tool gives numbers, and the question gave stock reasons.** A moment listed only the win chance before and after, so working out who led was left to the model. The question offered "put a different side ahead" and "came while the game was still open" as example reasons. In the 14 stored answers, 8 use the words "still open". In one of them, 63% to 79%, the player was already ahead and never trailed.
+2. **Nothing tied the chosen turn to a fact.** Any of the three listed moments passed if its fields were cited. Showcase-3 picks turn 8 (44% to 33%) over turn 22 (35% to 2%), again in the re-run. Turn 8 is the game's biggest luck turn, a field `get_summary` names, so the luck number may be what drew the model to it. That is one case and it can't be shown.
+3. **Nothing checked for a reason, or for what the words claim.** The checker tests numbers and their phrases, not "flipped the lead" or "still open", and it was left alone.
+
+**The change** (`tools.py`, `explain.py`, `templates.py`, the q4 text; `verifier.py` and `lexicon.py` are untouched, and q1 to q3 keep their schema and path):
+
+- Each win-chance moment has a new field, `standing`, written by code from the win chances and the result: for example "it put you ahead for the rest of the game", "it put your opponent ahead, though the lead changed again later", or "you were already ahead before it and never trailed in this game". The answer must cite it.
+- A check in `explain.py`, on top of the checker. A smaller move than the largest must be near-tied with the larger ones, or have put the eventual winner ahead, or the larger ones must have started with the winner at 70% or more. An answer whose chosen move did not put the winner ahead must give a reason in words. Words about a lead flip, an open game, or "already ahead" set against later moves are compared with the win chances. A failure goes to the one repair turn, then to the template.
+- The question no longer offers the stock phrases. It says a move that put the winner ahead for good is usually the turning point, and otherwise to start from the largest. It also dictates two sentences, "As for the lead, {s}." and "Choices, yours and your opponent's, were {c}."
+- The template now says "the largest move toward the final result" and states `standing`.
+- `EXPLANATION_POLICY_VERSION` is now `offered-scope-v4`.
+
+**Tuning.** One pilot on 6 games and three full runs, all on the original 14, with the question changed after each read. The diff was then frozen (SHA-256 of `git diff HEAD`: `9edb3483…f09f`, and unchanged after the final run), and the final version ran once on the held-out set with no change afterwards.
+
+| Turning-point question (q4) | Original 14, before | Original 14, after | **Held-out 15, before** | **Held-out 15, after** |
+|---|---|---|---|---|
+| First draft passes | 9/14 | 9/14 | **11/15** | **11/15** |
+| Passes after repair | 14/14 | 12/14 | **14/15** | **14/15** |
+| Template fallback | 0/14 | 2/14 | **1/15** | **1/15** |
+| Model answers matching the template word for word | 0 | 0 | **0** | **0** |
+| Misleading (AI read) | 1/14 | 0/14 | **1/15** | **0/15** |
+| Awkward (AI read) | 3/14 | 1/14 | **2/15** | **3/15** |
+| Gave a reason (AI read) | 2/14 | 14/14 | **7/15** | **15/15** |
+| Answers saying "still open" | 3/14 | 0/14 | **5/15** | **0/15** |
+| Turn differs from the top-ranked move | 6/14 | 5/14 | **6/15** | **5/15** |
+| Median latency | 58.7 s | 63.0 s | **57.4 s** | **63.8 s** |
+| 95th-percentile latency (nearest rank) | 90.1 s | 81.2 s | **79.8 s** | **78.2 s** |
+
+"Before" is the current code re-run on this server, not the stored answers. The template rows count fallbacks, and those answers are judged like the rest. The two misleading answers are showcase-3 (M4) and, on the held-out set, a win that calls a turn starting at 67% "still relatively open" against later moves when the player was "already ahead" (M2). The player led at 67% too and never trailed.
+
+**Reading the answers.** A fresh AI reader labelled all 58 answers, shuffled, without set or version labels, against the written definitions. I then read the same answers. We agree on every misleading label.
+
+- **Where I differ, on reasons.** I would also count three baseline answers as giving a reason: two with a weak "still open" and one saying the game was already leaning. That makes the "before" figures 4/14 and 8/15, and the "after" figures do not change.
+- **The closest calls.** On the "after" side, showcase-4 says "the largest win chance move" for a move tied with another and smaller than a later recovery, and it drops the tool's note that no single turn stands out. On the "before" side, two answers say "still open" with the winner at 62% and 66%. That is under the 70% line set in advance, and a 60% line would make the "before" misleading counts 2/14 and 2/15.
+- **The blinding is imperfect.** "As for the lead" gives the new version away.
+
+**What this does and does not show.**
+
+- **Misleading answers: not enough to say.** The held-out difference is a single answer, 1/15 against 0/15, and 0/15 still allows a true rate up to about 18% (one-sided 95%). The rule written in advance needed 5 or more one-way changes for p < 0.05. Baseline misleading answers were already rare on these sets.
+- **Reasons: a real change, but partly by construction.** Eight held-out answers gained a reason and none lost one, which passes the sign test (p ≈ 0.004). But the check requires a reason, and the question names which ones to use, so this shows the model complying. It doesn't show better judgement, and "it was the largest move" is a thin reason.
+- **Which part did the work.** In the frozen runs, the new check rejected drafts only for a missing reason (8 times on the two sets) and never for a pick or a claim about the lead. That matches what I saw while tuning. The `standing` field and the rewritten question made the difference, and the pick and claim checks are an untested backstop on real answers. Their word lists are short, and a paraphrase would pass them.
+- **What it costs.**
+  - The wording is much more uniform: all 26 "after" model answers contain the dictated lead sentence, and 22 open "The turning point was turn". They are not template copies, but they sound alike.
+  - Median latency rose by about 5 to 6 s.
+  - Passes after repair fell by 2 on the original set and did not change on the held-out set.
+  - Awkward answers on the held-out set went from 2 to 3. One repeats the lead clause, one template says "Instead of switch to" (both new), and one still has "1 points".
+- **Some picks got less apt.** In one held-out loss the model moved from a turn that flipped the lead (52% to 37%) to a move one point larger that left the player ahead (68% to 52%), though the question says to prefer the flip. `standing` then reads oddly on that drop: "you were already ahead before it".
+- **The process stays sensitive.** With the same prompt on this server, the frozen run repeated the last tuning run's text on all 14, so the "after" column for the original set is not a new sample. The "before" re-run used the same code as the stored answers, but all 14 texts differ and 2 of the 14 turns differ, for a reason I did not find. The stored run also read better on reasons than this re-run (9/14 in the earlier author's read against 2/14 to 4/14 here, by different readers). Treat every figure here as one sample.
+- **Win chances are engine estimates.** There is no ground truth for which turn turned a game, and a move that "put the winner ahead for good" is a rule of thumb.
+
+**Not done.** The saved showcase answers in `app/data/showcases/` are from the earlier version and were not regenerated, so the showcases won't show this change until they are. No human labels. The anonymized held-out reviews and the answers stay in the gitignored `scratch_ds/q4_holdout_20261102/` and are not published.
+
+**Against the rule set in advance:** fewer misleading answers on the held-out set and no fall in reasons, so the code is committed, with the size of that evidence as stated above.
+
+### Follow-up: undictated wording, the last turn, and the checks tested on bad answers
+
+**Written before the rerun.** The new version drops the dictated sentences from the q4 text, keeps the rules (cite `standing`, give a reason), restores the "no single turn stands out" note as a required part of the answer when the tool gives it, and ends the last turn's move at the result in games ended by knockouts. Tuning is on the original 14 only, then the code is frozen and run once on both sets. The 15 held-out games are no longer unseen: I read their answers for the version above, so this rerun is a weaker test than the first.
+
+**Which version stays.** The undictated wording replaces the dictated one unless it is clearly worse on the held-out 15 by a fresh blind read of the new answers. Clearly worse means any of: 2 or more misleading answers more than the dictated version's 0; 3 or more fewer answers passing after repair than its 14; 3 or more fewer giving a reason than its 15; 4 or more more awkward answers than its 3. The last-turn change stays either way unless it causes a misleading answer of its own. The labels for the two versions come from different readers, so small gaps mean little.
+
+**Status: stopped before it finished, all figures pre-fix.** The coordinator stopped this rerun because a bug in the review flow (S27) gave the set lists at each decision hindsight. The fix will change the facts these answers cite, so every figure in this section, before and after, is pre-fix and q4 needs rerunning on the fixed reviews. The code is committed on the branch and not merged. The frozen run reached 13 of the 15 held-out sides, and the original 14 did not start. No blind read was done, so this version has no misleading, awkward or reason labels, and the rule above was not applied.
+
+**What the partial run shows, from my own unblinded read of the 13.**
+
+- "As for the lead" is gone from all 10 model answers, but the repetition moved: 9 of the 10 open "Turn N was the". The new wording did not solve the repeated opening.
+- Grammar looks worse in places, for example "when you used Make It Rain and your opponent used Thunderbolt moved your win chance". There were 3 template fallbacks in 13, against 1 in 15 before: two from invalid tool-call JSON at the server and one from a truncated reply followed by a failed repair. Most of this run shared the machine with other jobs, so its latencies are not comparable.
+- The largest-claim check fired on a real draft for the first time: a draft called turn 1 "largest" when turn 27's move was larger.
+
+**Known gap in the last-turn change.** In the game with 97% at the start of the last turn and a knockout loss, the tool now lists that move first, but the model picked turn 4 (52% to 37%) and did not mention the collapse. The answer states no false size claim, and the pick check allows it because turn 4 put the winner ahead, even though the lead changed again later. That check may need to require a lasting lead change. This is not changed here.
+
+**Checks on bad answers.** `BadAnswersThroughTheLoop` in `test_turning_point.py` sends a draft through the real loop for the pick check, each lead claim and the reason check. Each draft passes the checker and is stopped by the turning-point check, and with the check disabled the matching test fails. A paraphrase ("carried you into the lead") still gets through, and a test records that as a known limit.

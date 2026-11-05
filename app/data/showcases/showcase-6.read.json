@@ -1,0 +1,202 @@
+{
+ "schema": "hardread.saved-read-example.v1",
+ "what": "An example belief written by the HardRead authors, not a real player's read. It ran on the assumed sets the showcase review used. A saved result, not a live check.",
+ "selection": {
+  "decision": "The offered decision with the largest gap: the one the page calls 'the one decision to look at again'.",
+  "pokemon": "The opposing Pokemon active at that decision (ctx.opp_active).",
+  "belief": "The most used detail in the engine's set data that the log had not revealed by then. Its item, ability and Tera have one value each, and Ivy Cudgel was revealed, so: Swords Dance.",
+  "kept": "Both were fixed before the search ran, and this is the only run of this belief."
+ },
+ "names": {
+  "swordsdance": "Swords Dance"
+ },
+ "source_commit": "b29dea4bc0f820617d6d1f044ac6e0ebd2ae834d",
+ "command": "tools/review/verdict.py one REPLAY --team TEAM --side p2 --turn 9 --k 1 --x 'switch volcanion' --belief BELIEF --review-id showcase-6 --reference auto --seeds 11,12,13 --worlds 4 --iterations 60000 --margin 0.08 --cal absolute_human --no-cache",
+ "receipt_note": "result_sha256 and cache_identity_sha256 were computed on the full receipt, which also lists this machine's file paths under cache_identity.runtime. That one block is left out here, so they can't be recomputed from this file alone. REPLAY is the anonymized log, deliberately not published.",
+ "team_text": "Corviknight (M) @ rockyhelmet\nAbility: Pressure\nTera Type: Dragon\nEVs: 252 HP / 0 Atk / 252 Def / 0 SpA / 4 SpD / 0 Spe\nImpish Nature\n- Bulk Up\n- Brave Bird\n- defog\n- roost\n\nVolcanion @ choicespecs\nAbility: waterabsorb\nTera Type: Ground\nEVs: 128 HP / 0 Atk / 0 Def / 252 SpA / 0 SpD / 128 Spe\nModest Nature\n- Fire Blast\n- earthpower\n- solarbeam\n- steameruption\n\nCinderace (M) @ heavydutyboots\nAbility: Libero\nTera Type: Fire\nEVs: 0 HP / 252 Atk / 0 Def / 0 SpA / 4 SpD / 252 Spe\nJolly Nature\n- Pyro Ball\n- Court Change\n- High Jump Kick\n- suckerpunch\n\nDeoxys-Speed @ focussash\nAbility: Pressure\nTera Type: Ghost\nEVs: 0 HP / 0 Atk / 0 Def / 252 SpA / 4 SpD / 252 Spe\nTimid Nature\n- Psycho Boost\n- spikes\n- stealthrock\n- taunt\n\nDarkrai @ Life Orb\nAbility: baddreams\nTera Type: Poison\nEVs: 0 HP / 0 Atk / 0 Def / 252 SpA / 4 SpD / 252 Spe\nTimid Nature\n- Dark Pulse\n- Focus Blast\n- Nasty Plot\n- icebeam\n\nThundurus-Therian (M) @ Leftovers\nAbility: voltabsorb\nTera Type: Fairy\nEVs: 0 HP / 0 Atk / 0 Def / 252 SpA / 4 SpD / 252 Spe\nModest Nature\n- Thunderbolt\n- focusblast\n- grassknot\n- nastyplot\n",
+ "verdict": {
+  "X": "switch volcanion",
+  "app_belief": {
+   "sets": {
+    "Ogerpon-Wellspring": {
+     "moves_has": [
+      "swordsdance"
+     ]
+    }
+   }
+  },
+  "cache_identity": {
+   "belief_sha256": "a36b12fc1d5e8ca69c336f7113486945a6831227602e55fff434c7342b0c7ca1",
+   "decision": {
+    "chosen": "switch cinderace",
+    "engine_best": "switch volcanion",
+    "k": 1,
+    "side": "p2",
+    "turn": 9
+   },
+   "identity_version": 3,
+   "inputs": {
+    "replay_sha256": "d416c9ff99c5df9f3e95a0c5e75e154eda7ebd24fa4b0b0a261009789a456d5d",
+    "team_sha256": "3f0572728635db0b1dba113d608d67656143708c45a5bc88f26465a953605385"
+   },
+   "models_sha256": "44a320aaad7788d17f9425e6044b588c242f483e91368f0322ba30f77bc8f884",
+   "review_id": "showcase-6",
+   "schema": "hardread.verdict-cache-identity.v3",
+   "settings": {
+    "calibration": "absolute_human",
+    "calibration_sha256": "d4a8b2580ca101bc6f55a8900cb716db59d04d78e0636c6843ed135d6b5642a9",
+    "iterations": 60000,
+    "margin": 0.08,
+    "ok_margin": 0.02,
+    "reference": "auto",
+    "seeds": [
+     11,
+     12,
+     13
+    ],
+    "verdict_source_version": 1,
+    "worlds": 4
+   }
+  },
+  "cache_identity_sha256": "5352329f4732fae955b0260eed5cebcf69d621c096d072bda9570e62e28c1704",
+  "calibration": "absolute_human",
+  "calibration_sha256": "d4a8b2580ca101bc6f55a8900cb716db59d04d78e0636c6843ed135d6b5642a9",
+  "chosen": "switch cinderace",
+  "contradictions": [],
+  "copy": "Even if your read were right, switch volcanion was better by 10 points (3 runs: +7.6, +10.1, +11.7).",
+  "delta_R": [
+   0.0747,
+   0.0957,
+   0.1059
+  ],
+  "delta_U": [
+   0.076,
+   0.1006,
+   0.1172
+  ],
+  "info_third_option": null,
+  "iterations": 60000,
+  "k": 1,
+  "kind": "switch",
+  "margin": 0.08,
+  "mean_delta_R": 0.0921,
+  "mean_delta_U": 0.098,
+  "models_sha256": "44a320aaad7788d17f9425e6044b588c242f483e91368f0322ba30f77bc8f884",
+  "ok_margin": 0.02,
+  "reference": "engine",
+  "reference_fields": null,
+  "result_sha256": "c3df4b2491648c217ee3eede282cd4be44ff13be7d84f66f18af73738e6de6ca",
+  "runs": [
+   {
+    "R": {
+     "changes_world0": [],
+     "delta": 0.07467021507396032,
+     "missing": [],
+     "root_wp": 0.6478,
+     "wp": {
+      "switch cinderace": 0.5767,
+      "switch corviknight": 0.6291,
+      "switch darkrai": 0.5856,
+      "switch volcanion": 0.6514
+     }
+    },
+    "U": {
+     "changes_world0": [],
+     "delta": 0.07598826570207806,
+     "missing": [],
+     "root_wp": 0.6488,
+     "wp": {
+      "switch cinderace": 0.5767,
+      "switch corviknight": 0.6294,
+      "switch darkrai": 0.5897,
+      "switch volcanion": 0.6526
+     }
+    },
+    "seed": 11
+   },
+   {
+    "R": {
+     "changes_world0": [],
+     "delta": 0.09566407646366015,
+     "missing": [],
+     "root_wp": 0.6837,
+     "wp": {
+      "switch cinderace": 0.5918,
+      "switch corviknight": 0.6339,
+      "switch darkrai": 0.6034,
+      "switch volcanion": 0.6875
+     }
+    },
+    "U": {
+     "changes_world0": [],
+     "delta": 0.1006485989898821,
+     "missing": [],
+     "root_wp": 0.6819,
+     "wp": {
+      "switch cinderace": 0.5849,
+      "switch corviknight": 0.627,
+      "switch darkrai": 0.6036,
+      "switch volcanion": 0.6856
+     }
+    },
+    "seed": 12
+   },
+   {
+    "R": {
+     "changes_world0": [],
+     "delta": 0.10589290045919886,
+     "missing": [],
+     "root_wp": 0.7148,
+     "wp": {
+      "switch cinderace": 0.6122,
+      "switch corviknight": 0.6342,
+      "switch darkrai": 0.6272,
+      "switch volcanion": 0.7181
+     }
+    },
+    "U": {
+     "changes_world0": [
+      {
+       "move_replaced": [
+        "spikes",
+        "swordsdance"
+       ],
+       "species": "Ogerpon-Wellspring"
+      }
+     ],
+     "delta": 0.11722090652758244,
+     "missing": [],
+     "root_wp": 0.7105,
+     "wp": {
+      "switch cinderace": 0.5966,
+      "switch corviknight": 0.6299,
+      "switch darkrai": 0.6194,
+      "switch volcanion": 0.7138
+     }
+    },
+    "seed": 13
+   }
+  ],
+  "runtime_sha256": "f892307bb45d25ffdb7d50ef3ff8d9de52ce1f8b7c36495d56b3389557df8ce7",
+  "seconds": 4.5,
+  "seeds": [
+   11,
+   12,
+   13
+  ],
+  "stated": {
+   "sets": {
+    "Ogerpon-Wellspring": {
+     "moves_has": [
+      "swordsdance"
+     ]
+    }
+   }
+  },
+  "turn": 9,
+  "verdict": "Misplay",
+  "version": 1,
+  "wording": "3 independent runs on the same sampled worlds",
+  "worlds": 4
+ }
+}

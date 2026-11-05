@@ -34,7 +34,7 @@ import math
 import re
 import sys
 from collections import defaultdict
-from copy import deepcopy
+from copy import copy, deepcopy
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -742,6 +742,18 @@ def _view(b):
             "trick_room": b.trick_room, "user": declog._side(b.user), "opponent": declog._side(b.opponent)}
 
 
+def _lists_at_this_decision(mode):
+    """Battle copies share one mode, and later events prune its set lists in place. Reviews replay the whole game
+    before searching, so a decision keeps its own copy of the lists, as a player or a live bot would have them.
+    (Luck for a turn uses the next decision's copy: see LuckMeter.turn_record.)"""
+    m = copy(mode)
+    for name in ("team_datasets", "smogon_sets"):
+        ds = copy(getattr(m, name))
+        ds.pkmn_sets = {k: list(v) for k, v in ds.pkmn_sets.items()}
+        setattr(m, name, ds)
+    return m
+
+
 def _search_copy(battle):
     """What find_best_move logs: a deepcopy, with the team-preview actives popped."""
     b = deepcopy(battle)
@@ -849,6 +861,7 @@ def reconstruct(log, side, team, fmt="gen9ou", compute_legal=True, oracle_choice
         sc = _search_copy(b_for_search)
         d.view = _view(sc)
         d.battle = b_for_search
+        d.battle.mode = _lists_at_this_decision(battle.mode)
         d.active_name = b_for_search.user.active.name if b_for_search.user.active else None
         decisions.append(d)
         return d
@@ -1030,6 +1043,7 @@ def reconstruct(log, side, team, fmt="gen9ou", compute_legal=True, oracle_choice
     except Exception:  # noqa: BLE001
         pass
     final_battle = battle
+    final_battle.mode = _lists_at_this_decision(battle.mode)   # the mode object is reused by the next game's replay
     winner = next((l.split("|")[2] for l in lines if l.startswith("|win|")), None)
     if compute_legal:
         for d in decisions:

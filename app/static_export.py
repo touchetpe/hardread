@@ -55,6 +55,24 @@ def explanations(review, offered, saved=None):
     return result
 
 
+READ_EXAMPLE = "showcase-6"
+
+
+def attach_read_example(view, sid, review, ctx):
+    """The saved read-test example, kept apart from view["verdicts"]. Same rule as server._attach_read_example."""
+    path = SHOW / f"{READ_EXAMPLE}.read.json"
+    if not path.exists():
+        return
+    if sid != READ_EXAMPLE:
+        view["read_example_at"] = READ_EXAMPLE
+        return
+    saved = json.loads(path.read_text())
+    raw = saved["verdict"]
+    names = dict(ctx.get("names") or {}, **saved.get("names", {}))
+    view["read_example"] = {"key": f"{raw['turn']}:{raw['k']}",
+                            "card": dict(P.verdict_card(raw, dict(ctx, names=names), review), example=True)}
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--showcases", action="store_true")
@@ -70,6 +88,7 @@ def main():
             ctx = json.loads((SHOW / f"{sc['id']}.ctx.json").read_text())
             v, offered = P.build_view_with_offered(review, ctx)
             v.update(id=sc["id"], showcase=True, private=False)
+            attach_read_example(v, sc["id"], review, ctx)
             saved = SHOW / f"{sc['id']}.explain.json"
             v["explanations"] = explanations(review, offered, json.loads(saved.read_text()) if saved.exists() else None)
             plain = SHOW / f"{sc['id']}.plain.json"
